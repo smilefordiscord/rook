@@ -3,16 +3,14 @@
 //! results arrive as: tables are copied, once per listener, by rules of
 //! their own (measured in Studio 0.746: `docs/behavior/scripting/bindables.md`).
 
-use std::ffi::c_void;
-
 use mlua::Table;
 
 use mlua::{Function, Lua, MultiValue, Value as LuaValue};
 use rook_dom::InstanceId;
 
 use crate::api::methods::RawMethod;
+use crate::net::{Nesting, table_key};
 use crate::runtime::ctx::args::Args;
-use crate::runtime::ctx::args::{display_value, type_name};
 use crate::runtime::ctx::{ApiResult, Outcome, ScriptError};
 use crate::runtime::signal::SignalKey;
 use crate::runtime::threads::fire_with;
@@ -128,21 +126,19 @@ pub(crate) fn copy_values(
 ) -> Result<Vec<LuaValue>, ScriptError> {
     let mut out = Vec::with_capacity(values.len());
     for v in values {
-        out.push(copy_value(lua, v, &mut Vec::new(), other_vm)?);
+        out.push(copy_value(lua, v, &mut Nesting::default(), other_vm)?);
     }
     Ok(out)
 }
 
-/// `within` holds the tables being copied: a table reached twice otherwise
-/// becomes two copies, one reached from itself is an error.
 fn copy_value(
     lua: &Lua,
     value: &LuaValue,
-    within: &mut Vec<*const c_void>,
+    nesting: &mut Nesting,
     other_vm: bool,
 ) -> Result<LuaValue, ScriptError> {
     Ok(match value {
-        LuaValue::Table(t) => LuaValue::Table(copy_table(lua, t, within, other_vm)?),
+        LuaValue::Table(t) => LuaValue::Table(copy_table(lua, t, nesting, other_vm)?),
         LuaValue::Thread(_) => LuaValue::Nil,
         LuaValue::Function(_) if other_vm => {
             return Err(ScriptError(
@@ -156,68 +152,28 @@ fn copy_value(
 fn copy_table(
     lua: &Lua,
     table: &Table,
-    within: &mut Vec<*const c_void>,
+    nesting: &mut Nesting,
     other_vm: bool,
 ) -> Result<Table, ScriptError> {
     let cast = |e: mlua::Error| ScriptError(crate::runtime::ctx::lua_error_message(&e));
-    let address = table.to_pointer();
-    if within.contains(&address) {
-        return Err(ScriptError("tables cannot be cyclic".into()));
-    }
-    within.push(address);
+    nesting.enter(table)?;
     let length = table.raw_len();
     let copy = lua.create_table_with_capacity(length, 0).map_err(cast)?;
     if length > 0 {
         // An array: holes inside it stay, its other keys don't.
         for i in 1..=length {
             let v: LuaValue = table.raw_get(i).map_err(cast)?;
-            let v = copy_value(lua, &v, within, other_vm)?;
+            let v = copy_value(lua, &v, nesting, other_vm)?;
             copy.raw_set(i, v).map_err(cast)?;
         }
     } else {
         for pair in table.clone().pairs::<LuaValue, LuaValue>() {
             let (k, v) = pair.map_err(cast)?;
-            let key = dictionary_key(lua, &k)?;
-            let v = copy_value(lua, &v, within, other_vm)?;
+            let key = table_key(lua, &k)?;
+            let v = copy_value(lua, &v, nesting, other_vm)?;
             copy.raw_set(key, v).map_err(cast)?;
         }
     }
-    within.pop();
+    nesting.leave();
     Ok(copy)
-}
-
-/// A dictionary's keys all arrive as strings.
-fn dictionary_key(lua: &Lua, key: &LuaValue) -> Result<LuaValue, ScriptError> {
-    let text = match key {
-        LuaValue::String(_) => return Ok(key.clone()),
-        LuaValue::Boolean(_) => return Err(ScriptError("Invalid table key type used".into())),
-        LuaValue::Integer(i) => i.to_string(),
-        LuaValue::Number(n) => whole(*n).to_string(),
-        other => format!("<{}> ({})", key_type(other), display_value(lua, other)),
-    };
-    lua.create_string(text)
-        .map(LuaValue::String)
-        .map_err(|e| ScriptError(crate::runtime::ctx::lua_error_message(&e)))
-}
-
-/// A number's whole part as a 64-bit integer, what x86's conversion makes of
-/// one too large for it included (observed for 1e20 and infinity).
-fn whole(n: f64) -> i64 {
-    if n.abs() < 9_223_372_036_854_775_808.0 {
-        n as i64
-    } else {
-        i64::MIN
-    }
-}
-
-/// The name Roblox's own variant types give a key's type.
-fn key_type(key: &LuaValue) -> String {
-    match type_name(key).as_str() {
-        "table" => "Table".into(),
-        "function" => "Function".into(),
-        "CFrame" => "CoordinateFrame".into(),
-        "BrickColor" => "int".into(),
-        "EnumItem" => "token".into(),
-        other => other.into(),
-    }
 }

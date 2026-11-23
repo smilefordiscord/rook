@@ -1,0 +1,9 @@
+-- studio 0.748.0.7481526
+-- signals: deferred
+FireServer cycle error tables cannot be cyclic
+FireServer plain ok 
+InvokeServer cycle error tables cannot be cyclic
+FireClient on client ok 
+FireAllClients on client ok 
+InvokeClient on client pending
+player still here true

@@ -1,10 +1,14 @@
 # Bindables
 
-Checked against Studio 0.746 on 2026-11-06.
+Checked against Studio 0.748 on 2026-11-23.
 
 What arrives through `BindableEvent:Fire` and `BindableFunction:Invoke`
 (`rook_lua::api::methods::instances::bindables`;
-`conformance/cases/signals/bindable_copies.luau`).
+`conformance/cases/signals/bindable_copies.luau`, and
+`conformance/cases/scripting/net_cycles.luau` for cycles and depth in
+Studio 0.748). Remotes copy tables by the same rules
+([remote arguments](../replication.md#remote-arguments)), and so does
+`TeleportOptions:SetTeleportData`.
 
 *When.* `Fire` copies when it's called, not when the listener runs, and each
 listener gets a copy of its own, so one changing a table isn't seen by the
@@ -16,7 +20,12 @@ delivered.
 pass as they are, inside tables too, and nils keep their places. A thread
 arrives as nil. A copy has no metatable and isn't frozen. A table reached
 twice arrives as two copies, across arguments too; one reached from itself
-raises `tables cannot be cyclic`.
+raises `tables cannot be cyclic`, before any listener runs, whatever
+`SignalBehavior` is; so does one a callback returns. Only what's copied
+counts: a table that is its own key arrives with that key as a string, and
+an array's dropped keys can't make a cycle. Tables nested 300 deep raise
+`Max lua stack size reached`, while 70 arrive whole (Rook's limit is 200;
+Approximation: the limit between them isn't measured).
 
 *Arrays.* A table with a length keeps 1 to that length, holes inside included
 (`{"a", nil, "c"}` has length 3), and loses every other key: `{1, 2, x = 3}`

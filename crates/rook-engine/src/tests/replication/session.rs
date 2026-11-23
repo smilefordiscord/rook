@@ -199,6 +199,154 @@ fn remote_buffers_arrive_as_copies() {
     assert_eq!(lines(session.client(index).unwrap()), ["99 97"]);
 }
 
+/// A table holding itself used to hang the sender: each reference was
+/// copied again, `2^64` times for two of them.
+#[test]
+fn remote_arguments_refuse_cyclic_tables_and_copy_shared_ones() {
+    let mut server = Server::new(&Options::default()).unwrap();
+    let rs = service(&server, "ReplicatedStorage");
+    add_under(&server, rs, "RemoteEvent", "Ping", "");
+    add_under(&server, rs, "RemoteFunction", "Ask", "");
+    add_script(
+        &server,
+        "ServerScriptService",
+        "Main",
+        r#"
+        local rs = game:GetService("ReplicatedStorage")
+        rs.Ping.OnServerEvent:Connect(function(player, pair, single)
+            print("server got", pair[1] == pair[2], pair[1] == single, pair[1][1], pair[2][1], single[1])
+        end)
+        rs.Ask.OnServerInvoke = function(player)
+            local t = {}
+            t.self = t
+            return t
+        end
+        game.Players.PlayerAdded:Connect(function(player)
+            local t = {}
+            t[1] = t
+            t[2] = t
+            print("fire client", pcall(function() rs.Ping:FireClient(player, t) end))
+            print("fire all", pcall(function() rs.Ping:FireAllClients({ { t } }) end))
+        end)
+        "#,
+    );
+    add_local_script(
+        &server,
+        "Client",
+        r#"
+        local rs = game:GetService("ReplicatedStorage")
+        rs.Ping.OnClientEvent:Connect(function(...)
+            print("client got", select('#', ...))
+        end)
+        local t = {}
+        t[1] = t
+        t[2] = t
+        print("fire", pcall(function() rs.Ping:FireServer(t) end))
+        print("invoke", pcall(function() return rs.Ask:InvokeServer(1, { t }) end))
+        print("reply", pcall(function() return rs.Ask:InvokeServer() end))
+        local shared = { "x" }
+        rs.Ping:FireServer({ shared, shared }, shared)
+        "#,
+    );
+    server.start();
+    let mut session = Session::new(server, Options::default());
+    let index = session.join("Player1", 1).unwrap();
+    session.run_for(1.0);
+    assert_eq!(
+        lines(session.server()),
+        [
+            "fire client false tables cannot be cyclic",
+            "fire all false tables cannot be cyclic",
+            "server got false false x x x",
+        ]
+    );
+    assert_eq!(
+        lines(session.client(index).unwrap()),
+        [
+            "fire false tables cannot be cyclic",
+            "invoke false tables cannot be cyclic",
+            "reply false tables cannot be cyclic",
+        ]
+    );
+}
+
+/// Measured in Studio 0.748 (`scripting/net_cycles`,
+/// `scripting/client_remotes`): tables are copied as bindables copy them,
+/// before the call checks its side, and a client's remote outside the
+/// DataModel may call the server's methods, reaching no one.
+#[test]
+fn remote_arguments_copy_as_bindables_do_before_the_side_is_checked() {
+    let mut server = Server::new(&Options::default()).unwrap();
+    let rs = service(&server, "ReplicatedStorage");
+    add_under(&server, rs, "RemoteEvent", "Ping", "");
+    add_script(
+        &server,
+        "ServerScriptService",
+        "Main",
+        r#"
+        local rs = game:GetService("ReplicatedStorage")
+        rs.Ping.OnServerEvent:Connect(function(player, mixed, keyed)
+            print("server got", #mixed, mixed.x, keyed["<Instance> (Workspace)"], keyed["2"])
+        end)
+        local t = {}
+        t.self = t
+        print("fire server", pcall(rs.Ping.FireServer, rs.Ping, t))
+        print("fire server plain", pcall(rs.Ping.FireServer, rs.Ping, 1))
+        local function nest(n)
+            local root = {}
+            for _ = 2, n do
+                root = { n = root }
+            end
+            return root
+        end
+        print("deep", pcall(rs.Ping.FireAllClients, rs.Ping, nest(70)))
+        print("too deep", pcall(rs.Ping.FireAllClients, rs.Ping, nest(300)))
+        print("self key", pcall(rs.Ping.FireAllClients, rs.Ping, { [t] = 1 }))
+        "#,
+    );
+    add_local_script(
+        &server,
+        "Client",
+        r#"
+        local rs = game:GetService("ReplicatedStorage")
+        local player = game.Players.LocalPlayer
+        print("parented", pcall(rs.Ping.FireClient, rs.Ping, player, 1))
+        local loose = Instance.new("RemoteEvent")
+        local fn = Instance.new("RemoteFunction")
+        print("loose", pcall(loose.FireClient, loose, player, 1))
+        print("loose all", pcall(loose.FireAllClients, loose, 1))
+        task.spawn(function()
+            fn:InvokeClient(player, 1)
+            print("never")
+        end)
+        rs.Ping:FireServer({ 1, 2, x = 3 }, { [workspace] = "w", [2] = "two" })
+        "#,
+    );
+    server.start();
+    let mut session = Session::new(server, Options::default());
+    let index = session.join("Player1", 1).unwrap();
+    session.run_for(1.0);
+    assert_eq!(
+        lines(session.server()),
+        [
+            "fire server false tables cannot be cyclic",
+            "fire server plain false FireServer can only be called from the client",
+            "deep true",
+            "too deep false Max lua stack size reached",
+            "self key true",
+            "server got 2 nil w two",
+        ]
+    );
+    assert_eq!(
+        lines(session.client(index).unwrap()),
+        [
+            "parented false FireClient can only be called from the server",
+            "loose true",
+            "loose all true",
+        ]
+    );
+}
+
 #[test]
 fn input_mouse_and_click_detectors() {
     let mut server = Server::new(&Options::default()).unwrap();
