@@ -42,12 +42,14 @@ fn step(rt: &Runtime) {
     rt.render_step(dt);
     rt.restyle();
     rt.resume_due(Queue::Legacy);
+    rt.run_parallel_phase();
     let rs = rt.world().dom.find_service("RunService");
     if let Some(rs) = rs {
         rt.fire_event(rs, "Heartbeat", dt);
         rt.drain_deferred();
     }
     rt.resume_due(Queue::Task);
+    rt.run_parallel_phase();
 }
 
 /// [`run`] with Ann (user 5) in Players and the web's domains at `base`

@@ -6,6 +6,13 @@ pub(super) fn instance_new(lua: &Lua, args: MultiValue) -> ApiResult<Outcome> {
     let a = Args::new(args, "new");
     let class_name = a.string(0)?;
     let parent = a.opt_instance(1)?;
+    // Desynchronized code may not parent the new instance (Confirmed:
+    // Studio 0.748, the words included).
+    if parent.is_some() && crate::runtime::actors::in_parallel(lua) {
+        return Err(ScriptError(
+            "Unable to parent new Instance during parallel execution.".into(),
+        ));
+    }
     let db = rook_reflection::database();
     let class = db
         .class_by_name(&class_name)

@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 use serde::Serialize;
 
 use super::{UpdateError, dump};
-use crate::members::{ClassMembers, Event, Function, Members};
+use crate::members::{ClassMembers, Event, Function, Members, ThreadSafety};
 
 impl Members {
     pub(super) fn from_api_dump(
@@ -24,6 +24,10 @@ impl Members {
                         if let Some(sec) = member.property_security()? {
                             out.property_security.insert(member.name.clone(), sec);
                         }
+                        let safety = member.thread_safety()?;
+                        if safety != ThreadSafety::ReadSafe {
+                            out.property_safety.insert(member.name.clone(), safety);
+                        }
                     }
                     "Function" | "Callback" => {
                         let f = Function {
@@ -33,6 +37,7 @@ impl Members {
                             name: member.name.clone(),
                             tags,
                             preferred,
+                            safety: member.thread_safety()?,
                         };
                         if member.member_type == "Function" {
                             out.functions.push(f);
@@ -46,6 +51,7 @@ impl Members {
                         name: member.name.clone(),
                         tags,
                         preferred,
+                        safety: member.thread_safety()?,
                     }),
                     other => return Err(UpdateError::Shape(format!("member type {other}"))),
                 }

@@ -29,6 +29,7 @@ mod access;
 mod calls;
 mod kept;
 mod lookup;
+mod parallel;
 
 use access::*;
 use calls::*;
@@ -66,7 +67,7 @@ pub(crate) fn key_of(id: InstanceId) -> LightUserData {
     LightUserData(id.to_ref().0 as usize as *mut c_void)
 }
 
-fn id_of(key: LightUserData) -> InstanceId {
+pub(crate) fn id_of(key: LightUserData) -> InstanceId {
     InstanceId::from_ref(InstanceRef(key.0 as usize as u64))
 }
 

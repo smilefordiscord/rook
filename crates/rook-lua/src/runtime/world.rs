@@ -21,6 +21,9 @@ pub enum Handler {
     Call(Function),
     /// `Wait`: resume the waiting thread with the arguments.
     Resume(Thread),
+    /// `ConnectParallel`/`BindToMessageParallel`: call the function on a
+    /// new thread in the Actor's next parallel phase.
+    Parallel { func: Function, actor: InstanceId },
 }
 
 /// How a resumed `wait` reports its result.
@@ -198,16 +201,30 @@ pub enum Listener {
     ObjectCFrame(InstanceId),
 }
 
+/// A ModuleScript as one context loads it: each Actor's scripts get a copy
+/// of their own (`runtime::actors`).
+pub(crate) type ModuleKey = (crate::runtime::actors::Context, InstanceId);
+
 /// ModuleScripts' `require` state.
 #[derive(Debug, Default)]
 pub(crate) struct ModuleState {
-    /// `require` results, by ModuleScript.
-    pub(crate) results: FxHashMap<InstanceId, mlua::RegistryKey>,
+    /// `require` results.
+    pub(crate) results: FxHashMap<ModuleKey, mlua::RegistryKey>,
     /// Modules currently loading, with the thread running each body: a
     /// require from that thread is a cycle, one from another thread waits.
-    pub(crate) loading: FxHashMap<InstanceId, mlua::Thread>,
+    pub(crate) loading: FxHashMap<ModuleKey, mlua::Thread>,
     /// Threads waiting for a module another thread is loading.
-    pub(crate) waiting: FxHashMap<InstanceId, Vec<mlua::Thread>>,
+    pub(crate) waiting: FxHashMap<ModuleKey, Vec<mlua::Thread>>,
+}
+
+impl ModuleState {
+    /// Drop what is kept about `id`, a module or an Actor.
+    fn forget(&mut self, id: InstanceId) {
+        let other = |&(context, module): &ModuleKey| module != id && context != Some(id);
+        self.results.retain(|k, _| other(k));
+        self.loading.retain(|k, _| other(k));
+        self.waiting.retain(|k, _| other(k));
+    }
 }
 
 /// Everything a DataModel's scripts can reach.
@@ -223,6 +240,10 @@ pub struct World {
     pub input: InputState,
     /// Remote calls waiting for the session to deliver them.
     pub outbox: Vec<crate::net::RemoteMessage>,
+    /// Messages sent to Actors, for the next resumption point.
+    pub messages: Vec<crate::runtime::actors::Message>,
+    /// `SharedTableRegistry`'s tables, by name.
+    pub(crate) shared_tables: FxHashMap<String, crate::types::shared_table::LSharedTable>,
     /// Tools a client's scripts moved between its player's Backpack and
     /// character, or dropped, for the server to repeat.
     pub(crate) tool_moves: Vec<crate::api::methods::tools::ToolMove>,
@@ -372,6 +393,8 @@ impl World {
             is_client: false,
             input: InputState::default(),
             outbox: Vec::new(),
+            messages: Vec::new(),
+            shared_tables: FxHashMap::default(),
             tool_moves: Vec::new(),
             tool_activations: Vec::new(),
             prompts: Default::default(),
@@ -481,9 +504,8 @@ impl World {
         self.pages.remove(&id);
         self.data_stores.objects.forget(id);
         self.prompts.forget(id);
-        self.modules.results.remove(&id);
-        self.modules.loading.remove(&id);
-        self.modules.waiting.remove(&id);
+        self.modules.forget(id);
+        self.messages.retain(|m| m.actor != id);
         self.bytecode.remove(&id);
         self.localization.remove(&id);
         self.translators.remove(&id);

@@ -1,0 +1,92 @@
+-- studio 0.748.0.7481526
+-- signals: deferred
+desynchronize outside error task.desynchronize() may only be called from a script that is a descendant of an Actor
+synchronize outside error task.synchronize() may only be called from a script that is a descendant of an Actor
+task.synchronize value function function
+actor Actor Actor true true
+GetActor unparented nil
+GetActor child true
+GetActor self true
+GetActor nested true true true
+GetActor service nil nil
+GetActor dot error Expected ':' not '.' calling member function GetActor
+GetActor extra arg ok true
+GetActor moved ok nil
+SendMessage no topic error Argument 1 missing or nil
+SendMessage nil topic error Argument 1 missing or nil
+SendMessage number topic error Actor:SendMessage may only be called on Actors attached to the DataModel.
+SendMessage table topic error Actor:SendMessage may only be called on Actors attached to the DataModel.
+SendMessage empty topic error Actor:SendMessage may only be called on Actors attached to the DataModel.
+SendMessage returns error Actor:SendMessage may only be called on Actors attached to the DataModel.
+SendMessage function error Actor:SendMessage may only be called on Actors attached to the DataModel.
+SendMessage Luau function error Actor:SendMessage may only be called on Actors attached to the DataModel.
+SendMessage nested function error Actor:SendMessage may only be called on Actors attached to the DataModel.
+SendMessage thread error Actor:SendMessage may only be called on Actors attached to the DataModel.
+SendMessage Instance error Actor:SendMessage may only be called on Actors attached to the DataModel.
+SendMessage cycle error tables cannot be cyclic
+SendMessage dot error Expected ':' not '.' calling member function SendMessage
+SendMessage on Part error SendMessage is not a valid member of Part "Actor.Part"
+BindToMessage outside error Calling BindToMessage on an Actor is only allowed in scripts that are a descendent of that Actor
+BindToMessageParallel outside error Calling BindToMessageParallel on an Actor is only allowed in scripts that are a descendent of that Actor
+BindToMessage no function error Argument 2 missing or nil
+BindToMessage number error Unable to cast double to Function
+BindToMessage no topic error Argument 1 missing or nil
+BindToMessage builtin error Calling BindToMessage on an Actor is only allowed in scripts that are a descendent of that Actor
+ConnectParallel outside error Function Event.ConnectParallel can only be used inside scripts
+ConnectParallel no function error Function Event.ConnectParallel can only be used inside scripts
+ConnectParallel builtin error Function Event.ConnectParallel can only be used inside scripts
+ConnectParallel type function
+Source settable true
+main module 10 true
+main module desynchronize false task.desynchronize() may only be called from a script that is a descendant of an Actor
+main module connect false Function Event.ConnectParallel can only be used inside scripts
+actor: GetActor true Actor
+actor: globals nil nil nil
+actor: module 1 true
+actor: module connect true nil
+actor: binding RBXScriptConnection true
+actor: disconnected false
+actor: bind args error Argument 2 missing or nil
+actor: bind other actor ok false Calling BindToMessage on an Actor is only allowed in scripts that are a descendent of that Actor
+actor script ran true
+send mixed table ok 
+send sparse table ok 
+send fraction key ok 
+send Instance key ok 
+send empty table ok 
+send metatable ok 
+main after send main changed after send nil
+main after delivery actor
+actor: Order serial second 1
+actor: Order serial first 1
+actor: Order serial second 2 b
+actor: Order serial first 2 b
+actor: Copy second sent
+actor: Copy first sent false false {list={1=number:1,2=number:2},x=string:sent}
+actor: Args 0 
+actor: Args 4 number:1 nil:nil string:three nil:nil
+actor: Args 5 Vector3:1, 2, 3 Instance:Actor Instance:Part boolean:true boolean:true
+actor: Args 1 {1=number:1,2=number:2}
+actor: Args 1 {1=string:a}
+actor: Args 1 {1=number:1}
+actor: Args 1 {<Instance> (Part)=number:1}
+actor: Args 1 {}
+actor: Args 1 {a=number:1}
+actor: Shared SharedTable true main
+actor: Self first
+actor: Self sent
+actor: Drop 1
+actor: Error other handler 1
+actor: Error handler 1
+actor: Yield before 1
+actor: Yield before 2
+actor: Order serial second 3
+actor: Order serial first 3
+actor: SelfReply from handler
+actor: Order parallel 1
+actor: Order parallel 2 b
+actor: Order parallel 3
+actor: Yield after 1
+actor: Yield after 2
+actor: bound Late
+actor: Late 2

@@ -40,7 +40,9 @@ fn heartbeat_fires_every_frame() {
     );
     s.start();
     s.run_for(1.0);
-    assert_eq!(lines(&s), ["30"]);
+    // The delay is up in the 30th frame, whose Heartbeat comes after it:
+    // `task` resumption precedes Heartbeat (Studio 0.748).
+    assert_eq!(lines(&s), ["29"]);
 }
 
 fn add_under(

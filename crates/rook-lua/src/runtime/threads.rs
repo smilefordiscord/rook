@@ -7,7 +7,7 @@ mod firing;
 mod jobs;
 pub(crate) mod watchdog;
 
-use crate::runtime::signal::{FireArgs, Firing, SignalKey};
+use crate::runtime::signal::{ConnectionId, FireArgs, Firing, SignalKey};
 use mlua::prelude::LuaThreadStatus as ThreadStatus;
 use mlua::{Function, IntoLuaMulti, Lua, MultiValue, Table, Thread, Value as LuaValue};
 use rook_dom::{Change, InstanceId};
@@ -42,6 +42,9 @@ pub(crate) fn resume(lua: &Lua, thread: &Thread, args: impl IntoLuaMulti) {
     if let Err(e) = thread.resume::<MultiValue>(args) {
         report_error(lua, thread, &e);
     }
+    let finished = thread.status() != ThreadStatus::Resumable;
+    let owner = thread.to_pointer().addr();
+    with_world(lua, |w| w.scheduler.resumption_ended(owner, finished));
 }
 
 /// Whether `func` belongs to a stopped script.
@@ -108,8 +111,19 @@ fn luau_helper(lua: &Lua, name: &str, source: &str) -> mlua::Result<Function> {
     Ok(f)
 }
 
-fn run_handler(lua: &Lua, handler: Handler, args: Vec<LuaValue>) {
+fn run_handler(lua: &Lua, connection: ConnectionId, handler: Handler, args: Vec<LuaValue>) {
     match handler {
+        // As a Deferred invocation, so disconnecting drops it.
+        Handler::Parallel { func, actor } => with_world(lua, |w| {
+            w.scheduler.desynchronize_handler(
+                actor,
+                Job::Fire {
+                    connection,
+                    handler: Handler::Call(func),
+                    args,
+                },
+            );
+        }),
         Handler::Call(f) => {
             if let Err(e) = spawn(lua, f, MultiValue::from_vec(args)) {
                 with_world(lua, |w| {

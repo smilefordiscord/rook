@@ -118,6 +118,21 @@ impl Runtime {
         });
     }
 
+    /// A resumption point's parallel phase: messages sent to Actors, the
+    /// work Actors' scripts desynchronized, then what that work
+    /// synchronized (docs/behavior/scripting/parallel-luau.md).
+    pub fn run_parallel_phase(&self) {
+        let idle = {
+            let w = self.world();
+            w.messages.is_empty() && !w.scheduler.has_parallel_work()
+        };
+        if idle {
+            return;
+        }
+        profiling::scope!("parallel_phase");
+        self.guarded(|| crate::runtime::actors::run_parallel_phase(&self.lua));
+    }
+
     /// Drain the deferred queue (a resumption point).
     pub fn drain_deferred(&self) {
         profiling::scope!("drain_deferred");

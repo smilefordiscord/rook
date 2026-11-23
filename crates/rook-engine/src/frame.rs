@@ -9,10 +9,13 @@ pub(crate) const PLACED_PER_FRAME: usize = 20_000;
 impl DataModel {
     /// Run one frame.
     ///
-    /// Order (Inference from the creator-docs task scheduler diagram):
-    /// legacy resumption (`wait`, `spawn`, `delay`), Stepped/PreSimulation,
-    /// [physics], PostSimulation, Heartbeat, `task` resumption; then, on a
-    /// client, the render step and GUI layout, just before it's drawn.
+    /// Order: legacy resumption (`wait`, `spawn`, `delay`),
+    /// Stepped/PreSimulation, [physics], PostSimulation, `task`
+    /// resumption, Heartbeat (Confirmed: Studio 0.748, from where Actors'
+    /// work runs; the rest is Inference from the creator-docs task
+    /// scheduler diagram); then, on a client, the render step and GUI
+    /// layout, just before it's drawn. A parallel phase follows the legacy
+    /// resumption and each of these events.
     pub fn step(&mut self) {
         self.step_frame(None);
     }
@@ -51,12 +54,16 @@ impl DataModel {
         self.advance_sounds(dt);
         self.update_audio(dt);
         self.runtime.resume_due(Queue::Legacy);
+        self.runtime.run_parallel_phase();
         self.fire(rs, "Stepped", (now, dt));
         self.fire(rs, "PreSimulation", dt);
+        self.runtime.run_parallel_phase();
         self.simulate(dt);
         self.fire(rs, "PostSimulation", dt);
-        self.fire(rs, "Heartbeat", dt);
+        self.runtime.run_parallel_phase();
         self.runtime.resume_due(Queue::Task);
+        self.fire(rs, "Heartbeat", dt);
+        self.runtime.run_parallel_phase();
         if self.role == Role::Client {
             // A client's frame ends as Roblox's begins, with what's drawn:
             // the render step, then GUI, so the camera script sees the
@@ -91,6 +98,7 @@ impl DataModel {
         self.runtime.render_step(dt);
         self.fire(rs, "RenderStepped", dt);
         self.fire(rs, "PreRender", dt);
+        self.runtime.run_parallel_phase();
         // Inference: the engine's own camera moves come after the
         // scripts', just before drawing.
         self.runtime.step_cameras();

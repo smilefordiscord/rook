@@ -1,4 +1,5 @@
-//! Functions, events and callbacks of every class, plus property security.
+//! Functions, events and callbacks of every class, plus property security
+//! and thread safety.
 //!
 //! The reflection database only describes properties, so Rook keeps its
 //! own compact list of the rest, generated from the same Full API dump as
@@ -39,6 +40,17 @@ pub struct ClassMembers {
     /// `[read, write]`. Properties not listed are open to scripts.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub property_security: BTreeMap<String, [Security; 2]>,
+    /// Properties whose thread safety isn't [`ThreadSafety::ReadSafe`],
+    /// which almost every property's is.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub property_safety: BTreeMap<String, ThreadSafety>,
+}
+
+impl ClassMembers {
+    /// The thread safety of a property this class declares.
+    pub fn property_thread_safety(&self, name: &str) -> ThreadSafety {
+        (self.property_safety.get(name).copied()).unwrap_or(ThreadSafety::ReadSafe)
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -55,6 +67,8 @@ pub struct Function {
     /// The replacement Roblox suggests for a deprecated member.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub preferred: Option<String>,
+    #[serde(default, skip_serializing_if = "ThreadSafety::is_unsafe")]
+    pub safety: ThreadSafety,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -68,6 +82,8 @@ pub struct Event {
     pub tags: Vec<Tag>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub preferred: Option<String>,
+    #[serde(default, skip_serializing_if = "ThreadSafety::is_unsafe")]
+    pub safety: ThreadSafety,
 }
 
 /// `[name, type]` or `[name, type, default]`.
@@ -222,6 +238,28 @@ impl Security {
             Self::RobloxSecurity => "RobloxEngine",
             Self::NotAccessibleSecurity => "NotAccessible",
         }
+    }
+}
+
+/// What a desynchronized (parallel) script may do with a member: the API
+/// dump's `ThreadSafety` (creator-docs "Parallel Luau", thread safety). A
+/// member the dump gives no level is Unsafe, as the creator docs say of
+/// members without one.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ThreadSafety {
+    /// Neither read, written nor called in parallel.
+    #[default]
+    Unsafe,
+    /// Read but not written in parallel (properties).
+    ReadSafe,
+    /// Used in parallel within its own Actor, only read from others.
+    LocalSafe,
+    Safe,
+}
+
+impl ThreadSafety {
+    pub fn is_unsafe(&self) -> bool {
+        *self == Self::Unsafe
     }
 }
 

@@ -74,6 +74,7 @@ pub(crate) fn set_member(lua: &Lua, id: InstanceId, key: &str, value: LuaValue) 
             return methods::web::marketplace::set_process_receipt(lua, id, value);
         }
         Some(Member::Callback(name)) => {
+            super::parallel::check_callback(lua, id, name)?;
             let f = match value {
                 LuaValue::Function(f) => Some(f),
                 LuaValue::Nil => None,
@@ -106,6 +107,7 @@ pub(crate) fn set_member(lua: &Lua, id: InstanceId, key: &str, value: LuaValue) 
             denied.capability()
         )));
     }
+    super::parallel::check_write(lua, id, &p, key)?;
     if p.flags.read_only || p.scriptability == Scriptability::Read {
         return Err(ScriptError(format!(
             "Unable to assign property {key}. Property is read only"

@@ -1,0 +1,115 @@
+-- studio 0.748.0.7481526
+-- signals: deferred
+Source settable true
+serial write ok 
+desynchronized
+desynchronize again ok 
+read Name ok Serial
+read Size ok 4, 1.2000000476837158, 2
+read Parent ok Folder
+read ClassName ok Part
+read Value ok 0
+read AbsoluteSize error Property GuiBase2d.AbsoluteSize is not safe to read in parallel
+read AbsolutePosition error Property GuiBase2d.AbsolutePosition is not safe to read in parallel
+read Gravity ok
+read game.Workspace ok
+read script ok Worker
+read missing member error Nope is not a valid member of Part "Serial"
+read child by name ok Child
+write Name error Property Instance.Name is not safe to write in parallel
+write Size error Property BasePart.Size is not safe to write in parallel
+write Anchored error Property BasePart.Anchored is not safe to write in parallel
+write same value error Property Instance.Name is not safe to write in parallel
+write Parent error Property Instance.Parent is not safe to write in parallel
+write Value error Property IntValue.Value is not safe to write in parallel
+write frame Size error Property GuiObject.Size is not safe to write in parallel
+write own instance error Property Instance.Name is not safe to write in parallel
+write missing member error Nope is not a valid member of Part "Serial"
+write wrong type error Property BasePart.Anchored is not safe to write in parallel
+after writes Serial false nil 0 Own
+SetAttribute error Function Instance.SetAttribute is not safe to call in parallel
+GetAttribute ok nil
+GetAttributes ok table
+AddTag error Function Instance.AddTag is not safe to call in parallel
+HasTag ok false
+GetTags ok 0
+CollectionService:HasTag ok false
+CollectionService:AddTag error Function CollectionService.AddTag is not safe to call in parallel
+FindFirstChild ok Child
+findFirstChild error Function Instance.findFirstChild is not safe to call in parallel
+FindFirstChildOfClass ok Child
+FindFirstChildWhichIsA ok Child
+FindFirstAncestor ok nil
+FindFirstDescendant error FindFirstDescendant is not enabled
+GetChildren ok 1
+children error Function Instance.children is not safe to call in parallel
+GetDescendants ok 1
+IsA ok true
+isA error Function Object.isA is not safe to call in parallel
+IsDescendantOf ok true
+GetFullName ok Folder.Child
+GetActor ok true
+WaitForChild error Function Instance.WaitForChild is not safe to call in parallel
+Clone error Function Instance.Clone is not safe to call in parallel
+Destroy error Function Instance.Destroy is not safe to call in parallel
+ClearAllChildren error Function Instance.ClearAllChildren is not safe to call in parallel
+GetPropertyChangedSignal error Function Object.GetPropertyChangedSignal is not safe to call in parallel
+GetAttributeChangedSignal error Function Instance.GetAttributeChangedSignal is not safe to call in parallel
+GetPivot ok 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1
+PivotTo error Function PVInstance.PivotTo is not safe to call in parallel
+GetMass ok 6.720000267028809
+GetService error Function ServiceProvider.GetService is not safe to call in parallel
+FindService ok Workspace
+Raycast ok
+GetPartBoundsInBox ok
+IsServer ok true
+JSONEncode ok [1]
+GenerateGUID ok
+missing method error Nope is not a valid member of Part "Serial"
+read event error Event BasePart.Touched is not safe to access in parallel
+read Changed error Event Object.Changed is not safe to access in parallel
+read bindable Event error Event BindableEvent.Event is not safe to access in parallel
+Connect held signal error Function Event.Connect is not safe to call in parallel
+Once held signal error Function Event.Once is not safe to call in parallel
+ConnectParallel held signal error Function Event.ConnectParallel is not safe to call in parallel
+Fire ok 
+set OnInvoke error Callback BindableFunction.OnInvoke is not safe to access in parallel
+read OnInvoke error OnInvoke is a callback member of BindableFunction; you can only set the callback value, get is not available
+Instance.new ok Instance Part
+Instance.new with parent error Unable to parent new Instance during parallel execution.
+write new instance error Property Instance.Name is not safe to write in parallel
+Destroy new instance error Function Instance.Destroy is not safe to call in parallel
+require error require can not be used during the parallel phase
+SendMessage ok 
+BindToMessage ok Connection
+BindToMessageParallel ok Connection
+SharedTable.increment ok 0 1
+SharedTableRegistry ok SharedTable
+print ok
+warn ok
+Vector3 math ok 2, 4, 6
+tick ok
+os.clock ok
+Random ok
+game ok DataModel
+spawned error Property Instance.Name is not safe to write in parallel
+spawn ok
+defer ok
+delay ok
+wrapped error Property Instance.Name is not safe to write in parallel
+coroutine.wrap ok 
+legacy spawn ok
+delayed error Property Instance.Name is not safe to write in parallel
+after task.wait error Property Instance.Name is not safe to write in parallel
+deferred error Property Instance.Name is not safe to write in parallel
+legacy spawned ok 
+after wait ok 
+after delays ok 
+synchronized
+synchronize again ok 
+write after synchronize ok 
+Clone after synchronize ok Serial
+Fire after synchronize ok 
+require after synchronize ok true
+SetAttribute after synchronize ok 
+deferred after synchronize ok

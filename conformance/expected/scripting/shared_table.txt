@@ -1,0 +1,137 @@
+-- studio 0.748.0.7481526
+-- signals: deferred
+global table true
+functions clear:function clone:function cloneAndFreeze:function increment:function isFrozen:function new:function size:function update:function
+assign global error attempt to modify a readonly table
+new SharedTable: <address> SharedTable userdata 0
+new nil error invalid argument #1 to 'new' (table expected, got nil)
+new number error invalid argument #1 to 'new' (table expected, got number)
+new string error invalid argument #1 to 'new' (table expected, got string)
+new boolean error invalid argument #1 to 'new' (table expected, got boolean)
+new Instance error invalid argument #1 to 'new' (table expected, got Instance)
+new two tables ok 1
+new SharedTable error invalid argument #1 to 'new' (table expected, got SharedTable)
+method call error Functions can not be stored in a SharedTable
+read 1 true s one two nil nil
+size 5
+string number keys distinct ok nil one
+key empty string ok v 1
+key 0 ok v 1
+key -0 ok v 1
+key 2^32-1 ok v 1
+key 2^32 error Numeric SharedTable keys must be nonnegative integers less than 2^32
+key -1 error Numeric SharedTable keys must be nonnegative integers less than 2^32
+key 1.5 error Numeric SharedTable keys must be nonnegative integers less than 2^32
+key nan error Numeric SharedTable keys must be nonnegative integers less than 2^32
+key inf error Numeric SharedTable keys must be nonnegative integers less than 2^32
+key true error SharedTable keys can only be strings or numbers.
+key Vector3 error SharedTable keys can only be strings or numbers.
+key Instance error SharedTable keys can only be strings or numbers.
+key table error SharedTable keys can only be strings or numbers.
+key SharedTable error SharedTable keys can only be strings or numbers.
+read key 1.5 error Numeric SharedTable keys must be nonnegative integers less than 2^32
+read key -1 error Numeric SharedTable keys must be nonnegative integers less than 2^32
+read key true error SharedTable keys can only be strings or numbers.
+read key nil error SharedTable keys can only be strings or numbers.
+write key nil error SharedTable keys can only be strings or numbers.
+new key 1.5 error Numeric SharedTable keys must be nonnegative integers less than 2^32
+new key true error SharedTable keys can only be strings or numbers.
+new key -1 error Numeric SharedTable keys must be nonnegative integers less than 2^32
+new key table error SharedTable keys can only be strings or numbers.
+value nil ok nil 0
+value integer ok number 7 true
+value fraction ok number -2.25 true
+value nan ok true
+value inf ok number -inf true
+value false ok boolean false true
+value string ok string hello true
+value empty string ok string  true
+value embedded zero ok 3
+value Vector3 ok Vector3 1, 2, 3 true
+value vector ok Vector3 1, 2, 3 true
+value Vector2 ok Vector2 1, 2 true
+value Vector3int16 ok Vector3int16 1, 2, 3 true
+value CFrame ok CFrame 1, 2, 3, 1, 0, 0, 0, 1, 0, 0, 0, 1 true
+value Color3 ok Color3 1, 0, 0 true
+value BrickColor ok BrickColor Bright red true
+value UDim ok UDim 1, 2 true
+value UDim2 ok UDim2 {1, 2}, {3, 4} true
+value Rect ok Rect 1, 2, 3, 4 true
+value NumberRange ok NumberRange 1 2  true
+value NumberSequence ok NumberSequence 0 1 0 1 1 0  true
+value ColorSequence ok ColorSequence 0 0 1 0 0 1 0 1 0 0  true
+value Ray ok Ray {0, 0, 0}, {1, 1, 1} true
+value Region3 ok Region3 0.5, 0.5, 0.5, 1, 0, 0, 0, 1, 0, 0, 0, 1; 1, 1, 1 true
+value Font ok Font Font { Family = rbxasset://fonts/families/Arial.json, Weight = Regular, Style = Normal } true
+value EnumItem ok EnumItem Enum.Material.Plastic true
+value Enum ok nil nil false
+value Enums ok nil nil false
+value TweenInfo ok TweenInfo Time:1 DelayTime:0 RepeatCount:0 Reverses:False EasingDirection:Out EasingStyle:Quad true
+value DateTime error DateTimes can not be stored in a SharedTable
+value PhysicalProperties ok PhysicalProperties 1, 0.300000012, 0.5, 1, 1, 1 true
+value Random error Randoms can not be stored in a SharedTable
+value Content error Contents can not be stored in a SharedTable
+value function error Functions can not be stored in a SharedTable
+value Luau function error Functions can not be stored in a SharedTable
+value thread ok nil nil false
+value buffer ok buffer buffer: <address> false
+value Instance error Instances can not be stored in a SharedTable
+value unparented Instance error Instances can not be stored in a SharedTable
+value userdata ok nil nil false
+value RBXScriptSignal error EventInstances can not be stored in a SharedTable
+value RBXScriptConnection ok error Connections can not be stored in a SharedTable
+new function value error Functions can not be stored in a SharedTable
+new Instance value error Instances can not be stored in a SharedTable
+new nested function error Functions can not be stored in a SharedTable
+failed assign keeps old ok 1
+nested SharedTable 1 SharedTable 20
+assign table ok SharedTable 2
+assign frozen table ok SharedTable false
+assign empty table ok SharedTable 0
+table with metatable ok SharedTable nil
+table with sparse keys ok a nil c z 3
+same table twice ok false
+cycle error Cannot convert a cyclic table to a SharedTable
+assign cycle error Cannot convert a cyclic table to a SharedTable
+SharedTable in itself ok true true 1
+SharedTable shared ok 2 true true
+equal self true true
+equal empty false
+equal nested read twice true false
+equal other types false false false
+length error attempt to get length of a SharedTable value
+length empty error attempt to get length of a SharedTable value
+length array error attempt to get length of a SharedTable value
+concat error attempt to concatenate string with SharedTable
+add error attempt to perform arithmetic (add) on SharedTable and number
+compare error attempt to compare SharedTable < SharedTable
+call error attempt to call a SharedTable value
+tostring SharedTable: <address> SharedTable: <address>
+string.format error invalid argument #2 to 'format' (string expected, got SharedTable)
+rawget error invalid argument #1 to 'rawget' (table expected, got SharedTable)
+rawset error invalid argument #1 to 'rawset' (table expected, got SharedTable)
+rawlen error invalid argument #1 to 'rawlen' (table or string expected)
+getmetatable ok string
+setmetatable error invalid argument #1 to 'setmetatable' (table expected, got SharedTable)
+table.isfrozen error invalid argument #1 to 'isfrozen' (table expected, got SharedTable)
+table.freeze error invalid argument #1 to 'freeze' (table expected, got SharedTable)
+table.insert error invalid argument #1 to 'insert' (table expected, got SharedTable)
+table.concat error invalid argument #1 to 'concat' (table expected, got SharedTable)
+table.clone error invalid argument #1 to 'clone' (table expected, got SharedTable)
+unpack error invalid argument #1 to 'unpack' (table expected, got SharedTable)
+json ok null
+attribute error SharedTable is not a supported attribute type
+method on table error attempt to call missing method 'size' of SharedTable
+field named size ok 5 1
+order number:0=w number:1=y number:2=z number:3=x number:10=v number:4294967295=u string:=5 string:10=6 string:2=7 string:B=3 string:a=2 string:aa=4 string:b=1
+order inserted ok number:1=1 number:5=1 string:a=1 string:m=1 string:z=1
+order after delete ok number:1=1 number:2=2 number:3=3 string:a=1 string:b=2
+iterate empty ok 
+iterate nested ok inner SharedTable true
+pairs error invalid argument #1 to 'pairs' (table expected, got SharedTable)
+ipairs error invalid argument #1 to 'ipairs' (table expected, got SharedTable)
+next error invalid argument #1 to 'next' (table expected, got SharedTable)
+add while iterating ok a b 4
+remove while iterating ok a=1 b=2 c=3
+break and restart ok 3
+through BindableFunction ok true SharedTable SharedTable true

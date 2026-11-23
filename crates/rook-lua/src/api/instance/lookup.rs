@@ -51,6 +51,10 @@ pub(crate) struct PropInfo {
     pub(super) scriptability: Scriptability,
     pub(super) flags: PropertyFlags,
     pub(super) security: [Security; 2],
+    /// The class that declares the name scripts use.
+    pub(super) owner: &'static str,
+    /// What desynchronized code may do with it.
+    pub(super) safety: rook_reflection::members::ThreadSafety,
 }
 
 /// What a key names on a class.
@@ -92,7 +96,15 @@ pub(super) fn member_table(class: ClassId, known: bool, identity: Identity) -> M
             let Some(p) = db.find_property(class, name) else {
                 continue;
             };
-            let security = property_security(db.class(p.owner).name, p.name);
+            let owner = db.class(p.owner).name;
+            let security = property_security(owner, p.name);
+            // A property only rbx-dom's database has reads as most do.
+            let safety = members()
+                .classes
+                .get(owner)
+                .map_or(rook_reflection::members::ThreadSafety::ReadSafe, |m| {
+                    m.property_thread_safety(p.name)
+                });
             // What only the engine reaches isn't a member at all, so a child
             // of that name is found (conformance case
             // `instance/locked_member_children`).
@@ -134,6 +146,8 @@ pub(super) fn member_table(class: ClassId, known: bool, identity: Identity) -> M
                     scriptability,
                     flags: p.flags,
                     security,
+                    owner,
+                    safety,
                 }),
             );
         }
@@ -329,14 +343,17 @@ pub(crate) fn get_member(
             if p.flags.write_only {
                 return Err(ScriptError(format!("{key} is a write-only member")));
             }
+            super::parallel::check_read(lua, &p, key)?;
             if PLACE_READS.contains(&p.name) {
                 let attachment = with_world(lua, |w| w.dom.is_a(id, "Attachment"));
                 let part = with_world(lua, |w| w.dom.parent(id));
                 settle_joints(lua, if attachment { part.unwrap_or(id) } else { id });
             }
             let (value, plain) = read(lua, &c, id, p.name, Some((p.id, p.enum_id)))?;
+            // A fast read skips the check above.
             if plain
                 && identity == Identity::Game
+                && p.safety != rook_reflection::members::ThreadSafety::Unsafe
                 && let Some((static_key, _)) = found
             {
                 fast = Some(register_fast_read(&c, id, static_key, p));
@@ -350,13 +367,16 @@ pub(crate) fn get_member(
         }) => Ok(LuaValue::Function(method_function(
             lua, owner, name, preferred,
         )?)),
-        Some(Member::Event(name)) => Ok(mlua::IntoLua::into_lua(
-            LSignal {
-                instance: id,
-                kind: SignalKind::Event(name),
-            },
-            lua,
-        )?),
+        Some(Member::Event(name)) => {
+            super::parallel::check_event(lua, id, name)?;
+            Ok(mlua::IntoLua::into_lua(
+                LSignal {
+                    instance: id,
+                    kind: SignalKind::Event(name),
+                },
+                lua,
+            )?)
+        }
         Some(Member::Denied { verb, security }) => Err(ScriptError(format!(
             "The current thread cannot {verb} '{key}' (lacking capability {})",
             security.capability()

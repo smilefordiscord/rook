@@ -2,7 +2,7 @@ use rbx_reflection::{PropertyKind, PropertySerialization, PropertyTag, Reflectio
 use rbx_types::Variant;
 
 use super::*;
-use crate::members::{Security, Tag, TypeKind};
+use crate::members::{Security, Tag, ThreadSafety, TypeKind};
 
 const DUMP: &str = r#"{"Classes": [{"Name": "Instance", "Superclass": "<<<ROOT>>>", "Members": [
     {"MemberType": "Function", "Name": "FindFirstChild",
@@ -15,7 +15,7 @@ const DUMP: &str = r#"{"Classes": [{"Name": "Instance", "Superclass": "<<<ROOT>>
     {"MemberType": "Event", "Name": "ChildAdded",
      "Parameters": [{"Name": "child", "Type": {"Category": "Class", "Name": "Instance"}}], "Security": "None"},
     {"MemberType": "Property", "Name": "Name", "Security": {"Read": "None", "Write": "None"},
-     "ValueType": {"Category": "Primitive", "Name": "string"}},
+     "ThreadSafety": "ReadSafe", "ValueType": {"Category": "Primitive", "Name": "string"}},
     {"MemberType": "Property", "Name": "UniqueId", "Security": {"Read": "RobloxSecurity", "Write": "RobloxSecurity"},
      "ValueType": {"Category": "DataType", "Name": "UniqueId"}}
 ]}]}"#;
@@ -35,6 +35,15 @@ fn members_generate_and_round_trip() {
     let children = &inst.functions[1];
     assert_eq!(children.tags, [Tag::Deprecated]);
     assert_eq!(children.preferred.as_deref(), Some("GetChildren"));
+
+    assert_eq!(ffc.safety, ThreadSafety::Safe);
+    assert_eq!(children.safety, ThreadSafety::Unsafe);
+    assert_eq!(inst.property_thread_safety("Name"), ThreadSafety::ReadSafe);
+    // The dump gives UniqueId no level.
+    assert_eq!(
+        inst.property_thread_safety("UniqueId"),
+        ThreadSafety::Unsafe
+    );
 
     assert_eq!(inst.events[0].params[0].ty.kind, TypeKind::Class);
     assert_eq!(inst.property_security.len(), 1);

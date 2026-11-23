@@ -46,6 +46,9 @@ impl Runtime {
             {
                 tracing::warn!("dropping a freed instance's callbacks failed: {e}");
             }
+            if let Err(e) = crate::runtime::actors::forget(&self.lua, id) {
+                tracing::warn!("dropping a freed Actor's globals failed: {e}");
+            }
         }
         freed
     }

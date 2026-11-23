@@ -6,7 +6,7 @@ Signals, the scheduler and the Luau bridge. Part of the [architecture](../archit
 
 ### Signals
 
-- `RBXScriptSignal`: `Connect`, `Once`, `Wait`, `ConnectParallel` (stub until Actors exist), plus legacy `connect`/`wait` aliases. `RBXScriptConnection`: `Disconnect`, `Connected`.
+- `RBXScriptSignal`: `Connect`, `Once`, `Wait`, `ConnectParallel` (its handler waits for its Actor's parallel phase), plus legacy `connect`/`wait` aliases. `RBXScriptConnection`: `Disconnect`, `Connected`.
 - **Immediate** mode (what `SignalBehavior.Default` maps to today, and what old places use): handlers run synchronously at fire time on a new thread, with a re-entrancy depth limit of 10. This is **Confirmed** from creator-docs.
 - **Deferred** mode: handlers are queued and run at resumption points. `Disconnect()` drops pending invocations; `Destroy()` disconnects but still runs pending ones. This is **Confirmed** from creator-docs.
 - **Removal** (`rook-lua`'s `removal`): a script's `Destroy` or `Parent` write is split into steps (lock and `Destroying`; `DescendantRemoving` per descendant; the move; each child it had at the start), each step's journal entries dispatched before the next, so Immediate handlers see the tree mid-removal as in Studio. Host code doing the same through `Dom` records the same entries in the same order and dispatches after. **Confirmed** in Studio 0.743 (conformance case `signals/destroy_order`).
@@ -27,12 +27,14 @@ Signals, the scheduler and the Luau bridge. Part of the [architecture](../archit
   PreSimulation (Stepped)
   physics               → whole 240 Hz steps, the rest carried (Measured)
   PostSimulation
-  Heartbeat; task.wait / task.delay resumption
+  task.wait / task.delay resumption   (Measured: just before Heartbeat)
+  Heartbeat
   replication send
   ```
 
-  Deferred-event drains happen at each documented resumption point.
-- Queues: a min-heap of waiting threads by resume time; legacy `wait` (with its own minimum and throttling, behavior to be measured); `task.defer`/`task.spawn`; the deferred-event queue; and jobs held for the next frame's resumption point, never this frame's, for work that stands for a round trip (MessagingService's messages).
+  Deferred-event drains happen at each documented resumption point. Each place the frame runs scripts ends with a parallel phase (`Runtime::run_parallel_phase`): Actors' messages' serial bindings, then their desynchronized work grouped by Actor, then the threads that synchronized ([Parallel Luau](../../behavior/scripting/parallel-luau.md#phases-in-the-frame)).
+- Queues: a min-heap of waiting threads by resume time; legacy `wait` (with its own minimum and throttling, behavior to be measured); `task.defer`/`task.spawn`; the deferred-event queue; the next parallel phase's work by Actor, each job in its place (a message's parallel bindings in the place it was sent), and what synchronized out of it; jobs held for the next frame's resumption point, never this frame's, for work that stands for a round trip (MessagingService's messages); `task.defer`s made in parallel, held until the deferring thread has been resumed again. The scheduler owns the phase (serial, or one Actor's parallel work), and `task` work scheduled while parallel comes back parallel; legacy `wait`/`spawn`/`delay` come back serial.
+- **Actors** (`rook-lua`'s `actors`): each Actor's scripts run in a context of their own, a globals table their environments fall back to with the Actor's own `_G`, `shared`, `require` (module results kept per context) and `task`, standing for the Luau VM Roblox gives each Actor. A context is the unit a parallel phase runs as one, one after another on the DataModel's thread ([M14 step 6](../../roadmap/m14-scripting-completeness.md)).
 - **Time source abstraction**: real time (player) or fixed-step simulated time (headless runs and tests), so conformance runs are deterministic.
 
 ## Luau bridge (`rook-lua`)

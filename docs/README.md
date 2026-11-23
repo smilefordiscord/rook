@@ -94,11 +94,13 @@
     - [Faces, Axes and PhysicalProperties](behavior/scripting/faces-and-axes.md): their `typeof` and printing
     - [HTTP requests](behavior/scripting/http-requests.md): when HttpService's requests go out, what they send and what comes back
     - [JSON](behavior/scripting/json.md): which tables `JSONEncode` writes as arrays
+    - [Luau libraries](behavior/scripting/luau-libraries.md): `buffer`, `vector` and the rest of the Luau Roblox runs
     - [Marketplace](behavior/scripting/marketplace.md): item info, ownership, purchase prompts and receipts, as Studio's test purchases
     - [Member lookup](behavior/scripting/member-lookup.md): lowercase first letters, and what a child of that name beats
     - [Memory stores](behavior/scripting/memory-stores.md): MemoryStoreService's sorted maps, queues and hash maps within one session
     - [Messaging](behavior/scripting/messaging.md): MessagingService's topics within one session
     - [Nil Instance arguments](behavior/scripting/nil-arguments.md): what each method does with the null object
+    - [Parallel Luau](behavior/scripting/parallel-luau.md): Actors, serial and parallel phases, messages and SharedTable
     - [Random](behavior/scripting/random.md): Luau's generator and each method's draws
     - [Require by string](behavior/scripting/require-by-string.md): `./`, `../` and `@self` paths, and their errors
     - [Running scripts](behavior/scripting/running-scripts.md): scripts stop the moment they're removed from where they run or disabled

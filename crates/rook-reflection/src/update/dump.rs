@@ -3,7 +3,7 @@
 use serde::Deserialize;
 
 use super::UpdateError;
-use crate::members::{Param, Security, Tag, TypeKind, TypeRef};
+use crate::members::{Param, Security, Tag, ThreadSafety, TypeKind, TypeRef};
 
 #[derive(Deserialize)]
 #[serde(rename_all = "PascalCase")]
@@ -61,6 +61,8 @@ pub(super) struct Member {
     /// such as `__api_dump_class_not_creatable__`.
     #[serde(default)]
     pub default: Option<String>,
+    #[serde(default)]
+    thread_safety: Option<String>,
 }
 
 #[derive(Deserialize, PartialEq)]
@@ -155,6 +157,15 @@ impl Member {
     pub(super) fn property_security(&self) -> Result<Option<[Security; 2]>, UpdateError> {
         let pair = self.property_security_pair()?;
         Ok((pair != [Security::None; 2]).then_some(pair))
+    }
+
+    /// The member's `ThreadSafety`; Unsafe when the dump gives none.
+    pub(super) fn thread_safety(&self) -> Result<ThreadSafety, UpdateError> {
+        match &self.thread_safety {
+            None => Ok(ThreadSafety::Unsafe),
+            Some(s) => serde_json::from_value(serde_json::Value::String(s.clone()))
+                .map_err(|_| UpdateError::Shape(format!("thread safety {s}"))),
+        }
     }
 
     /// String tags Rook cares about; others (replication, threading) are dropped.

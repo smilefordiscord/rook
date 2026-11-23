@@ -2,7 +2,8 @@ use mlua::{Function, Lua, MultiValue, Table, Value as LuaValue};
 use rook_dom::{Change, Dom, InstanceId};
 use rook_types::RunContext;
 
-use super::instance::{LuaInstance, push_instance};
+use super::instance::{LuaInstance, key_of, push_instance};
+use crate::runtime::actors::{self, Context};
 use crate::runtime::bytecode;
 use crate::runtime::ctx::args::Args;
 use crate::runtime::ctx::{ApiResult, Outcome, ScriptError, api_fn, api_ret, with_world};
@@ -15,10 +16,10 @@ fn source_of(lua: &Lua, id: InstanceId) -> String {
     })
 }
 
-/// A fresh environment whose globals fall back to the shared ones, with
+/// A fresh environment whose globals fall back to `context`'s, with
 /// `script` set. Global assignments stay in the script's own environment.
-fn environment(lua: &Lua, script: InstanceId) -> mlua::Result<Table> {
-    let env = fresh_environment(lua)?;
+fn environment(lua: &Lua, script: InstanceId, context: Context) -> mlua::Result<Table> {
+    let env = fresh_environment(lua, context)?;
     env.raw_set("script", push_instance(lua, script)?)?;
     Ok(env)
 }
@@ -84,13 +85,21 @@ pub(crate) fn caller_is_core(lua: &Lua) -> bool {
     false
 }
 
-/// Start a Script on a new thread. Compile errors go to the output.
-/// Returns false if the script was already started or failed to compile.
+/// Start a Script on a new thread, in the context of the Actor it's under
+/// as it starts. Compile errors go to the output. Returns false if the
+/// script was already started or failed to compile.
 pub(crate) fn run_script(lua: &Lua, id: InstanceId) -> bool {
-    if with_world(lua, |w| w.started.contains_key(&id)) {
+    let (started, context) = with_world(lua, |w| {
+        (
+            w.started.contains_key(&id),
+            w.dom.parent(id).and_then(|p| actors::actor_of(&w.dom, p)),
+        )
+    });
+    if started {
         return false;
     }
-    let compiled = environment(lua, id).and_then(|env| Ok((compile(lua, id, env.clone())?, env)));
+    let compiled =
+        environment(lua, id, context).and_then(|env| Ok((compile(lua, id, env.clone())?, env)));
     let (func, env) = match compiled {
         Ok(f) => f,
         Err(e) => {
@@ -264,23 +273,24 @@ pub(crate) fn run_source(
     script: Option<InstanceId>,
 ) -> mlua::Result<()> {
     let env = match script {
-        Some(id) => environment(lua, id)?,
-        None => fresh_environment(lua)?,
+        Some(id) => environment(lua, id, None)?,
+        None => fresh_environment(lua, None)?,
     };
     run_in(lua, chunk_name, source, env)
 }
 
-/// An environment that reads the shared globals and keeps its own writes.
-/// It's marked `safeenv`, as Roblox's script sandbox is, so Luau calls
-/// builtins (`math.floor`, `type`, `select`) and runs `pairs` loops on its
-/// fast paths. `getfenv` and `setfenv` clear the mark (Luau's own rule),
-/// so scripts that change environments get the general paths.
-fn fresh_environment(lua: &Lua) -> mlua::Result<Table> {
+/// An environment that reads `context`'s globals and keeps its own
+/// writes. It's marked `safeenv`, as Roblox's script sandbox is, so Luau
+/// calls builtins (`math.floor`, `type`, `select`) and runs `pairs` loops
+/// on its fast paths. `getfenv` and `setfenv` clear the mark (Luau's own
+/// rule), so scripts that change environments get the general paths.
+fn fresh_environment(lua: &Lua, context: Context) -> mlua::Result<Table> {
     let env = lua.create_table()?;
     let mt = lua.create_table()?;
-    mt.raw_set("__index", lua.globals())?;
+    mt.raw_set("__index", actors::globals(lua, context)?)?;
     env.set_metatable(Some(mt))?;
     env.set_safeenv(true);
+    actors::register(lua, &env, context)?;
     Ok(env)
 }
 
@@ -296,7 +306,7 @@ pub(crate) fn run_source_in(
     let env = match lua.named_registry_value::<Option<Table>>(&key)? {
         Some(env) => env,
         None => {
-            let env = fresh_environment(lua)?;
+            let env = fresh_environment(lua, None)?;
             lua.set_named_registry_value(&key, &env)?;
             env
         }
@@ -378,14 +388,28 @@ fn require_path(lua: &Lua, path: &str) -> ApiResult<InstanceId> {
     Ok(at)
 }
 
-fn require(lua: &Lua, args: MultiValue) -> ApiResult<Outcome> {
+/// `require` for code in `context`, which gets the context's own copy of
+/// each module.
+pub(crate) fn require_in(lua: &Lua, context: Context) -> mlua::Result<Function> {
+    api_fn(lua, move |lua, args| require(lua, args, context))
+}
+
+fn require(lua: &Lua, args: MultiValue, context: Context) -> ApiResult<Outcome> {
+    // Confirmed: Studio 0.748, the words included.
+    if actors::in_parallel(lua) {
+        return Err(ScriptError(
+            "require can not be used during the parallel phase".into(),
+        ));
+    }
     let a = Args::new(args, "require");
     let module = match a.get(0) {
         LuaValue::UserData(u) => u.borrow::<LuaInstance>().ok().map(|i| i.0),
         LuaValue::Integer(n) => {
-            return super::methods::content::assets::require_asset(lua, *n as f64);
+            return super::methods::content::assets::require_asset(lua, *n as f64, context);
         }
-        LuaValue::Number(n) => return super::methods::content::assets::require_asset(lua, *n),
+        LuaValue::Number(n) => {
+            return super::methods::content::assets::require_asset(lua, *n, context);
+        }
         LuaValue::String(path) => {
             let path = path.to_string_lossy();
             let found = require_path(lua, &path)?;
@@ -406,10 +430,11 @@ fn require(lua: &Lua, args: MultiValue) -> ApiResult<Outcome> {
         ));
     }
 
+    let key = (context, module);
     let cached = with_world(lua, |w| {
         w.modules
             .results
-            .get(&module)
+            .get(&key)
             .map(|k| lua.registry_value::<LuaValue>(k))
     });
     if let Some(v) = cached {
@@ -418,7 +443,7 @@ fn require(lua: &Lua, args: MultiValue) -> ApiResult<Outcome> {
     // Another thread loading the module: wait for it (observed in Studio
     // 0.742: a second require while the body yielded got the same value).
     let thread = lua.current_thread();
-    let loader = with_world(lua, |w| w.modules.loading.get(&module).cloned());
+    let loader = with_world(lua, |w| w.modules.loading.get(&key).cloned());
     if let Some(loader) = loader {
         if loader == thread {
             return Err(ScriptError(
@@ -426,12 +451,12 @@ fn require(lua: &Lua, args: MultiValue) -> ApiResult<Outcome> {
             ));
         }
         with_world(lua, |w| {
-            w.modules.waiting.entry(module).or_default().push(thread)
+            w.modules.waiting.entry(key).or_default().push(thread)
         });
         let wait: Function = lua.named_registry_value("rook.module_wait")?;
         return Ok(Outcome::Call(wait, MultiValue::new()));
     }
-    let func = compile(lua, module, environment(lua, module)?).map_err(|e| {
+    let func = compile(lua, module, environment(lua, module, context)?).map_err(|e| {
         with_world(lua, |w| {
             w.errors += 1;
             w.push_log(
@@ -441,13 +466,17 @@ fn require(lua: &Lua, args: MultiValue) -> ApiResult<Outcome> {
         });
         ScriptError("Requested module experienced an error while loading".into())
     })?;
-    with_world(lua, |w| w.modules.loading.insert(module, thread));
+    with_world(lua, |w| w.modules.loading.insert(key, thread));
     let runner: Function = lua.named_registry_value("rook.module_runner")?;
+    let context = context.map_or(LuaValue::Nil, |actor| {
+        LuaValue::LightUserData(key_of(actor))
+    });
     Ok(Outcome::Call(
         runner,
         MultiValue::from_vec(vec![
             LuaValue::UserData(push_instance(lua, module)?),
             LuaValue::Function(func),
+            context,
         ]),
     ))
 }
@@ -471,15 +500,20 @@ pub(crate) fn install(lua: &Lua) -> mlua::Result<()> {
     let finished = api_ret(lua, |lua, args| {
         let a = Args::new(args, "require");
         let module = a.instance(0)?;
-        let ok = a.truthy(1);
-        let value = a.get(2).clone();
+        let context = match a.get(1) {
+            LuaValue::LightUserData(actor) => Some(super::instance::id_of(*actor)),
+            _ => None,
+        };
+        let key = (context, module);
+        let ok = a.truthy(2);
+        let value = a.get(3).clone();
         let waiting = with_world(lua, |w| {
-            w.modules.loading.remove(&module);
-            w.modules.waiting.remove(&module).unwrap_or_default()
+            w.modules.loading.remove(&key);
+            w.modules.waiting.remove(&key).unwrap_or_default()
         });
         if ok {
-            let key = lua.create_registry_value(value.clone())?;
-            with_world(lua, |w| w.modules.results.insert(module, key));
+            let result = lua.create_registry_value(value.clone())?;
+            with_world(lua, |w| w.modules.results.insert(key, result));
         } else {
             let msg = crate::runtime::ctx::args::display_value(lua, &value);
             with_world(lua, |w| {
@@ -522,21 +556,21 @@ pub(crate) fn install(lua: &Lua) -> mlua::Result<()> {
         .load(
             r##"
             local finished, pcall, select, error = ...
-            local function check(module, ok, ...)
+            local function check(module, context, ok, ...)
                 if not ok then
-                    finished(module, false, (...))
+                    finished(module, context, false, (...))
                     error("Requested module experienced an error while loading", 0)
                 end
                 if select("#", ...) ~= 1 then
-                    finished(module, false, "Module code did not return exactly one value")
+                    finished(module, context, false, "Module code did not return exactly one value")
                     error("Module code did not return exactly one value", 0)
                 end
                 local value = ...
-                finished(module, true, value)
+                finished(module, context, true, value)
                 return value
             end
-            return function(module, body)
-                return check(module, pcall(body))
+            return function(module, body, context)
+                return check(module, context, pcall(body))
             end
             "##,
         )
@@ -548,6 +582,6 @@ pub(crate) fn install(lua: &Lua) -> mlua::Result<()> {
             lua.globals().get::<Function>("error")?,
         ))?;
     lua.set_named_registry_value("rook.module_runner", runner)?;
-    lua.globals().set("require", api_fn(lua, require)?)?;
+    lua.globals().set("require", require_in(lua, None)?)?;
     Ok(())
 }
