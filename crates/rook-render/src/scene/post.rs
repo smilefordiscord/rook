@@ -9,6 +9,9 @@ pub struct PostEffects {
     pub tonemapper: Tonemapper,
     /// The ColorCorrectionEffects, applied one after another in this order.
     pub color: Vec<ColorCorrection>,
+    /// The greatest enabled BlurEffect's `Size`, in pixels at the screen's
+    /// resolution; 0 blurs nothing.
+    pub blur: f32,
 }
 
 /// `ColorGradingEffect.TonemapperPreset`: how light becomes the screen's

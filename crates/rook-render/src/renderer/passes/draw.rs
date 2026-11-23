@@ -172,8 +172,21 @@ impl Renderer {
         let gui = self
             .gui
             .record(&self.queue, &mut encoder, &gui_layer, (width, height));
-        self.tonemap
-            .record(&self.queue, &mut encoder, target, &self.post, (looks, gui));
+        let inputs = self.post_passes.record(
+            &self.device,
+            &self.queue,
+            &mut encoder,
+            &frame,
+            (width, height),
+            &self.post,
+        );
+        self.tonemap.record(
+            &self.queue,
+            &mut encoder,
+            target,
+            (&self.post, self.post_passes.tone_group(), inputs),
+            (looks, gui),
+        );
         if let Some(timer) = &mut self.timer {
             timer.resolve(&mut encoder, shadow.is_some());
         }

@@ -11,6 +11,7 @@ use wesl_core::include_wesl;
 use super::gui::GUI_FORMAT;
 use super::*;
 use crate::renderer::passes::highlights::{HIGHLIGHT_LIMIT, Looks, MASK_FORMAT};
+use crate::renderer::passes::post::ToneInputs;
 use crate::scene::COLOR_IDENTITY;
 
 /// What the tone pass reads besides the frame and the mask.
@@ -23,6 +24,8 @@ struct ToneUniform {
     curve: [f32; 4],
     /// The ColorCorrections' matrix, on sRGB pixel values.
     color: ColorMatrix,
+    /// x: how much of the blurred frame replaces the frame.
+    effects: [f32; 4],
     looks: Looks,
 }
 
@@ -50,7 +53,12 @@ pub(crate) struct Tonemap {
 }
 
 impl Tonemap {
-    pub(crate) fn new(device: &wgpu::Device, color_format: wgpu::TextureFormat) -> Self {
+    /// Its group 1 is `post`'s, the post effects' textures.
+    pub(crate) fn new(
+        device: &wgpu::Device,
+        color_format: wgpu::TextureFormat,
+        post: &wgpu::BindGroupLayout,
+    ) -> Self {
         let layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("rook tone"),
             entries: &[
@@ -102,7 +110,7 @@ impl Tonemap {
         });
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("rook tone"),
-            bind_group_layouts: &[Some(&layout)],
+            bind_group_layouts: &[Some(&layout), Some(post)],
             immediate_size: 0,
         });
         let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -211,7 +219,8 @@ impl Tonemap {
         (view, mask, gui)
     }
 
-    /// The frame through `post`'s curve and color matrix onto `target`,
+    /// The frame and the post effects' textures (`inputs`, read through
+    /// `group`) through `post`'s curve and color matrix onto `target`,
     /// with the Highlights' `looks` over it when the mask holds any, and
     /// the GUI layer over that when it holds GUI.
     pub(crate) fn record(
@@ -219,10 +228,10 @@ impl Tonemap {
         queue: &wgpu::Queue,
         encoder: &mut wgpu::CommandEncoder,
         target: &wgpu::TextureView,
-        post: &PostEffects,
+        (post, group, inputs): (&PostEffects, &wgpu::BindGroup, ToneInputs),
         (looks, gui): (Option<&Looks>, bool),
     ) {
-        let Some(Frame { group, .. }) = &self.frame else {
+        let Some(Frame { group: frame, .. }) = &self.frame else {
             return;
         };
         let curve = match post.tonemapper {
@@ -238,6 +247,7 @@ impl Tonemap {
                 f32::from(u8::from(color.is_some())),
             ],
             color: color.unwrap_or(COLOR_IDENTITY),
+            effects: [inputs.blur, 0.0, 0.0, 0.0],
             looks: looks.copied().unwrap_or([[0.0; 4]; 2 * HIGHLIGHT_LIMIT]),
         };
         queue.write_buffer(&self.uniform, 0, bytemuck::bytes_of(&uniform));
@@ -258,7 +268,8 @@ impl Tonemap {
             multiview_mask: None,
         });
         pass.set_pipeline(&self.pipeline);
-        pass.set_bind_group(0, group, &[]);
+        pass.set_bind_group(0, frame, &[]);
+        pass.set_bind_group(1, group, &[]);
         pass.draw(0..3, 0..1);
     }
 }

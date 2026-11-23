@@ -50,6 +50,32 @@ How the properties make Studio's matrix isn't in its shaders. Rook's
   Camera's, each in child order, as one matrix;
 - the result is clamped to 0 to 1.
 
+## BlurEffect
+
+A Gaussian blur over the whole 3D view, `Size` its radius in pixels;
+only one applies at a time, the one with the greatest `Size` (Confirmed:
+creator-docs).
+
+Studio's blur shaders (`Blur1FS` to `Blur7FS`, Inference) are separable
+Gaussians: a center texel plus 1 to 7 pairs of neighbors, the pair 2k − 1
+and 2k texels out read by one filtered tap placed between them by their
+weights, the weights exp(−d² / 2σ²). They read the frame's encoded values
+(the square root of light), not light, and the last pass mixes the
+blurred frame with the frame by a factor, before the curve. Bloom and
+SunRays are added to the frame only there, so a full blur would hide
+them (Inference from the shaders: `ImageProcessBlurBloomFS` mixes the
+frame with its Bloom towards the blurred frame alone). Studio also has
+4 × 4 downsampling shaders, used for wide blurs (Inference).
+
+Rook (`renderer/passes/post/blur.rs`, `shaders/post/blur.wgsl`): the same
+Gaussian, σ half of `Size` in pixels at the screen's resolution
+(Approximation: how Studio turns Size into σ, and whether it follows the
+window's size, isn't measured). A wide blur runs on a copy of the frame
+shrunk by a power of two, so σ is at most 4 texels of the copy and a
+pass reads at most 8 pairs; the tone pass reads the result filtered,
+replacing the frame wholly (the factor is 1 while `Size` is above 0,
+Inference).
+
 ## ColorGradingEffect
 
 Its `TonemapperPreset` picks the tone curve ([tone
@@ -66,7 +92,11 @@ only when the journal says one of them changed, came or went, or
 tone pass (`renderer/passes/tonemap.rs`, `shaders/tonemap.wgsl`) is
 Studio's last pass: ColorCorrection is its matrix, after the curve,
 before Highlights and the GUI, and costs nothing when no effect is
-enabled.
+enabled. The effects that need passes of their own run them between the
+main pass and the tone pass (`renderer/passes/post.rs`), only while
+enabled, into textures made the first frame they're needed and again
+when the window's size changes; the tone pass reads them, or a black
+texel when they're off.
 
 ## What Studio must settle
 
@@ -74,4 +104,8 @@ enabled.
   brightness, contrast, saturation and tint; contrast's pivot; how two
   effects combine (a gray ramp and a color chart under each property
   alone, then two effects at once).
+- Blur: its width for a `Size` (a lone white line a pixel wide at
+  several Sizes), whether it follows the window's size (the same at two
+  window sizes), the mix factor at small Sizes, and whether Bloom and
+  SunRays show through a Blur.
 - Which of several ColorGradingEffects picks the curve.

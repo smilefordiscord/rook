@@ -29,6 +29,7 @@ use pipelines::{BindLayouts, Pipelines};
 use timing::GpuTimer;
 
 use draws::worlds::World;
+use passes::post::Post;
 use passes::tonemap::{FRAME_FORMAT, Tonemap};
 use passes::transparent::TransparentParts;
 use passes::viewports::Viewports;
@@ -121,6 +122,8 @@ pub struct Renderer {
     /// The frame the main pass draws into, and the pass taking it to the
     /// target.
     tonemap: Tonemap,
+    /// The post effects' passes between the two.
+    post_passes: Post,
     gui: GuiPass,
     /// The last frame's draw calls.
     draw_counts: DrawCounts,

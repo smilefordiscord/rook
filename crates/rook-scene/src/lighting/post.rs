@@ -28,6 +28,11 @@ pub(crate) fn post_effects(dom: &Dom) -> PostEffects {
                 saturation: dom.float_property(id, "Saturation").unwrap_or(0.0),
                 tint: (dom.color3_property(id, "TintColor")).map_or([1.0; 3], Color3::to_array),
             }),
+            // The greatest Size wins (Confirmed: creator-docs BlurEffect).
+            "BlurEffect" => {
+                let size = dom.float_property(id, "Size").unwrap_or(24.0);
+                post.blur = post.blur.max(size);
+            }
             _ => {}
         }
     }
@@ -122,6 +127,30 @@ mod tests {
         assert!(post.color.is_empty());
         // Nothing that matters changed: nothing to hand over.
         assert_eq!(run(&mut dm, &mut cache, "workspace.Gravity = 10"), None);
+    }
+
+    /// Of several Blurs the greatest Size draws, wherever it is.
+    #[test]
+    fn the_greatest_blur_wins() {
+        let (mut dm, mut cache) = place();
+        let post = run(
+            &mut dm,
+            &mut cache,
+            "local a = Instance.new('BlurEffect')
+             a.Size = 4
+             a.Parent = game.Lighting
+             local b = Instance.new('BlurEffect')
+             b.Size = 10
+             b.Parent = workspace.CurrentCamera",
+        )
+        .unwrap();
+        assert_eq!(post.blur, 10.0);
+        let post = run(
+            &mut dm,
+            &mut cache,
+            "workspace.CurrentCamera.Blur.Enabled = false",
+        );
+        assert_eq!(post.unwrap().blur, 4.0);
     }
 
     /// A ColorGradingEffect's curve applies from the Camera too, and the

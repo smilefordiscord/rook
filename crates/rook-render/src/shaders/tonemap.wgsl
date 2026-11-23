@@ -13,6 +13,8 @@ struct Tone {
     // The ColorCorrections' matrix: each row times the sRGB pixel, plus
     // its w.
     color: array<vec4<f32>, 3>,
+    // x: how much of the blurred frame replaces the frame.
+    effects: vec4<f32>,
     // Each Highlight's fill and outline (sRGB, and their opacity), by its
     // number - 1 (`renderer/passes/highlights.rs`).
     looks: array<vec4<f32>, 62>,
@@ -24,6 +26,10 @@ struct Tone {
 @group(0) @binding(2) var mask: texture_2d<u32>;
 // The GUI, premultiplied sRGB (`gui.wgsl`).
 @group(0) @binding(3) var gui_layer: texture_2d<f32>;
+// The post effects' textures (`renderer/passes/post.rs`), black when off.
+@group(1) @binding(0) var post_sampler: sampler;
+// The blurred frame, in the frame's encoding, maybe smaller than it.
+@group(1) @binding(1) var blurred: texture_2d<f32>;
 
 @vertex
 fn vs_tonemap(@builtin(vertex_index) i: u32) -> @builtin(position) vec4<f32> {
@@ -35,7 +41,13 @@ fn vs_tonemap(@builtin(vertex_index) i: u32) -> @builtin(position) vec4<f32> {
 fn fs_tonemap(@builtin(position) at: vec4<f32>) -> @location(0) vec4<f32> {
     let p = vec2<i32>(at.xy);
     let v = textureLoad(frame_texture, p, 0).rgb;
-    let units = v * v * FRAME_LIGHT;
+    var units = v * v * FRAME_LIGHT;
+    let uv = at.xy / vec2<f32>(textureDimensions(frame_texture));
+    // Mixed in before the curve, as Studio's last pass mixes it.
+    if tone.effects.x > 0.0 {
+        let b = textureSampleLevel(blurred, post_sampler, uv, 0.0).rgb;
+        units = mix(units, b * b * FRAME_LIGHT, tone.effects.x);
+    }
     var out: vec3<f32>;
     // Retro shows the light's square root as the pixel, with no curve
     // (measured: black Decals over white Neon draw 510 x Transparency).

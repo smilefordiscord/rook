@@ -132,7 +132,8 @@ impl Renderer {
             "{} ({:?}, driver {} {})",
             info.name, info.backend, info.driver, info.driver_info
         );
-        let tonemap = Tonemap::new(&device, color_format);
+        let post_passes = Post::new(&device, &queue);
+        let tonemap = Tonemap::new(&device, color_format, post_passes.tone_layout());
         let scatter = crate::batch::scatter::Scatter::new(&device);
         let gui = GuiPass::new(
             &device,
@@ -191,6 +192,7 @@ impl Renderer {
             water_phase: 0.0,
             depth: None,
             tonemap,
+            post_passes,
             gui,
             draw_counts: DrawCounts::default(),
             timer: None,
