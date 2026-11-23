@@ -1,7 +1,13 @@
 //! The game the player shows: a play session with one local player, whose
 //! server runs on its own thread, or the server alone (Studio's Run mode),
-//! which the window draws itself.
+//! which the window draws itself. Teleports are routed on the server's
+//! thread by the `Router` every host shares; a player sent to another
+//! server starts the destination's server on a new thread, which reads and
+//! loads its place while the old client keeps running, then the window
+//! switches to the new client and the old server closes on its own thread
+//! (docs/behavior/scripting/teleports.md).
 
+use std::cell::Cell;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -9,12 +15,17 @@ use anyhow::Context;
 
 #[cfg(feature = "repl")]
 use rook_engine::console::repl::Side;
-use rook_engine::session::host::{ClientHost, ServerHost};
-use rook_engine::session::server_thread::{ServerThread, Started, Starting};
+use rook_engine::session::host::{Carried, ClientHost, ServerHost};
+use rook_engine::session::router::{Router, To};
+use rook_engine::session::server_thread::{
+    Joining, Placement, ServerThread, Started, Starting, Teleported,
+};
 use rook_engine::settings::user_settings::PlayerSettings;
+use rook_engine::universe::PlaceSource;
 use rook_engine::{DataModel, InputEvent, Options, console};
 #[cfg(feature = "repl")]
 use rook_lua::MessageType;
+use rook_lua::teleport::JoinData;
 use rook_render::Camera;
 
 use crate::stats::Times;
@@ -50,6 +61,25 @@ pub struct Game {
     /// CoreScripts' or Rook's own.
     menu: bool,
     pub(crate) name: String,
+    /// What new clients and servers are made with.
+    options: Options,
+    /// Routes Run mode's teleports; Play mode's are its server thread's.
+    router: Router,
+    /// The player's teleport, while its destination's server starts.
+    teleport: Option<Teleporting>,
+    /// Servers the player left, ending on their own threads.
+    closing: Vec<ServerThread>,
+    /// The server steps by itself ([`Game::free_run`]), as a teleport's
+    /// next one will.
+    free_running: Cell<bool>,
+}
+
+/// A teleport on its way: the destination's server starting, and what the
+/// old client carries to the new one.
+#[derive(Debug)]
+struct Teleporting {
+    starting: Starting,
+    carried: Carried,
 }
 
 /// A place on its way to being a [`Game`], for a window that keeps
@@ -80,6 +110,7 @@ enum Stage {
 #[derive(Debug)]
 struct Finish {
     options: Options,
+    placement: Placement,
     script: Option<String>,
     client_script: Option<String>,
     load_start: std::time::Instant,
@@ -115,6 +146,9 @@ pub struct Setup {
     /// [`rook_engine::Options::viewport`]); a window gives its own
     /// ([`Loading::set_viewport`]).
     pub viewport: Option<(u32, u32)>,
+    /// The local player's `LaunchData` (`Player:GetJoinData`), as a share
+    /// link gives it.
+    pub launch_data: Option<String>,
 }
 
 impl Loading {
@@ -132,9 +166,23 @@ impl Loading {
             ..Options::default()
         };
         let script = setup.script.clone();
+        let placement = Placement::open(path)?;
         let (stage, script) = if setup.play {
-            let starting =
-                ServerThread::spawn(bytes, options.clone(), script, Some(("Player1", 1)))?;
+            let player = Joining {
+                name: "Player1".into(),
+                user_id: 1,
+                join: JoinData {
+                    launch_data: setup.launch_data.clone(),
+                    ..JoinData::default()
+                },
+            };
+            let starting = ServerThread::spawn(
+                PlaceSource::Bytes(bytes.into()),
+                options.clone(),
+                script,
+                placement.clone(),
+                Some(player),
+            )?;
             (Stage::Server(starting), None)
         } else {
             (Stage::Run(bytes), script)
@@ -143,6 +191,7 @@ impl Loading {
             stage,
             finish: Finish {
                 options,
+                placement,
                 script,
                 client_script: setup.client_script.clone(),
                 load_start,
@@ -207,6 +256,7 @@ impl Finish {
 
     fn run(&self, bytes: &[u8]) -> anyhow::Result<Game> {
         let mut server = DataModel::load_place(bytes, &self.options)?;
+        self.placement.identity.apply(&server);
         server.start();
         let host = ServerHost::new(server);
         if let Some(source) = &self.script {
@@ -231,6 +281,11 @@ impl Finish {
             behind: 0.0,
             load_start: self.load_start,
             name: self.name.clone(),
+            options: self.options.clone(),
+            router: Router::new(self.placement.universe.clone()),
+            teleport: None,
+            closing: Vec::new(),
+            free_running: Cell::new(false),
         };
         game.print_logs();
         game
@@ -291,6 +346,8 @@ impl Game {
     /// changes reach the client, then the client steps. Results are the
     /// same every run.
     pub(crate) fn step(&mut self) {
+        self.arrive(true);
+        let mut teleports = Vec::new();
         match &mut self.mode {
             Mode::Play { server, client } => {
                 let frame = server.step();
@@ -299,6 +356,7 @@ impl Game {
                 for msg in &frame.messages {
                     client.deliver(msg);
                 }
+                teleports = frame.teleports;
                 client.step();
                 for msg in client.outgoing() {
                     server.deliver(msg);
@@ -308,17 +366,25 @@ impl Game {
             Mode::Run(host) => {
                 let start = std::time::Instant::now();
                 host.step();
+                // Run mode has no player, so its teleports fail before
+                // they route and send no one off.
+                let sent = self.router.route_alone(host);
+                debug_assert!(sent.is_empty(), "{sent:?}");
                 host.updates();
                 self.server_steps.push(start.elapsed());
             }
         }
         self.print_logs();
+        for teleported in teleports {
+            self.depart(teleported);
+        }
     }
 
     /// Let the server keep its own 60 Hz pace (Play mode), for live play.
     pub(crate) fn free_run(&self) {
         if let Mode::Play { server, .. } = &self.mode {
             server.run(true);
+            self.free_running.set(true);
         }
     }
 
@@ -327,6 +393,8 @@ impl Game {
     /// client frame per drawn frame. In Run mode the server steps here at
     /// 60 Hz, catching up at most four steps.
     pub(crate) fn advance(&mut self, dt: f64) {
+        self.arrive(false);
+        let mut teleports = Vec::new();
         match &mut self.mode {
             Mode::Play { server, client } => {
                 let start = std::time::Instant::now();
@@ -335,6 +403,7 @@ impl Game {
                     for msg in &frame.messages {
                         client.deliver(msg);
                     }
+                    teleports.extend(frame.teleports);
                 }
                 // Applying the server's changes counts towards the client's
                 // next step, as it does in lockstep.
@@ -347,6 +416,9 @@ impl Game {
                 let took = start.elapsed() + std::mem::take(&mut self.delivering);
                 self.client_steps.push(took);
                 self.print_logs();
+                for teleported in teleports {
+                    self.depart(teleported);
+                }
             }
             Mode::Run(_) => {
                 self.behind += dt;
@@ -361,6 +433,111 @@ impl Game {
                 }
             }
         }
+    }
+
+    /// The local player left its server by teleport: its client hears so
+    /// and packs what it carries, then joins the server it rejoined, or
+    /// keeps running while the destination's server reads and loads its
+    /// place on a new thread.
+    fn depart(&mut self, teleported: Teleported) {
+        let Mode::Play { client, .. } = &mut self.mode else {
+            return;
+        };
+        let Teleported { sent, joined } = teleported;
+        let carried = client.send_off(&sent.departure);
+        let started = match (sent.to, joined) {
+            (To::Same, Some(joined)) => {
+                match ClientHost::arriving(&joined, &self.options, &[], Some(carried)) {
+                    Ok(arrived) => {
+                        for entry in client.client().take_log() {
+                            console::print_entry("Client", &entry);
+                        }
+                        **client = arrived;
+                        return;
+                    }
+                    Err(e) => Err(e.to_string()),
+                }
+            }
+            (To::Same, None) => Err("the player couldn't join again".to_owned()),
+            (To::Start(placement), _) => {
+                let d = sent.departure;
+                let player = Joining {
+                    name: d.name,
+                    user_id: d.user_id,
+                    join: d.join,
+                };
+                (placement.universe.place_source(placement.identity.place_id))
+                    .map_err(|e| e.to_string())
+                    .and_then(|place| {
+                        let options = self.options.clone();
+                        ServerThread::spawn(place, options, None, placement, Some(player))
+                            .map_err(|e| e.to_string())
+                    })
+                    .map(|starting| self.teleport = Some(Teleporting { starting, carried }))
+            }
+            // The player's server thread runs no other server.
+            (To::Running(_), _) => Err("the server isn't running".to_owned()),
+        };
+        if let Err(e) = started {
+            client.teleport_failed(&e);
+        }
+    }
+
+    /// The teleport's destination has started (waiting for it with
+    /// `wait`): the window switches to the new client, and the old server
+    /// closes on its own thread, which [`Game::forget_closed`] lets go of.
+    fn arrive(&mut self, wait: bool) {
+        self.forget_closed();
+        let Some(teleport) = &mut self.teleport else {
+            return;
+        };
+        let started = if wait {
+            let Some(teleport) = self.teleport.take() else {
+                return;
+            };
+            Some((teleport.starting.wait(), teleport.carried))
+        } else {
+            match teleport.starting.poll() {
+                Some(started) => self.teleport.take().map(|t| (started, t.carried)),
+                None => None,
+            }
+        };
+        let Some((started, carried)) = started else {
+            return;
+        };
+        let arrived = (started.map_err(|e| e.to_string())).and_then(|(server, started)| {
+            let joined = (started.joined).ok_or_else(|| "the player didn't join".to_owned())?;
+            let client = ClientHost::arriving(&joined, &self.options, &[], Some(carried))
+                .map_err(|e| e.to_string())?;
+            Ok((server, client))
+        });
+        match arrived {
+            Ok((server, client)) => {
+                self.print_logs();
+                if self.free_running.get() {
+                    server.run(true);
+                }
+                let next = Mode::Play {
+                    server,
+                    client: Box::new(client),
+                };
+                if let Mode::Play { mut server, .. } = std::mem::replace(&mut self.mode, next) {
+                    server.close();
+                    self.closing.push(server);
+                }
+            }
+            Err(e) => {
+                if let Mode::Play { client, .. } = &mut self.mode {
+                    client.teleport_failed(&e);
+                }
+            }
+        }
+    }
+
+    /// Let go of the servers the player left whose threads have ended,
+    /// which then drop without waiting.
+    fn forget_closed(&mut self) {
+        self.closing.retain(|server| !server.ended());
     }
 
     pub(crate) fn run_for(&mut self, seconds: f64) {
@@ -455,5 +632,173 @@ impl Game {
         for entry in self.view().take_log() {
             console::print_entry(side, &entry);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A place file whose ServerScriptService runs `source`, with
+    /// characters off.
+    fn place(source: &str) -> String {
+        format!(
+            r#"<roblox version="4">
+<Item class="Players" referent="P"><Properties><string name="Name">Players</string><bool name="CharacterAutoLoads">false</bool></Properties></Item>
+<Item class="ServerScriptService" referent="S"><Properties><string name="Name">ServerScriptService</string></Properties>
+<Item class="Script" referent="A"><Properties><string name="Name">Main</string><ProtectedString name="Source"><![CDATA[{source}]]></ProtectedString></Properties></Item>
+</Item>
+</roblox>"#
+        )
+    }
+
+    /// A universe folder of game 9 holding `files` (with `universe.toml`
+    /// naming the lobby 1001 and the arena 1002), removed when dropped.
+    struct Folder {
+        dir: PathBuf,
+        names: Vec<&'static str>,
+    }
+
+    impl Folder {
+        fn new(test: &str, files: &[(&'static str, String)]) -> Self {
+            let dir = std::env::temp_dir()
+                .join("rook-client-tests")
+                .join(format!("{test}-{}", std::process::id()));
+            let fs = &rook_platform::get().files;
+            fs.create_dir_all(&dir).unwrap();
+            let manifest =
+                "game_id = 9\n[places]\n1001 = \"Lobby.rbxlx\"\n1002 = \"Arena.rbxlx\"\n";
+            let mut names = vec!["universe.toml"];
+            fs.write(&dir.join("universe.toml"), manifest.as_bytes())
+                .unwrap();
+            for (name, text) in files {
+                fs.write(&dir.join(name), text.as_bytes()).unwrap();
+                names.push(name);
+            }
+            Self { dir, names }
+        }
+
+        /// The player's game, opened on the lobby.
+        fn play(&self) -> Game {
+            let setup = Setup {
+                play: true,
+                content: Arc::new(rook_content::Resolver::new(
+                    rook_engine::settings::content_config(false),
+                )),
+                script: None,
+                client_script: None,
+                wait_for_sounds: true,
+                core_scripts: None,
+                user_settings: None,
+                launch_data: Some("hello".into()),
+            };
+            Game::load(&self.dir.join("Lobby.rbxlx"), &setup).unwrap()
+        }
+    }
+
+    impl Drop for Folder {
+        fn drop(&mut self) {
+            for name in &self.names {
+                // Clean-up only: a file left in the temp folder is harmless.
+                let _ = rook_platform::get().files.remove_file(&self.dir.join(name));
+            }
+        }
+    }
+
+    fn place_id(game: &Game) -> Option<f64> {
+        let w = game.view().runtime().world();
+        w.dom.number_property(w.dom.root(), "PlaceId")
+    }
+
+    /// What `source` prints on the window's client.
+    fn client_says(game: &Game, source: &str) -> Vec<String> {
+        game.view().take_log();
+        assert!(game.view().run_extra_script(source).is_ok());
+        let out = game.view().take_log().into_iter();
+        out.map(|e| e.message).collect()
+    }
+
+    /// The window's game follows its player to the place a teleport sends
+    /// it to, on a new server thread that reads the place's file, and the
+    /// server it left closes on its own thread.
+    #[test]
+    fn the_game_follows_its_player_to_another_place() {
+        let lobby = place(
+            r#"game.Players.PlayerAdded:Connect(function(p)
+                task.wait(0.1)
+                local options = Instance.new("TeleportOptions")
+                options:SetTeleportData({ x = 1 })
+                game:GetService("TeleportService"):TeleportAsync(1002, { p }, options)
+            end)"#,
+        );
+        let folder = Folder::new(
+            "teleport",
+            &[("Lobby.rbxlx", lobby), ("Arena.rbxlx", place(""))],
+        );
+        let mut game = folder.play();
+        assert_eq!(place_id(&game), Some(1001.0));
+        game.run_for(0.3);
+        game.step();
+        assert_eq!(place_id(&game), Some(1002.0));
+        let data = "print(game:GetService('TeleportService'):GetLocalPlayerTeleportData().x)";
+        assert_eq!(client_says(&game, data), ["1"]);
+        // Each step waits on the new server's frame, while the old one
+        // ends by itself.
+        for _ in 0..3000 {
+            if game.closing.is_empty() {
+                break;
+            }
+            game.step();
+        }
+        assert!(game.closing.is_empty(), "the lobby's server ended");
+    }
+
+    /// A teleport into the server the player is on routes to it again: the
+    /// player joins it again there, on a new client with what the old one
+    /// carried, as `Servers` carries it.
+    #[test]
+    fn a_teleport_into_the_same_server_joins_it_again() {
+        let lobby = place(
+            r#"local went = false
+            game.Players.PlayerAdded:Connect(function(p)
+                print("joined", p:GetJoinData().TeleportData)
+                if went then return end
+                went = true
+                task.wait(0.1)
+                local options = Instance.new("TeleportOptions")
+                options:SetTeleportData("again")
+                game:GetService("TeleportService"):TeleportAsync(1001, { p }, options)
+            end)"#,
+        );
+        let folder = Folder::new("rejoin", &[("Lobby.rbxlx", lobby)]);
+        let mut game = folder.play();
+        game.run_for(0.3);
+        game.step();
+        assert_eq!(place_id(&game), Some(1001.0));
+        assert!(game.teleport.is_none() && game.closing.is_empty());
+        let data = "print(game:GetService('TeleportService'):GetLocalPlayerTeleportData())";
+        assert_eq!(client_says(&game, data), ["again"]);
+        assert!(!game.view().session_ended());
+    }
+
+    /// A destination whose file can't be read fails on its server's
+    /// thread: the player, gone from its server, is left with the prompt.
+    #[test]
+    fn a_destination_that_cannot_load_ends_the_client_with_a_prompt() {
+        let lobby = place(
+            r#"game.Players.PlayerAdded:Connect(function(p)
+                task.wait(0.1)
+                game:GetService("TeleportService"):TeleportAsync(1002, { p })
+            end)"#,
+        );
+        let folder = Folder::new("missing", &[("Lobby.rbxlx", lobby)]);
+        let mut game = folder.play();
+        // By steps: an ended client's time stops.
+        for _ in 0..20 {
+            game.step();
+        }
+        assert_eq!(place_id(&game), Some(1001.0));
+        assert!(game.teleport.is_none());
+        assert!(game.view().session_ended());
     }
 }

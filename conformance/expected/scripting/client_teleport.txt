@@ -1,0 +1,25 @@
+-- studio 0.748.0.7481526
+-- signals: deferred
+GetJoinData ok {}
+GetLocalPlayerTeleportData ok nil
+GetArrivingTeleportGui ok nil
+SetTeleportGui ScreenGui ok 
+SetTeleportGui nil ok 
+SetTeleportGui Part ok 
+SetTeleportGui Frame ok 
+SetTeleportGui string error Unable to cast value to Object
+SetTeleportSetting ok 
+GetTeleportSetting ok 5
+SetTeleportSetting nil error Argument 2 missing or nil
+TeleportAsync -1 error TeleportUnknown must be called from a Server
+TeleportAsync empty error TeleportUnknown must be called from a Server
+TeleportAsync Workspace in list error TeleportUnknown must be called from a Server
+TeleportPartyAsync empty error TeleportPartyAsync must be called from a Server
+TeleportToPrivateServer empty error TeleportToPrivateServer can only be called from the server
+ReserveServerAsync word error Unable to cast string to int64
+GetPlayerPlaceInstanceAsync word error Unable to cast string to User
+Teleport Workspace error Cannot teleport to invalid place id. Aborting teleport.
+Teleport word place error Unable to cast string to int64
+TeleportOptions on client false {a=1}
+Kick on Workspace error Expected ':' not '.' calling member function Kick
+Kick on nil error Expected ':' not '.' calling member function Kick

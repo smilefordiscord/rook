@@ -1,5 +1,6 @@
 //! Scripting (docs/behavior/scripting/): datatypes, encoding, errors,
-//! instances, JSON, members, arguments, scheduling, scripts and tweens.
+//! instances, JSON, members, arguments, scheduling, scripts, teleports
+//! and tweens.
 
 mod datatypes;
 mod encoding;
@@ -11,5 +12,6 @@ mod object_arguments;
 mod path2d;
 mod scheduling;
 mod scripts;
+mod teleports;
 mod tweens;
 mod web;

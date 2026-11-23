@@ -18,6 +18,7 @@ mod rigs;
 mod scripts;
 pub mod session;
 pub mod settings;
+pub mod universe;
 
 pub use bridges::camera::{CameraView, MouseLock, SavedCamera};
 pub use bridges::input::{
@@ -54,6 +55,11 @@ pub enum EngineError {
     Thread(#[from] std::io::Error),
     #[error("the server thread stopped")]
     ServerStopped,
+    #[error("place {place_id}: {source}")]
+    PlaceFile {
+        place_id: i64,
+        source: std::io::Error,
+    },
 }
 
 /// Services every place gets, created up front so scripts find them in

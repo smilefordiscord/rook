@@ -11,13 +11,16 @@
 
 mod client;
 mod server;
+mod teleport;
 
 pub use client::ClientHost;
 pub use server::{STARTER_PLAYER_COPIES, ServerHost};
+pub use teleport::{Carried, Departure};
 
 use rustc_hash::FxHashMap;
 
 use rook_dom::InstanceId;
+use rook_lua::teleport::{Failure, JoinData, Routing, TeleportRequest, TeleportState};
 use rook_lua::{EffectCall, NetValue, RemoteKind, RemoteMessage, ToolActivation, ToolMove};
 use rook_net::{Sink, Snapshot, Source, Update};
 use rook_types::Value;
@@ -44,6 +47,15 @@ pub enum ToClient {
     /// the message to show (empty: the default notice): the last message
     /// the client gets.
     Kicked { message: String },
+    /// The client's player's teleport moved on (`Player.OnTeleport`).
+    TeleportState {
+        state: TeleportState,
+        place_id: i64,
+        spawn_name: String,
+    },
+    /// The client's player's teleport didn't start
+    /// (`TeleportInitFailed` fires here too).
+    TeleportFailed(Failure),
 }
 
 /// From a client to the server, with the server's instance ids.
@@ -75,6 +87,9 @@ pub enum ToServer {
     /// The client's own scripts kicked its player (`Player:Kick` in a
     /// LocalScript): it has gone, and its player leaves.
     Leave,
+    /// A LocalScript's legacy teleport of the local player, which the
+    /// server carries out as its own.
+    Teleport(TeleportRequest),
     /// Where the client's simulation put an assembly it owns (its
     /// character, or what a script made it the owner of): the root part,
     /// which the rest of the assembly follows.
@@ -93,4 +108,7 @@ pub struct Joined {
     pub player: InstanceId,
     /// The client handles signals the way the server does.
     pub signal_behavior: rook_lua::SignalBehavior,
+    /// The server's place and job, which the client's DataModel reports
+    /// too.
+    pub identity: crate::universe::ServerIdentity,
 }

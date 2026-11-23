@@ -45,6 +45,17 @@ pub fn kick_prompt(message: &str) -> rook_gui::Prompt {
     }
 }
 
+/// What a client shows when its teleport couldn't finish after its player
+/// had left the server: Rook's own words, as Roblox's client shows its
+/// own error there.
+pub fn teleport_failed_prompt(why: &str) -> rook_gui::Prompt {
+    rook_gui::Prompt {
+        title: "Teleport Failed".into(),
+        message: format!("The place couldn't be joined: {why}"),
+        button: "Leave".into(),
+    }
+}
+
 impl DataModel {
     /// The connection to the server ended: from now on the place doesn't
     /// run here (steps do nothing), and `prompt` shows over it, taking the

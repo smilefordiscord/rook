@@ -216,6 +216,67 @@ impl Args {
             .ok_or_else(|| self.cast_error(i, enum_name))
     }
 
+    /// An `int64` parameter (`User` too, a user id, under its own name in
+    /// messages): a number, or a string that reads as one, rounded to the
+    /// nearest whole number as `InsertService:LoadAsset`'s id was measured
+    /// to be.
+    pub(crate) fn int64(&self, i: usize, target: &str) -> ApiResult<i64> {
+        number_of(self.get(i))
+            .map(|n| n.round() as i64)
+            .ok_or_else(|| self.cast_error(i, target))
+    }
+
+    /// A `Variant` parameter, which takes any value but nil (measured:
+    /// `TeleportOptions:SetTeleportData(nil)` is `Argument 1 missing or
+    /// nil`).
+    pub(crate) fn variant(&self, i: usize) -> ApiResult<&LuaValue> {
+        match self.get(i) {
+            LuaValue::Nil => Err(self.missing(i)),
+            v => Ok(v),
+        }
+    }
+
+    /// An `Objects` parameter: an array of instances, empty included.
+    /// Measured on `TeleportService:TeleportAsync`: missing or nil is
+    /// `Argument 2 missing or nil`; anything but an array (a Player not in a
+    /// table, a dictionary) `Unable to cast value to Objects`; an item that
+    /// isn't an Instance `Unable to cast value to Object`.
+    pub(crate) fn objects(&self, i: usize) -> ApiResult<Vec<InstanceId>> {
+        let LuaValue::Table(t) = self.get(i) else {
+            return Err(match self.get(i) {
+                LuaValue::Nil => self.missing(i),
+                _ => ScriptError("Unable to cast value to Objects".into()),
+            });
+        };
+        let length = t.raw_len();
+        let not_array = || ScriptError("Unable to cast value to Objects".into());
+        let mut entries = 0;
+        for pair in t.clone().pairs::<LuaValue, LuaValue>() {
+            let (key, _) = pair.map_err(|_| not_array())?;
+            let index = match key {
+                LuaValue::Integer(n) => n as f64,
+                LuaValue::Number(n) => n,
+                _ => return Err(not_array()),
+            };
+            if index.fract() != 0.0 || index < 1.0 || index > length as f64 {
+                return Err(not_array());
+            }
+            entries += 1;
+        }
+        if entries != length {
+            return Err(not_array());
+        }
+        (1..=length)
+            .map(|n| match t.raw_get::<LuaValue>(n) {
+                Ok(LuaValue::UserData(ud)) => ud
+                    .borrow::<LuaInstance>()
+                    .map(|inst| inst.0)
+                    .map_err(|_| cast_to_object()),
+                _ => Err(cast_to_object()),
+            })
+            .collect()
+    }
+
     pub(crate) fn string(&self, i: usize) -> ApiResult<String> {
         self.opt_string(i)?.ok_or_else(|| self.missing(i))
     }

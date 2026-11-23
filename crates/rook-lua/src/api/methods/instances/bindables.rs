@@ -117,7 +117,7 @@ pub(super) fn native(owner: &str, name: &str) -> Option<RawMethod> {
 }
 
 /// Copies of `values`. Fails on what a table can't carry.
-fn copy_values(lua: &Lua, values: &[LuaValue]) -> Result<Vec<LuaValue>, ScriptError> {
+pub(crate) fn copy_values(lua: &Lua, values: &[LuaValue]) -> Result<Vec<LuaValue>, ScriptError> {
     let mut out = Vec::with_capacity(values.len());
     for v in values {
         out.push(copy_value(lua, v, &mut Vec::new())?);

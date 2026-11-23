@@ -26,6 +26,9 @@ pub struct ServerHost {
     /// its own number for the call.
     pub(super) calls: FxHashMap<u64, (usize, u64)>,
     pub(super) next_call: u64,
+    /// Messages for clients made outside `outgoing` (a refused teleport's),
+    /// sent with its next ones.
+    pub(super) pending: Vec<(usize, ToClient)>,
     /// Players whose first character spawns at the start of a step, once
     /// their look has arrived.
     pub(super) spawning: Vec<InstanceId>,
@@ -44,6 +47,7 @@ impl ServerHost {
             clients: Vec::new(),
             calls: FxHashMap::default(),
             next_call: 0,
+            pending: Vec::new(),
             spawning: Vec::new(),
             dead: FxHashMap::default(),
         }
@@ -61,12 +65,12 @@ impl ServerHost {
         self.link(client).map(|c| c.player)
     }
 
-    fn link(&self, client: usize) -> Option<&Link> {
+    pub(super) fn link(&self, client: usize) -> Option<&Link> {
         self.clients.get(client).and_then(Option::as_ref)
     }
 
     /// The clients still connected, with their indices.
-    fn links(&self) -> impl Iterator<Item = (usize, &Link)> {
+    pub(super) fn links(&self) -> impl Iterator<Item = (usize, &Link)> {
         (self.clients.iter().enumerate()).filter_map(|(i, c)| Some((i, c.as_ref()?)))
     }
 
@@ -115,6 +119,17 @@ impl ServerHost {
     /// character spawns at the start of the next step, once the client
     /// runs, so it arrives like any later change.
     pub fn join(&mut self, name: &str, user_id: i64) -> Result<(usize, Joined), EngineError> {
+        self.join_with(name, user_id, JoinData::default())
+    }
+
+    /// [`ServerHost::join`], with how the player came
+    /// (`Player:GetJoinData`), which its `PlayerAdded` handlers can read.
+    pub fn join_with(
+        &mut self,
+        name: &str,
+        user_id: i64,
+        data: JoinData,
+    ) -> Result<(usize, Joined), EngineError> {
         let (player, start) = {
             let mut w = self.server.runtime().world_mut();
             let dom = &mut w.dom;
@@ -149,6 +164,7 @@ impl ServerHost {
             (player, start)
         };
         let players = self.server.runtime().world().dom.find_service("Players");
+        self.server.runtime().set_join_data(player, data);
         self.server.runtime().dispatch_since(start);
         self.server.runtime().welcome_player(player);
         if let Some(players) = players {
@@ -186,6 +202,7 @@ impl ServerHost {
                 snapshot,
                 player,
                 signal_behavior,
+                identity: crate::universe::ServerIdentity::read(&self.server),
             },
         ))
     }
@@ -280,7 +297,7 @@ impl ServerHost {
     /// client each goes to. An invoke to a player with no client fails at
     /// once. Kicked clients hear so first, and nothing after.
     pub fn outgoing(&mut self) -> Vec<(usize, ToClient)> {
-        let mut out = Vec::new();
+        let mut out = std::mem::take(&mut self.pending);
         self.kick(&mut out);
         // Each client hears what it owns when that changes.
         for (i, link) in
@@ -446,6 +463,24 @@ impl ServerHost {
                 rt.deliver_tool_activation(Some(player), activation);
             }
             ToServer::Prompt(action) => rt.deliver_prompt_action(player, action),
+            // A client may move only its own player, and only as the
+            // legacy methods it can call do: to a public or a running
+            // server, as its own request, with no call of the server's
+            // waiting. The rest is the server's to say.
+            ToServer::Teleport(request) => match request.routing {
+                Routing::Public | Routing::Instance(_) => {
+                    rt.request_teleport(TeleportRequest {
+                        players: vec![player],
+                        call: None,
+                        from_server: false,
+                        ..request
+                    });
+                }
+                _ => tracing::warn!(
+                    "a client asked to teleport by {:?}, which only a server may",
+                    request.routing
+                ),
+            },
             // Inference: a client going away is an Unknown exit, though
             // its own script kicked it.
             ToServer::Leave => self.leave(index, rook_lua::ExitReason::Unknown),

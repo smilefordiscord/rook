@@ -8,4 +8,5 @@ pub(crate) mod input;
 pub(crate) mod prompts;
 pub(crate) mod remotes;
 pub(crate) mod scripts;
+pub(crate) mod teleport;
 pub(crate) mod tools;

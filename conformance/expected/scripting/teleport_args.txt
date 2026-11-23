@@ -1,0 +1,88 @@
+-- studio 0.748.0.7481526
+-- signals: deferred
+options Instance "" "" false
+options data ok nil
+VipServerId ok 
+ReservedServerId ok 
+ServerInstanceId number ok 5
+ServerInstanceId nil error Unable to assign property ServerInstanceId. string expected, got nil
+ServerInstanceId table error Unable to assign property ServerInstanceId. string expected, got table
+ShouldReserveServer string ok true
+ShouldReserveServer nil ok false
+ReservedServerAccessCode number ok 5
+data table ok {a=1, b={1=2, 2=3}} false
+data string ok x true
+data number ok 5 true
+data bool ok true true
+data nil error Argument 1 missing or nil
+data Vector3 ok 1, 2, 3 true
+data Instance ok Workspace true
+data Instance in table ok {part=Workspace} false
+data function ok function: <address> true
+data function in table ok {f=function: <address>} false
+data mixed table ok {1=1, 2=2} false
+data bool key error Invalid table key type used
+data cycle error tables cannot be cyclic
+data copied when set false 1
+data copied when read false
+SetTeleportData no args error Argument 1 missing or nil
+SetTeleportData nil error Argument 1 missing or nil
+TeleportAsync no args error Argument 2 missing or nil
+TeleportAsync -1 error Invalid placeId.
+TeleportAsync word place error Unable to cast string to int64
+TeleportAsync empty error Invalid placeId.
+TeleportAsync no players error Argument 2 missing or nil
+TeleportAsync string players error Unable to cast value to Objects
+TeleportAsync Player not in table error Unable to cast value to Objects
+TeleportAsync Workspace in list error Invalid placeId.
+TeleportAsync number in list error Unable to cast value to Object
+TeleportAsync dictionary error Unable to cast value to Objects
+TeleportAsync Part options error Invalid placeId.
+TeleportAsync string options error Unable to cast value to Object
+TeleportAsync 51 error Invalid placeId.
+TeleportAsync reserve and instance error Can only specify one of ReservedServerId, VipServerId, ReservedServerAccessCode, ShouldReserveServer, or ServerInstanceId.
+TeleportAsync reserve and code error Can only specify one of ReservedServerId, VipServerId, ReservedServerAccessCode, ShouldReserveServer, or ServerInstanceId.
+TeleportAsync place 0 error Invalid placeId.
+TeleportInitFailed 0 nil
+player stayed true
+Teleport Workspace error Invalid placeId.
+Teleport string player error Unable to cast value to Object
+Teleport no player ok 
+Teleport word place error Unable to cast string to int64
+TeleportToSpawnByName Workspace error Invalid placeId.
+TeleportToPlaceInstance Workspace error Invalid placeId.
+TeleportToPrivateServer empty error Invalid placeId.
+TeleportToPrivateServer Workspace error Invalid placeId.
+TeleportPartyAsync empty error Invalid placeId.
+TeleportPartyAsync Workspace error Invalid placeId.
+ReserveServerAsync word error Unable to cast string to int64
+ReserveServer no args error Argument 1 missing or nil
+GetPlayerPlaceInstanceAsync word error Unable to cast string to User
+GetPlayerPlaceInstanceAsync nil error Argument 1 missing or nil
+GetLocalPlayerTeleportData ok nil
+GetArrivingTeleportGui ok nil
+SetTeleportGui ScreenGui ok 
+SetTeleportGui nil ok 
+SetTeleportGui no args error Argument 1 missing or nil
+SetTeleportGui Part ok 
+SetTeleportGui Frame ok 
+SetTeleportGui BillboardGui ok 
+SetTeleportGui string error Unable to cast value to Object
+SetTeleportGui number error Unable to cast value to Object
+GetArrivingTeleportGui after ok nil
+SetTeleportSetting ok 
+GetTeleportSetting ok 5
+SetTeleportSetting table ok 
+GetTeleportSetting table ok {1=1}
+SetTeleportSetting Instance ok 
+GetTeleportSetting missing ok nil
+SetTeleportSetting nil key error Argument 1 missing or nil
+GetJoinData ok {}
+GetJoinData fresh table false
+GetJoinData on Workspace error Expected ':' not '.' calling member function GetJoinData
+Kick on Workspace error Expected ':' not '.' calling member function Kick
+Kick on nil error Expected ':' not '.' calling member function Kick
+Kick on Players error Expected ':' not '.' calling member function Kick
+Kick member of Workspace error Kick is not a valid member of Workspace "Workspace"
+Kick is a function function
+player still here true

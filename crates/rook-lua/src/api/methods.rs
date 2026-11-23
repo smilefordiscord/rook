@@ -34,6 +34,7 @@ pub(crate) mod physics;
 mod player_scripts;
 pub(crate) mod prompts;
 pub(crate) mod remotes;
+pub(crate) mod teleport;
 pub(crate) mod terrain;
 pub(crate) mod tools;
 mod tweens;
@@ -85,6 +86,7 @@ pub(crate) fn native(owner: &str, name: &str) -> Option<RawMethod> {
             encoding::native,
             content::native,
             web::native,
+            teleport::native,
             localization::native,
             core::native,
         ],

@@ -323,6 +323,8 @@ pub struct World {
     /// `Player:Kick` calls since the session last took them: each player
     /// and the message it's to be shown.
     pub(crate) kicks: Vec<(InstanceId, String)>,
+    /// Teleports asked for and what players arrived with.
+    pub(crate) teleports: crate::teleport::Teleports,
     /// What this client's server made it the owner of (a client's).
     pub owned_here: crate::OwnedHere,
     /// Picks spawns and spots on them.
@@ -402,6 +404,7 @@ impl World {
             avatars_pending: FxHashSet::default(),
             client_players: FxHashSet::default(),
             kicks: Vec::new(),
+            teleports: Default::default(),
             owned_here: crate::OwnedHere::default(),
             // A fixed seed: runs repeat exactly.
             spawn_random: crate::types::random::LRandom::new(1),
@@ -451,6 +454,7 @@ impl World {
             .chain(self.tool_activations.iter().map(|a| a.tool))
             .chain(self.prompts.held())
             .chain(self.movement.held())
+            .chain(self.teleports.held())
             .collect()
     }
 
@@ -472,6 +476,7 @@ impl World {
         self.avatars.remove(&id);
         self.avatars_pending.remove(&id);
         self.client_players.remove(&id);
+        self.teleports.forget(id);
         self.physics.forget_network_owner(id);
         self.topbar_transparency.remove(&id);
         self.interpolations.remove(&id);
