@@ -157,6 +157,77 @@ fn remote_events_and_functions_cross_the_session() {
     );
 }
 
+/// A table holding itself used to hang the sender: each reference was
+/// copied again, `2^64` times for two of them.
+#[test]
+fn remote_arguments_refuse_cyclic_tables_and_copy_shared_ones() {
+    let mut server = Server::new(&Options::default()).unwrap();
+    let rs = service(&server, "ReplicatedStorage");
+    add_under(&server, rs, "RemoteEvent", "Ping", "");
+    add_under(&server, rs, "RemoteFunction", "Ask", "");
+    add_script(
+        &server,
+        "ServerScriptService",
+        "Main",
+        r#"
+        local rs = game:GetService("ReplicatedStorage")
+        rs.Ping.OnServerEvent:Connect(function(player, pair, single)
+            print("server got", pair[1] == pair[2], pair[1] == single, pair[1][1], pair[2][1], single[1])
+        end)
+        rs.Ask.OnServerInvoke = function(player)
+            local t = {}
+            t.self = t
+            return t
+        end
+        game.Players.PlayerAdded:Connect(function(player)
+            local t = {}
+            t[1] = t
+            t[2] = t
+            print("fire client", pcall(function() rs.Ping:FireClient(player, t) end))
+            print("fire all", pcall(function() rs.Ping:FireAllClients({ { t } }) end))
+        end)
+        "#,
+    );
+    add_local_script(
+        &server,
+        "Client",
+        r#"
+        local rs = game:GetService("ReplicatedStorage")
+        rs.Ping.OnClientEvent:Connect(function(...)
+            print("client got", select('#', ...))
+        end)
+        local t = {}
+        t[1] = t
+        t[2] = t
+        print("fire", pcall(function() rs.Ping:FireServer(t) end))
+        print("invoke", pcall(function() return rs.Ask:InvokeServer(1, { t }) end))
+        print("reply", pcall(function() return rs.Ask:InvokeServer() end))
+        local shared = { "x" }
+        rs.Ping:FireServer({ shared, shared }, shared)
+        "#,
+    );
+    server.start();
+    let mut session = Session::new(server, Options::default());
+    let index = session.join("Player1", 1).unwrap();
+    session.run_for(1.0);
+    assert_eq!(
+        lines(session.server()),
+        [
+            "fire client false tables cannot be cyclic",
+            "fire all false tables cannot be cyclic",
+            "server got false false x x x",
+        ]
+    );
+    assert_eq!(
+        lines(session.client(index).unwrap()),
+        [
+            "fire false tables cannot be cyclic",
+            "invoke false tables cannot be cyclic",
+            "reply false tables cannot be cyclic",
+        ]
+    );
+}
+
 #[test]
 fn input_mouse_and_click_detectors() {
     let mut server = Server::new(&Options::default()).unwrap();

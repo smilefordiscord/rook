@@ -136,6 +136,28 @@ its own (`Dom::write_voxels`). Rook's chunks are its storage's 32 voxels
 on a side, larger than Roblox's block. A joining client gets the voxels
 whole, as `SmoothGrid`, and so does a script's whole write of it.
 
+## Remote arguments
+
+What `RemoteEvent` and `RemoteFunction` calls carry (`rook_lua::net`).
+From creator-docs "Remote events and callbacks" (argument limitations):
+tables arrive as copies, never the table sent, results returned to an
+invoker too; metatables are lost; functions arrive as nil, and so do
+instances the receiver can't see.
+
+Tables reached more than once (Inference: the docs give no rule, and
+these follow what [bindables](scripting/bindables.md) were measured to
+do, with the message players see from remotes):
+
+- A table reached twice, in one argument or across several, arrives as
+  separate copies, no two the same table.
+- A table reached from itself raises `tables cannot be cyclic` from the
+  call that sends it (`FireServer`, `FireClient`, `FireAllClients`,
+  `InvokeServer`, `InvokeClient`), and nothing is sent. Results a
+  callback returns that hold one fail the invoke with that message
+  instead.
+- Tables nested more than 64 deep arrive as nil (Approximation: the docs
+  give no limit, and Studio's hasn't been measured).
+
 ## From clients
 
 Changes made on a client stay there, except what Roblox takes from

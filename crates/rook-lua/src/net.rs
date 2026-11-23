@@ -5,7 +5,12 @@
 //! values become nil), instances arrive as the receiver's copy or nil if the
 //! receiver can't see them, and datatypes are copied by value. Mixed tables
 //! keep their entries but Roblox's exact key conversion rules are
-//! Inference.
+//! Inference. A table reached twice arrives as two copies, and one reached
+//! from itself raises `tables cannot be cyclic` from the call that sends it
+//! (Inference: the docs only say tables are copied; bindables were measured
+//! to behave so). See `docs/behavior/replication.md`.
+
+use std::ffi::c_void;
 
 use mlua::{Lua, Value as LuaValue};
 use rook_dom::InstanceId;
@@ -13,6 +18,7 @@ use rook_reflection::EnumId;
 use rook_types::Value;
 
 use crate::api::instance::{LuaInstance, push_instance};
+use crate::runtime::ctx::ScriptError;
 use crate::runtime::ctx::convert::{datatype_value, to_lua};
 use crate::types::enums::{LEnumItem, push_item};
 
@@ -52,32 +58,61 @@ impl NetValue {
     }
 }
 
-pub(crate) fn to_net(v: &LuaValue, depth: u32) -> NetValue {
-    match v {
+/// Tables nested deeper than this arrive as nil, which keeps encoding off
+/// the end of the stack. Approximation: the creator docs give no nesting
+/// limit, and Studio's hasn't been measured.
+const MAX_DEPTH: usize = 64;
+
+/// What `values` send. Fails, sending nothing, on a cyclic table.
+pub(crate) fn to_net(values: &[LuaValue]) -> Result<Vec<NetValue>, ScriptError> {
+    let mut within = Vec::new();
+    values.iter().map(|v| encode(v, &mut within)).collect()
+}
+
+/// `within` holds the tables being encoded, outermost first: a table found
+/// among them is cyclic, while one reached again on another path is copied
+/// again, as the receiver gets it.
+fn encode(v: &LuaValue, within: &mut Vec<*const c_void>) -> Result<NetValue, ScriptError> {
+    Ok(match v {
         LuaValue::Boolean(b) => NetValue::Bool(*b),
         LuaValue::Integer(i) => NetValue::Number(*i as f64),
         LuaValue::Number(n) => NetValue::Number(*n),
         LuaValue::String(s) => NetValue::String(s.as_bytes().to_vec()),
         LuaValue::Vector(v) => NetValue::Vector3([v.x(), v.y(), v.z()]),
-        LuaValue::Table(t) if depth < 64 => NetValue::Table(
-            t.clone()
+        LuaValue::Table(t) => {
+            let address = t.to_pointer();
+            if within.contains(&address) {
+                return Err(ScriptError("tables cannot be cyclic".into()));
+            }
+            if within.len() >= MAX_DEPTH {
+                return Ok(NetValue::Nil);
+            }
+            within.push(address);
+            let mut entries = Vec::new();
+            for (k, v) in t
+                .clone()
                 .pairs::<LuaValue, LuaValue>()
                 .filter_map(Result::ok)
-                .map(|(k, v)| (to_net(&k, depth + 1), to_net(&v, depth + 1)))
-                .filter(|(k, v)| *k != NetValue::Nil && *v != NetValue::Nil)
-                .collect(),
-        ),
+            {
+                let entry = (encode(&k, within)?, encode(&v, within)?);
+                if entry.0 != NetValue::Nil && entry.1 != NetValue::Nil {
+                    entries.push(entry);
+                }
+            }
+            within.pop();
+            NetValue::Table(entries)
+        }
         LuaValue::UserData(u) => {
             if let Ok(i) = u.borrow::<LuaInstance>() {
-                return NetValue::Instance(i.0);
+                return Ok(NetValue::Instance(i.0));
             }
             if let Ok(e) = u.borrow::<LEnumItem>() {
-                return NetValue::EnumItem(e.enum_id, e.value);
+                return Ok(NetValue::EnumItem(e.enum_id, e.value));
             }
             datatype_value(u).map_or(NetValue::Nil, NetValue::Data)
         }
         _ => NetValue::Nil,
-    }
+    })
 }
 
 pub(crate) fn from_net(lua: &Lua, v: &NetValue) -> mlua::Result<LuaValue> {

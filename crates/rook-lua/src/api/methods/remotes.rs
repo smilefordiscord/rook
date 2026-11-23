@@ -8,7 +8,7 @@ use mlua::{Lua, MultiValue, Value as LuaValue};
 use rook_dom::InstanceId;
 
 use super::RawMethod;
-use crate::net::{RemoteKind, RemoteMessage, to_net};
+use crate::net::{NetValue, RemoteKind, RemoteMessage, to_net};
 use crate::runtime::ctx::args::Args;
 use crate::runtime::ctx::{ApiResult, Outcome, ScriptError, api_fn, with_world};
 
@@ -49,8 +49,7 @@ fn is_client(lua: &Lua) -> bool {
     with_world(lua, |w| w.is_client)
 }
 
-fn push(lua: &Lua, remote: InstanceId, kind: RemoteKind, args: &[LuaValue]) {
-    let args = args.iter().map(|v| to_net(v, 0)).collect();
+fn push(lua: &Lua, remote: InstanceId, kind: RemoteKind, args: Vec<NetValue>) {
     with_world(lua, |w| {
         w.outbox.push(RemoteMessage {
             remote: Some(remote),
@@ -74,7 +73,7 @@ fn fire_server(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> {
     if !is_client(lua) {
         return Err("FireServer can only be called from the client".into());
     }
-    push(lua, this, RemoteKind::FireServer, &a.rest(0));
+    push(lua, this, RemoteKind::FireServer, to_net(&a.rest(0))?);
     Outcome::ret(lua, ())
 }
 
@@ -83,7 +82,8 @@ fn fire_client(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> {
         return Err("FireClient can only be called from the server".into());
     }
     let player = player_arg(lua, a, "FireClient")?;
-    push(lua, this, RemoteKind::FireClient { player }, &a.rest(1));
+    let args = to_net(&a.rest(1))?;
+    push(lua, this, RemoteKind::FireClient { player }, args);
     Outcome::ret(lua, ())
 }
 
@@ -91,7 +91,7 @@ fn fire_all_clients(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome>
     if is_client(lua) {
         return Err("FireAllClients can only be called from the server".into());
     }
-    push(lua, this, RemoteKind::FireAllClients, &a.rest(0));
+    push(lua, this, RemoteKind::FireAllClients, to_net(&a.rest(0))?);
     Outcome::ret(lua, ())
 }
 
@@ -125,11 +125,12 @@ fn invoke(lua: &Lua, args: MultiValue) -> ApiResult<Outcome> {
         w.next_call
     });
     let kind = kind_for(call)?;
+    let args = to_net(&a.rest(3))?;
     let thread = lua.current_thread();
     with_world(lua, |w| {
         w.pending_calls.insert(call, thread);
     });
-    push(lua, remote, kind, &a.rest(3));
+    push(lua, remote, kind, args);
     Ok(Outcome::Yield)
 }
 
@@ -141,7 +142,14 @@ pub(crate) fn install(lua: &Lua) -> mlua::Result<()> {
         "reply",
         lua.create_function(
             |lua, (call, ok, rest): (u64, bool, mlua::Variadic<LuaValue>)| {
-                let args = rest.iter().map(|v| to_net(v, 0)).collect();
+                // Results that can't be sent fail the invoke with why, as an
+                // error raised by the callback would (Inference).
+                let (ok, args) = match to_net(&rest) {
+                    Ok(args) => (ok, args),
+                    Err(ScriptError(message)) => {
+                        (false, vec![NetValue::String(message.into_bytes())])
+                    }
+                };
                 with_world(lua, |w| {
                     w.outbox.push(RemoteMessage {
                         remote: None,
