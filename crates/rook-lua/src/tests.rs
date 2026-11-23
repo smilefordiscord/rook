@@ -85,6 +85,7 @@ fn run_with_ann(
                 requests.push(format!("{} {}", request.method, request.url));
                 let response = rook_platform::network::Response {
                     status: 200,
+                    reason: "OK".into(),
                     headers: Vec::new(),
                     body: answer(&request.url).as_bytes().to_vec(),
                 };

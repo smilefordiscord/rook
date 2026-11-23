@@ -42,6 +42,7 @@ fn run_market(
                 asked.push(request.url);
                 let response = rook_platform::network::Response {
                     status,
+                    reason: String::new(),
                     headers: Vec::new(),
                     body: body.as_bytes().to_vec(),
                 };
