@@ -76,8 +76,11 @@ pub(super) fn rumble_report(
             r
         }
         (Model::DualSense, bluetooth) => {
+            // Over USB, the id and the 47 bytes the pad's descriptor
+            // declares, as SDL sends: Windows takes no more than the
+            // device's output length, where Linux's driver pads to 63.
             let (mut r, base) = match bluetooth {
-                false => (vec![0u8; 63], 1),
+                false => (vec![0u8; 48], 1),
                 true => (vec![0u8; 78], 3),
             };
             r[0] = if bluetooth { 0x31 } else { 0x02 };
@@ -233,7 +236,9 @@ mod tests {
         );
 
         let r = rumble_report(Model::DualSense, false, false, 0, speeds);
-        assert_eq!((r.len(), &r[..5]), (63, &[0x02, 0x03, 0, 100, 200][..]));
+        // No longer than the USB descriptor's output report, or Windows
+        // refuses the write.
+        assert_eq!((r.len(), &r[..5]), (48, &[0x02, 0x03, 0, 100, 200][..]));
         assert_eq!(r[39], 0);
         let r = rumble_report(Model::DualSense, false, true, 0, speeds);
         assert_eq!((r[1], r[39]), (0x01, 0x04));

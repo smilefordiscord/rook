@@ -120,7 +120,7 @@ pad connected came from the edit DataModel.
 
 ## Motors
 
-Not measured in Studio yet: these follow the creator docs
+Not measured in Studio: these follow the creator docs
 (HapticService, `Enum.VibrationMotor`, the gamepad input guide), with
 Rook's own choices marked Inference.
 
@@ -167,13 +167,16 @@ engine as `InputEvent`s; the engine side is
 - A pad's Large and Small motors are its compatible rumble: gilrs's
   strong and weak motors, and on Windows a PlayStation pad's own output
   report, laid out as Linux's `hid-playstation` writes it (a DualSense on
-  update 2.21 or later gets the newer compatible rumble, as there). The
+  update 2.21 or later gets the newer compatible rumble, as there), at
+  the length the pad's descriptor declares, as SDL sends it. The
   trigger motors aren't reached, so `IsMotorSupported` is false for them
   (Approximation: whether Studio runs an Xbox pad's trigger motors is
   unmeasured). The engine decides each motor's speed
   (`DataModel::motor_speeds`), and the window sends a pad its speeds
   when they change; gilrs applies them on its next 50 ms tick. Closing
-  the player stops every motor.
+  the player stops a PlayStation pad's motors before it exits; gilrs
+  stops the others on its next tick, which a player exiting sooner
+  misses.
 - The CoreScripts bind `MemStorageService`'s `ActiveGamepadConnected`
   key, which none of them set: Roblox's engine does, with a value only
   Roblox's own scripts can read (a plugin's `GetItem` fails, "lacking

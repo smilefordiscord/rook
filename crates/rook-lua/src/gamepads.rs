@@ -36,7 +36,6 @@ pub struct Gamepad {
     /// `SetNavigationGamepad(pad, false)` took it off the navigation
     /// list, which holds every slot until then (measured).
     pub not_navigation: bool,
-    /// The motors the pad can run.
     pub motors: Vec<VibrationMotor>,
     /// What `HapticService:SetMotor` last set each motor to, by
     /// [`VibrationMotor::index`], as the script gave it; None until set.
