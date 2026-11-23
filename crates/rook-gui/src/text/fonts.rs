@@ -51,12 +51,22 @@ impl std::fmt::Debug for Face {
 }
 
 impl Face {
-    fn load(data: Arc<[u8]>) -> Option<Self> {
+    /// Measured: a face is scaled so its ascent to descent and its line
+    /// gap (`hhea`) are the line height (Ubuntu's text, gap 28 of 1121, was
+    /// 0.9756 as wide as without it; Arimo's, 67 of 2288, 0.97). `legacy`:
+    /// the Legacy font's, which leaves the gap out (its widths matched
+    /// without it).
+    fn load(data: Arc<[u8]>, legacy: bool) -> Option<Self> {
         let font = FontRef::new(&data).ok()?;
         let upm = f32::from(font.head().ok()?.units_per_em());
         let hhea = font.hhea().ok()?;
         let ascent = f32::from(hhea.ascender().to_i16());
-        let line = ascent - f32::from(hhea.descender().to_i16());
+        let gap = if legacy {
+            0.0
+        } else {
+            f32::from(hhea.line_gap().to_i16()).max(0.0)
+        };
+        let line = ascent - f32::from(hhea.descender().to_i16()) + gap;
         let shaper = ShaperData::new(&font);
         (upm > 0.0 && line > 0.0).then_some(Self {
             data,
@@ -157,15 +167,23 @@ impl Fonts {
             *entry = bytes.as_deref().and_then(parse_family);
             used = self.pending.remove(url);
         }
-        if self.files.get(url) == Some(&Slot::Waiting) {
-            let slot = match bytes.and_then(Face::load) {
+        // The file's face for the Legacy font and for the others, each
+        // as it's measured.
+        let waiting: Vec<(String, bool)> = [false, true]
+            .into_iter()
+            .map(|legacy| (file_key(url, legacy), legacy))
+            .filter(|(key, _)| self.files.get(key) == Some(&Slot::Waiting))
+            .collect();
+        let count = waiting.len();
+        for ((key, legacy), bytes) in waiting.into_iter().zip(std::iter::repeat_n(bytes, count)) {
+            let slot = match bytes.and_then(|d| Face::load(d, legacy)) {
                 Some(face) => {
                     self.faces.push(face);
                     Slot::Loaded(self.faces.len() as FaceId - 1)
                 }
                 None => Slot::Missing,
             };
-            self.files.insert(url.to_owned(), slot);
+            self.files.insert(key, slot);
             used = true;
         }
         used
@@ -178,13 +196,10 @@ impl Fonts {
             return Some(picked);
         }
         let waited = std::mem::take(&mut self.waited);
-        let scale = if font.family.ends_with(LEGACY_FAMILY) {
-            LEGACY_SCALE
-        } else {
-            1.0
-        };
-        let own = self.pick_in(&font.family, font);
-        let face = own.or_else(|| self.pick_in(FALLBACK_FAMILY, font));
+        let legacy = font.family.ends_with(LEGACY_FAMILY);
+        let scale = if legacy { LEGACY_SCALE } else { 1.0 };
+        let own = self.pick_in(&font.family, font, legacy);
+        let face = own.or_else(|| self.pick_in(FALLBACK_FAMILY, font, false));
         let picked = face.map(|face| Picked { face, scale });
         // A pick that waited for a font may change when it arrives.
         if let Some(picked) = picked.filter(|_| !self.waited) {
@@ -194,14 +209,14 @@ impl Fonts {
         picked
     }
 
-    fn pick_in(&mut self, family: &str, font: &Font) -> Option<FaceId> {
+    fn pick_in(&mut self, family: &str, font: &Font, legacy: bool) -> Option<FaceId> {
         let url = stand_in(family);
         let listed = self.family(&url)?;
         let want_italic = font.style == FontStyle::Italic;
         let file = nearest(&listed, font.weight.as_u16(), want_italic)?
             .asset
             .clone();
-        match self.file(&file) {
+        match self.file(&file, legacy) {
             Slot::Loaded(id) => Some(id),
             Slot::Waiting => {
                 self.waited = true;
@@ -229,12 +244,15 @@ impl Fonts {
         parsed
     }
 
-    fn file(&mut self, url: &str) -> Slot {
-        if let Some(&slot) = self.files.get(url) {
+    /// The face in file `url`, loaded once for the Legacy font (`legacy`)
+    /// and once for the others, as they measure it differently.
+    fn file(&mut self, url: &str, legacy: bool) -> Slot {
+        let key = file_key(url, legacy);
+        if let Some(&slot) = self.files.get(&key) {
             return slot;
         }
         let slot = if is_local(url) {
-            match self.read_local(url).and_then(Face::load) {
+            match self.read_local(url).and_then(|d| Face::load(d, legacy)) {
                 Some(face) => {
                     self.faces.push(face);
                     Slot::Loaded(self.faces.len() as FaceId - 1)
@@ -245,13 +263,22 @@ impl Fonts {
             self.requests.push(url.to_owned());
             Slot::Waiting
         };
-        self.files.insert(url.to_owned(), slot);
+        self.files.insert(key, slot);
         slot
     }
 
     fn read_local(&self, url: &str) -> Option<Arc<[u8]>> {
         let r = ContentRef::parse(url)?;
         Some(self.resolver.as_ref()?.resolve_local(&r)?.bytes)
+    }
+}
+
+/// Where [`Fonts::file`] keeps file `url`'s face.
+fn file_key(url: &str, legacy: bool) -> String {
+    if legacy {
+        format!("{url}#legacy")
+    } else {
+        url.to_owned()
     }
 }
 

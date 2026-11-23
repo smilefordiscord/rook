@@ -44,8 +44,12 @@ glyph masks and distance fields) and `draw/objects/text.rs`; the glyph atlas in
 ## Widths
 
 - A line of text is `TextSize` tall (Legacy: 1.5 ×), and the font is
-  scaled so its hhea ascent to descent is that height. Source Sans at
-  100 is 79.55 pixels to the em, Arimo 89.5.
+  scaled so its hhea ascent to descent and line gap are that height.
+  Source Sans (no gap) at 100 is 79.55 pixels to the em. The gap counts:
+  "Featured Hamburgefonstiv" at 100 was 1077 wide in Ubuntu (gap 28 of
+  1121 units) and 1040 in Arimo (67 of 2288), 0.976 and 0.97 as wide as
+  without it (Studio 0.748, conformance `gui/text_font_widths`). Legacy
+  leaves it out: its Arimo is 89.5 to the em at a 100-pixel line.
 - **Every glyph's advance is a whole number of pixels**: ten H's are
   always ten times one H, at every size from 8 to 100. Kerning applies:
   Roblox shapes with HarfBuzz ([research](../../design/research.md)), and

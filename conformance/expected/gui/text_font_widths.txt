@@ -1,0 +1,5 @@
+-- studio 0.748.0.7481526
+-- signals: deferred
+Ubuntu width 1080 height 100
+Arimo width 1040 height 100
+SourceSans width 900 height 100
