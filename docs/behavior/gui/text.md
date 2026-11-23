@@ -102,6 +102,14 @@ and no size is 107 × 24. Wrapped text growing on Y wraps at the object's
 width (150 wide, five Legacy lines: 150 × 180). Inference: growing on X
 lays text out unwrapped.
 
+`TextScaled` text is scaled as if the axes the object grows on had no
+end: as big as the other axis lets it be, up to 100 (or a
+UITextSizeConstraint's most). A 0 × 22 label growing on X is as wide as
+its text at 22 (at least its `Size`, as ever), one growing on XY is its
+text at 100 whatever its `Size`, and one 100 wide growing on Y is as tall
+as the text that fits 100 wide; on X it's unwrapped (Studio 0.748,
+conformance `gui/text_scaled_automatic`).
+
 ## RichText
 
 The tags of creator-docs' rich text page: `b`, `i`, `u`, `s`, `font`

@@ -1,0 +1,18 @@
+-- studio 0.748.0.7481526
+-- signals: deferred
+X, 17 tall size 50,20 bounds 50,20 fits true
+X, 22 tall size 70,20 bounds 70,20 fits true
+X, 26 tall size 80,30 bounds 80,30 fits true
+X, 60 tall size 180,60 bounds 180,60 fits true
+X, 140 tall size 300,140 bounds 300,100 fits true
+X, 22 tall, wrapped size 70,20 bounds 70,20 fits true
+X, 22 tall, two words size 170,20 bounds 170,20 fits true
+X, 22 tall, from 50 wide size 70,20 bounds 70,20 fits true
+X, 22 tall, from 300 wide size 300,20 bounds 70,20 fits true
+X, 22 tall, padded 5 size 50,20 bounds 40,10 fits true
+X, 22 tall, max 10 size 30,20 bounds 30,10 fits true
+Y, 100 wide size 100,30 bounds 100,30 fits true
+Y, 100 wide, 30 tall size 100,30 bounds 100,30 fits true
+XY, nothing size 300,100 bounds 300,100 fits true
+XY, 22 tall size 300,100 bounds 300,100 fits true
+X, 22 tall, scaled off size 50,20 bounds 50,10 fits true

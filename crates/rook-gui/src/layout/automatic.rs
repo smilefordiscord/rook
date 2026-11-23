@@ -209,12 +209,26 @@ fn scale_axes(dom: &rook_dom::Dom, id: InstanceId) -> Vec2 {
 /// What a text object's text needs: its `TextBounds` inside its padding.
 /// Measured: wrapped text grows on Y at the object's width; Inference:
 /// growing on X lays it out unwrapped.
+///
+/// Measured: `TextScaled` text is scaled as if the axes it grows on had no
+/// end, so as big as the others let it be (a label 0 × 22 growing on X was
+/// as wide as its text at 22; growing on XY it was the text at 100, the
+/// most scaled text gets), unwrapped when it grows on X.
 fn text_extent(pass: &mut Pass<'_>, id: InstanceId, base: Vec2, axes: Vec2) -> Vec2 {
     let Some(source) = Source::of(pass.dom, id) else {
         return Vec2::ZERO;
     };
     let inner = padding::inner(pass.dom, id, base);
     let wrap = (source.wrapped && axes.x == 0.0).then_some(inner.size.x);
-    let bounds = text::lay_out(pass.fonts, &source, inner.size, Some(wrap)).bounds;
+    let area = if source.scaled {
+        inner.size.max(Vec2::ZERO) * (Vec2::ONE - axes) + Vec2::splat(UNBOUNDED) * axes
+    } else {
+        inner.size
+    };
+    let bounds = text::lay_out(pass.fonts, &source, area, Some(wrap)).bounds;
     inner.origin + bounds + inner.far
 }
+
+/// The room scaled text measures in on an axis that grows: more than any
+/// scaled text is (it stops at 100 pixels a line).
+const UNBOUNDED: f32 = 1.0e7;
