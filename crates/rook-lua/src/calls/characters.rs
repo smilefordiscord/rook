@@ -34,6 +34,29 @@ impl Runtime {
         crate::api::methods::characters::request_avatar(&self.lua, player)
     }
 
+    /// `Player:Kick` calls since the last call: each player and the
+    /// message it's to be shown (empty: the default notice). A server's
+    /// message is already cut to what Roblox sends.
+    pub fn take_kicks(&self) -> Vec<(InstanceId, String)> {
+        std::mem::take(&mut self.world_mut().kicks)
+    }
+
+    /// `player` leaves the game for `reason`, firing the signals it causes
+    /// (`PlayerRemoving`, `CharacterRemoving`). A player no longer in
+    /// Players is left alone.
+    pub fn remove_player(&self, player: InstanceId, reason: crate::ExitReason) {
+        let result = self.guarded(|| {
+            let r =
+                crate::api::methods::characters::leaving::remove_player(&self.lua, player, reason);
+            crate::runtime::threads::drain_deferred(&self.lua);
+            r
+        });
+        if let Err(e) = result {
+            self.world_mut()
+                .push_log(MessageType::Error, format!("removing a player: {e}"));
+        }
+    }
+
     /// A part touched a SpawnLocation (team changes on touch).
     pub fn spawn_touched(&self, spawn: InstanceId, part: InstanceId) {
         let start = self.world().dom.journal().end();

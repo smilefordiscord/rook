@@ -39,7 +39,8 @@ impl CursorLook {
 }
 
 impl DataModel {
-    /// What the cursor shows: none with `UserInputService.MouseIconEnabled`
+    /// What the cursor shows: Roblox's arrow while the disconnect prompt
+    /// shows, else none with `UserInputService.MouseIconEnabled`
     /// off, else `UserInputService.MouseIcon`, else a held Tool's Mouse's
     /// `Icon`, else the PlayerMouse's (Inference: UserInputService's wins
     /// when both are set). Else
@@ -48,6 +49,11 @@ impl DataModel {
     /// (Inference), or Roblox's arrow (docs/behavior/gui/input.md#the-cursor).
     pub fn cursor_look(&self) -> CursorLook {
         let w = self.runtime.world();
+        // Roblox's prompt forces the cursor shown (its `ErrorPrompt`
+        // CoreScript module's `ForceShow`).
+        if w.gui.prompt_shown() {
+            return CursorLook::Image(ARROW.to_owned());
+        }
         let uis = w.dom.find_service("UserInputService");
         if uis.is_some_and(|u| w.dom.bool_property(u, "MouseIconEnabled") == Some(false)) {
             return CursorLook::Hidden;

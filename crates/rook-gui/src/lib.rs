@@ -24,6 +24,7 @@ use rook_dom::{Dom, DomError, InstanceId};
 use rook_types::{Value, Vector2, WorldCanvas, WorldCanvases};
 use rustc_hash::{FxHashMap, FxHashSet};
 
+pub use draw::overlays::prompt::Prompt;
 pub use images::GuiImage;
 pub use input::hits::WorldHit;
 pub use input::scrolling::BarDrag;
@@ -170,6 +171,8 @@ pub struct Gui {
     fonts: text::Fonts,
     glyphs: text::Glyphs,
     images: images::Images,
+    /// The prompt shown over everything, if any.
+    prompt: Option<draw::overlays::prompt::Shown>,
 }
 
 impl Default for Gui {
@@ -212,6 +215,7 @@ impl Default for Gui {
             fonts: text::Fonts::default(),
             glyphs: text::Glyphs::default(),
             images: images::Images::default(),
+            prompt: None,
         }
     }
 }

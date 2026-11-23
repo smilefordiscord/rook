@@ -139,6 +139,7 @@ impl DataModel {
             user_settings: None,
             freed: Vec::new(),
             camera_scripts: false,
+            connection: crate::session::ended::Connection::Open,
         })
     }
 }

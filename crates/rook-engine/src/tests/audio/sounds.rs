@@ -206,7 +206,7 @@ fn slow_server_keeps_client_clock() {
     let mut server_frames = |client: &mut ClientHost, n: usize| {
         for _ in 0..n {
             host.step();
-            client.deliver(&host.updates().pop().unwrap());
+            client.deliver(&host.updates().pop().unwrap().1);
             for _ in 0..9 {
                 client.step();
             }

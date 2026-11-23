@@ -317,6 +317,9 @@ pub struct World {
     pub avatars_pending: FxHashSet<InstanceId>,
     /// Players whose clients simulate their characters (a server's).
     pub client_players: FxHashSet<InstanceId>,
+    /// `Player:Kick` calls since the session last took them: each player
+    /// and the message it's to be shown.
+    pub(crate) kicks: Vec<(InstanceId, String)>,
     /// What this client's server made it the owner of (a client's).
     pub owned_here: crate::OwnedHere,
     /// Picks spawns and spots on them.
@@ -394,6 +397,7 @@ impl World {
             avatars: FxHashMap::default(),
             avatars_pending: FxHashSet::default(),
             client_players: FxHashSet::default(),
+            kicks: Vec::new(),
             owned_here: crate::OwnedHere::default(),
             // A fixed seed: runs repeat exactly.
             spawn_random: crate::types::random::LRandom::new(1),

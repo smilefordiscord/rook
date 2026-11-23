@@ -20,8 +20,8 @@ pub use api::methods::characters::movement::drives as humanoid_drives;
 pub use api::methods::characters::movement::face_camera;
 pub use api::methods::characters::ownership::{OwnedHere, authority, network_owner, owned_by};
 pub use api::methods::characters::{
-    Avatar, BuildRig, RigSource, RigType, Scales, character_root, humanoid_of_root, humanoid_root,
-    root_part,
+    Avatar, BuildRig, ExitReason, RigSource, RigType, Scales, character_root, humanoid_of_root,
+    humanoid_root, root_part,
 };
 pub use api::methods::content::assets::AssetModel;
 pub use api::methods::prompts::{Action as PromptAction, ActionKind as PromptActionKind};

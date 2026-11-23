@@ -30,6 +30,7 @@
   - Characters
     - [Rigs and looks](behavior/characters/rigs.md): R15 and R6 bodies, StarterCharacter, avatars and HumanoidDescriptions
     - [Spawning and teams](behavior/characters/spawning.md): which spawn, where on it, team assignment, respawning
+    - [Leaving and kicks](behavior/characters/leaving.md): `Player:Kick`, `PlayerRemoving`, the kicked client and its disconnect prompt
     - [Overhead names and health](behavior/characters/overhead.md): which show, how far, and how they look
     - [Tools](behavior/characters/tools.md): the grip, equipping, activating, dropping and picking up, HopperBin
     - [Humanoid movement and states](behavior/characters/movement.md): standing, walking, jumping, climbing, swimming, MoveTo, the state machine

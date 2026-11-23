@@ -164,6 +164,8 @@ pub struct DataModel {
     /// The local player joined with camera code (see
     /// [`DataModel::note_camera_scripts`]).
     camera_scripts: bool,
+    /// Whether this client's connection to its server is still open.
+    connection: session::ended::Connection,
 }
 
 /// Content requests from scripts, resolved off the engine thread.

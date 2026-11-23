@@ -3,6 +3,7 @@
 //! The ends are the same [`ServerHost`] and [`ClientHost`] a threaded host
 //! runs apart.
 
+pub mod ended;
 pub mod host;
 pub mod server_thread;
 pub mod threads;
@@ -75,10 +76,8 @@ impl Session {
     /// then each client steps.
     pub fn step(&mut self) {
         profiling::scope!("Session::step");
-        self.server.step();
-        self.route();
-        for (client, updates) in self.clients.iter_mut().zip(self.server.updates()) {
-            client.deliver(&updates);
+        self.step_server();
+        for client in &mut self.clients {
             client.step();
         }
         self.route();
@@ -90,8 +89,8 @@ impl Session {
     pub fn step_server(&mut self) {
         self.server.step();
         self.route();
-        for (client, updates) in self.clients.iter_mut().zip(self.server.updates()) {
-            client.deliver(&updates);
+        for (index, updates) in self.server.updates() {
+            self.clients[index].deliver(&updates);
         }
     }
 

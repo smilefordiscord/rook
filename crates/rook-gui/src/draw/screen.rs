@@ -9,7 +9,7 @@ use rook_types::GuiQuad;
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use super::objects::group;
-use super::overlays::messages;
+use super::overlays::{messages, prompt};
 use super::{Draw, Focus, Text};
 use crate::images::Images;
 use crate::layout::{GUI_INSET, Layout, top_of};
@@ -103,6 +103,11 @@ impl Screen {
         self.drawn = None;
     }
 
+    /// The prompt over everything changed.
+    pub(crate) fn repaint_prompt(&mut self) {
+        self.drawn = None;
+    }
+
     /// The shown ScreenGuis' stacks, bottom first, brought up to date with
     /// what was laid out since: what the screen draws, which hit-testing
     /// reads as it is rather than stacking every screen again.
@@ -118,15 +123,15 @@ impl Screen {
 
     /// The Hints and Messages among `messages` that show, then the pieces
     /// the local player's ScreenGuis draw over them (measured: every
-    /// ScreenGui, the top bar's too, whatever its DisplayOrder), bottom
-    /// first.
+    /// ScreenGui, the top bar's too, whatever its DisplayOrder), then the
+    /// `prompt` over everything, bottom first.
     pub(crate) fn draw(
         &mut self,
         dom: &Dom,
         layout: &Layout,
         (text, images): (&mut Text<'_>, &mut Images),
         focus: Option<Focus>,
-        messages: &FxHashSet<InstanceId>,
+        (messages, shown_prompt): (&FxHashSet<InstanceId>, Option<&mut prompt::Shown>),
     ) -> Arc<[Arc<[GuiQuad]>]> {
         if let Some(drawn) = &self.drawn {
             return drawn.clone();
@@ -177,6 +182,9 @@ impl Screen {
                     list.push(piece.clone());
                 }
             }
+        }
+        if let Some(shown) = shown_prompt {
+            list.push(prompt::emit(dom, shown, &mut *draw.text));
         }
         let drawn: Arc<[Arc<[GuiQuad]>]> = list.into();
         self.drawn = Some(drawn.clone());

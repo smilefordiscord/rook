@@ -108,6 +108,11 @@ impl DataModel {
     /// caused, for the session to fire on both sides.
     pub fn input(&mut self, event: InputEvent) -> Vec<ClickEvent> {
         profiling::scope!("DataModel::input");
+        if self.session_ended() {
+            self.prompt_input(&event);
+            self.input.processed = true;
+            return Vec::new();
+        }
         self.ensure_mouse();
         let mut clicks = Vec::new();
         self.input.processed = match event {
