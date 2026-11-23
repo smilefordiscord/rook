@@ -4,13 +4,14 @@
 //! same curve (`docs/behavior/audio/audio-api.md`).
 //!
 //! Each curve is built from the Audio EQ Cookbook's sections
-//! ([`Biquad`]). The steeper passes are Butterworth cascades: 24 dB per
-//! octave is two sections and 48 dB four, with the Butterworth Qs of that
-//! order, each scaled by `Q / 0.707`, so the default `Q` is flat (the
-//! docs' "0.707 corresponds to a flat filter") and a higher one resonates
-//! (Inference: how Studio's cascades take `Q` isn't documented). The
-//! shelves don't take `Q` (creator-docs) and use the cookbook's slope 1.
-//! Lowpass6dB and its high pass are first order, without `Q`.
+//! ([`Biquad`]). The steeper passes are cascades of identical sections:
+//! 24 dB per octave is two and 48 dB four, each with `Q` to the power of
+//! one over their count, so the whole is `Q` at the cutoff (-3 dB at the
+//! default 0.707) and bulges a little before it (Confirmed in Studio
+//! 0.748: `GetGainAt` matches it to 0.01 dB at every measured frequency,
+//! conformance case `content/sound_effects`). The shelves don't take `Q`
+//! (creator-docs) and use the cookbook's slope 1. Lowpass6dB is a
+//! one-pole smoother, without `Q` (Confirmed the same way).
 
 use super::Frame;
 use super::biquad::Biquad;
@@ -77,57 +78,46 @@ impl Default for Filter {
 
 impl Filter {
     /// The curve's gain in dB at `frequency` Hz, as `GetGainAt` gives it,
-    /// at the mixer's rate.
+    /// at the mixer's rate. Frequencies below 0 read as 0 Hz (Studio reads
+    /// 0 dB at both for a peak; Inference for the other curves).
     pub fn gain_at(&self, frequency: f32) -> f32 {
         let rate = crate::SAMPLE_RATE as f32;
         let gain: f32 = self
             .sections(rate)
             .iter()
-            .map(|s| s.gain_at(frequency, rate))
+            .map(|s| s.gain_at(frequency.max(0.0), rate))
             .product();
-        20.0 * gain.max(1e-12).log10()
+        20.0 * gain.log10()
     }
 
     fn sections(&self, rate: f32) -> Vec<Biquad> {
         let f = self.frequency.clamp(20.0, 22_000.0);
         let gain = self.gain.clamp(-30.0, 30.0);
         let q = self.q.clamp(0.1, 10.0);
-        let cascade = |order: u32, high: bool| -> Vec<Biquad> {
-            butterworth(order)
-                .map(|bq| {
-                    let q = bq * q / std::f32::consts::FRAC_1_SQRT_2;
-                    if high {
-                        Biquad::high_pass(f, q, rate)
-                    } else {
-                        Biquad::low_pass(f, q, rate)
-                    }
-                })
-                .collect()
+        let cascade = |count: u16, high: bool| -> Vec<Biquad> {
+            let q = q.powf(1.0 / f32::from(count));
+            let section = if high {
+                Biquad::high_pass(f, q, rate)
+            } else {
+                Biquad::low_pass(f, q, rate)
+            };
+            vec![section; usize::from(count)]
         };
         match self.kind {
             FilterType::Peak => vec![Biquad::peak(f, q, gain, rate)],
             FilterType::LowShelf => vec![Biquad::shelf(false, f, gain, rate)],
             FilterType::HighShelf => vec![Biquad::shelf(true, f, gain, rate)],
-            FilterType::Lowpass6dB => vec![Biquad::first_order(false, f, rate)],
-            FilterType::Lowpass12dB => cascade(2, false),
-            FilterType::Lowpass24dB => cascade(4, false),
-            FilterType::Lowpass48dB => cascade(8, false),
-            FilterType::Highpass12dB => cascade(2, true),
-            FilterType::Highpass24dB => cascade(4, true),
-            FilterType::Highpass48dB => cascade(8, true),
+            FilterType::Lowpass6dB => vec![Biquad::one_pole(f, rate)],
+            FilterType::Lowpass12dB => cascade(1, false),
+            FilterType::Lowpass24dB => cascade(2, false),
+            FilterType::Lowpass48dB => cascade(4, false),
+            FilterType::Highpass12dB => cascade(1, true),
+            FilterType::Highpass24dB => cascade(2, true),
+            FilterType::Highpass48dB => cascade(4, true),
             FilterType::Bandpass => vec![Biquad::band_pass(f, q, rate)],
             FilterType::Notch => vec![Biquad::notch(f, q, rate)],
         }
     }
-}
-
-/// The Qs of a Butterworth filter of `order` (even) as second-order
-/// sections: `1 / (2 sin((2k - 1) π / 2n))`.
-fn butterworth(order: u32) -> impl Iterator<Item = f32> {
-    (1..=order / 2).map(move |k| {
-        let angle = (2 * k - 1) as f32 * std::f32::consts::PI / (2 * order) as f32;
-        1.0 / (2.0 * angle.sin())
-    })
 }
 
 /// A running AudioFilter.

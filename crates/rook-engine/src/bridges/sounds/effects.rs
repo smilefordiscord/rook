@@ -9,8 +9,9 @@ use super::*;
 /// The effect a SoundEffect instance is, if Rook plays its class. Defaults
 /// are Studio's.
 fn effect(dom: &Dom, id: InstanceId) -> Option<Effect> {
-    // Scripts can set these to NaN, which would stick in an effect's state
-    // and silence the mix for good. Inference: NaN plays as the default.
+    // A saved file can hold NaN (a script's is ignored, Confirmed), which
+    // would stick in an effect's state and silence the mix for good.
+    // Inference: NaN plays as the default.
     let f = |name: &str, default: f32| {
         (dom.float_property(id, name))
             .filter(|v| !v.is_nan())

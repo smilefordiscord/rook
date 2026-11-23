@@ -1,7 +1,7 @@
 //! A second-order filter section, with the coefficients of Robert
 //! Bristow-Johnson's Audio EQ Cookbook (the bilinear transform of each
-//! analog prototype, with the frequency pre-warped), plus the first-order
-//! low and high passes as degenerate sections. The equalizer's crossovers
+//! analog prototype, with the frequency pre-warped), plus a one-pole low
+//! pass as a degenerate section. The equalizer's crossovers
 //! and AudioFilter are built from these.
 
 use std::f32::consts::TAU;
@@ -103,13 +103,12 @@ impl Biquad {
         )
     }
 
-    /// A first-order low (`high` false) or high pass, -3 dB at
-    /// `frequency` and 6 dB per octave beyond it (the bilinear transform
-    /// of `1 / (1 + s)`, pre-warped).
-    pub(super) fn first_order(high: bool, frequency: f32, rate: f32) -> Self {
-        let k = (omega(frequency, rate) / 2.0).tan();
-        let b = if high { [1.0, -1.0, 0.0] } else { [k, k, 0.0] };
-        Self::from(b, [1.0 + k, k - 1.0, 0.0])
+    /// A one-pole low pass, `y += a (x - y)` with `a = 1 - e^(-2π f / rate)`:
+    /// -3 dB near `frequency` and 6 dB per octave beyond it, flattening
+    /// toward Nyquist as it has no zero there.
+    pub(super) fn one_pole(frequency: f32, rate: f32) -> Self {
+        let a = 1.0 - (-omega(frequency, rate)).exp();
+        Self::from([a, 0.0, 0.0], [1.0, a - 1.0, 0.0])
     }
 
     /// Take `other`'s coefficients, keeping this section's state so a
@@ -127,17 +126,25 @@ impl Biquad {
         y
     }
 
-    /// The magnitude of the response at `frequency`, linear.
+    /// The magnitude of the response at `frequency`, linear: `|H(z)|` at
+    /// `z = e^-jw`, each polynomial in `z` taken by Horner's rule in single
+    /// precision. Studio's `GetGainAt` reads deep stop bands and a notch's
+    /// center to the same rounding (Confirmed to 0.01 dB down to -320 dB in
+    /// conformance case `content/sound_effects`; evaluating more exactly
+    /// reads those differently).
     pub(super) fn gain_at(&self, frequency: f32, rate: f32) -> f32 {
-        let w = TAU * frequency / rate;
-        // H(e^jw) = (b0 + b1 e^-jw + b2 e^-2jw) / (1 + a1 e^-jw + a2 e^-2jw).
-        let (s1, c1) = w.sin_cos();
-        let (s2, c2) = (2.0 * w).sin_cos();
+        let (sin, cos) = (TAU * frequency / rate).sin_cos();
+        let z = (cos, -sin);
+        // c0 + z (c1 + z c2).
+        let horner = |c0: f32, c1: f32, c2: f32| {
+            let t = (c1 + z.0 * c2, z.1 * c2);
+            (c0 + (z.0 * t.0 - z.1 * t.1), z.0 * t.1 + z.1 * t.0)
+        };
         let [b0, b1, b2] = self.b;
         let [a1, a2] = self.a;
-        let num = (b0 + b1 * c1 + b2 * c2).hypot(b1 * s1 + b2 * s2);
-        let den = (1.0 + a1 * c1 + a2 * c2).hypot(a1 * s1 + a2 * s2);
-        num / den.max(1e-12)
+        let num = horner(b0, b1, b2);
+        let den = horner(1.0, a1, a2);
+        num.0.hypot(num.1) / den.0.hypot(den.1)
     }
 }
 
@@ -163,8 +170,7 @@ mod tests {
         assert!((db(&Biquad::shelf(false, 1000.0, -12.0, RATE), 1000.0) + 6.0).abs() < 0.05);
         assert!((db(&Biquad::shelf(true, 1000.0, 9.0, RATE), 20_000.0) - 9.0).abs() < 0.1);
         assert!(db(&Biquad::shelf(true, 1000.0, 9.0, RATE), 20.0).abs() < 0.05);
-        assert!((db(&Biquad::first_order(false, 1000.0, RATE), 1000.0) + 3.01).abs() < 0.05);
-        assert!((db(&Biquad::first_order(true, 1000.0, RATE), 1000.0) + 3.01).abs() < 0.05);
+        assert!((db(&Biquad::one_pole(1000.0, RATE), 1000.0) + 3.0).abs() < 0.05);
         assert!((Biquad::all_pass(1000.0, q, RATE).gain_at(3000.0, RATE) - 1.0).abs() < 1e-4);
     }
 }

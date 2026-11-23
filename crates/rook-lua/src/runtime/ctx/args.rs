@@ -216,6 +216,18 @@ impl Args {
             .ok_or_else(|| self.cast_error(i, enum_name))
     }
 
+    /// A `float` argument, cast as the reflection layer casts one: a
+    /// number, or a string that reads as one. Measured on
+    /// `AudioFilter:GetGainAt("x")`: `Unable to cast string to float`.
+    pub(crate) fn float(&self, i: usize) -> ApiResult<f32> {
+        match self.get(i) {
+            LuaValue::Nil => Err(self.missing(i)),
+            v => number_of(v)
+                .map(|n| n as f32)
+                .ok_or_else(|| ScriptError(format!("Unable to cast {} to float", cast_name(v)))),
+        }
+    }
+
     pub(crate) fn string(&self, i: usize) -> ApiResult<String> {
         self.opt_string(i)?.ok_or_else(|| self.missing(i))
     }

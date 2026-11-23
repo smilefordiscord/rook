@@ -1,6 +1,8 @@
 //! The ranges the audio API's properties keep to: a value set outside one
-//! reads back at its end (all observed in Studio 0.742; setting -1e9 and
-//! 1e9 on each). Unlike the legacy SoundEffects, which read back anything.
+//! reads back at its end (all observed in Studio 0.742 and 0.748; setting
+//! -1e9 and 1e9 on each). Unlike the legacy SoundEffects, which read back
+//! anything. Both ignore NaN: the value before stays (Confirmed in Studio
+//! 0.748, conformance case `content/sound_effects`).
 
 use rbx_types::NumberRange;
 use rook_dom::{DomError, InstanceId};
@@ -57,11 +59,16 @@ const RANGES: &[(&str, &str, f64, f64)] = &[
     ("AudioTremolo", "Square", 0.0, 1.0),
     ("AudioLimiter", "MaxLevel", -12.0, 0.0),
     ("AudioLimiter", "Release", 0.001, 1.0),
+    ("AudioGate", "Attack", 0.001, 5.0),
+    ("AudioGate", "Release", 0.001, 5.0),
 ];
 
 /// AudioEqualizer's `MidRange` ends each keep within 200 to 20,000 Hz
 /// (10 to 30,000 read back as 200 to 20,000).
 const MID_RANGE: (f32, f32) = (200.0, 20_000.0);
+
+/// AudioGate's `Threshold` ends each keep within -80 to 30 dB.
+const GATE_THRESHOLD: (f32, f32) = (-80.0, 30.0);
 
 /// The range `class`'s `property` keeps to, if it has one: what scripts
 /// read back, and what the mixer plays a value saved outside it at.
@@ -72,18 +79,26 @@ fn range(class: &str, property: &str) -> Option<(f64, f64)> {
         .map(|&(_, _, lo, hi)| (lo, hi))
 }
 
-/// `v` kept to `class`'s `property`'s range, if it has one. NaN is the
-/// highest value (observed for AudioPlayer's `Volume`; Inference for the
-/// rest).
+/// `v` kept to `class`'s `property`'s range, if it has one. NaN stays
+/// NaN: scripts can't set it, and a saved one plays at the property's
+/// default (the mixer's choice).
 pub fn keep(class: &str, property: &str, v: f64) -> f64 {
     match range(class, property) {
-        Some((_, hi)) if v.is_nan() => hi,
         Some((lo, hi)) => v.clamp(lo, hi),
         None => v,
     }
 }
 
-/// Store `value` within its range, if `name` has one on `id`'s class.
+/// Whether NaN set on `id`'s `name` is ignored: the audio API's ranged
+/// properties and every legacy SoundEffect's numbers (Confirmed in
+/// Studio 0.748 for all of them; not every class does: `Sky`'s
+/// `SunAngularSize` keeps NaN).
+fn ignores_nan(w: &World, id: InstanceId, class: &str, name: &str) -> bool {
+    range(class, name).is_some() || w.dom.is_a(id, "SoundEffect")
+}
+
+/// Store `value` within its range, if `name` has one on `id`'s class, or
+/// ignore it if it's a NaN the property doesn't take.
 #[expect(
     clippy::disallowed_methods,
     reason = "stores the value in the variant the property already holds"
@@ -95,11 +110,15 @@ pub(crate) fn clamp(
     value: &Value,
 ) -> Option<Result<(), DomError>> {
     let class = w.dom.class_name(id);
-    if name == "MidRange"
-        && class == "AudioEqualizer"
-        && let Value::NumberRange(r) = value
-    {
-        let (lo, hi) = MID_RANGE;
+    if value.as_number().is_some_and(f64::is_nan) && ignores_nan(w, id, class, name) {
+        return Some(Ok(()));
+    }
+    let ends = match (class, name) {
+        ("AudioEqualizer", "MidRange") => Some(MID_RANGE),
+        ("AudioGate", "Threshold") => Some(GATE_THRESHOLD),
+        _ => None,
+    };
+    if let (Some((lo, hi)), Value::NumberRange(r)) = (ends, value) {
         let range = NumberRange::new(r.min.clamp(lo, hi), r.max.clamp(lo, hi));
         return Some(
             w.dom

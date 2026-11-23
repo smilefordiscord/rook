@@ -21,15 +21,17 @@ pub(crate) struct Metering {
 
 /// The effect an effect instance plays, with Studio's defaults and each
 /// property kept to its range (a value saved outside it plays at its
-/// end); `None` passes sound through as it is: a bypassed effect
-/// (creator-docs).
+/// end, a saved NaN at the default, as the legacy effects'); `None`
+/// passes sound through as it is: a bypassed effect (creator-docs).
 pub(super) fn effect(dom: &Dom, id: InstanceId) -> Option<Effect> {
     if dom.bool_property(id, "Bypass").unwrap_or(false) {
         return None;
     }
     let class = dom.class_name(id);
     let f = |name: &str, default: f32| {
-        let v = dom.float_property(id, name).unwrap_or(default);
+        let v = (dom.float_property(id, name))
+            .filter(|v| !v.is_nan())
+            .unwrap_or(default);
         rook_lua::audio_api::keep(class, name, f64::from(v)) as f32
     };
     Some(match class {

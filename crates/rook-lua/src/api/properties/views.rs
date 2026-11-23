@@ -159,7 +159,9 @@ pub(super) const REF_CLASSES: &[(&str, &str, &str)] = &[("Sound", "SoundGroup", 
 
 /// Studio's error for an instance of the wrong class given to one of
 /// [`REF_CLASSES`] (observed for `Sound.SoundGroup`: "Expected SoundGroup
-/// got Part for Sound.SoundGroup.").
+/// got Part for Sound.SoundGroup."), or to `CompressorSoundEffect`'s
+/// `SideChain`, which takes a Sound or a SoundGroup and words its error
+/// its own way.
 pub(crate) fn wrong_ref_class(
     w: &World,
     id: InstanceId,
@@ -170,6 +172,14 @@ pub(crate) fn wrong_ref_class(
         return None;
     };
     let target = InstanceId::from_ref(*r);
+    // Observed in Studio 0.748 (conformance case `content/sound_effects`).
+    if name == "SideChain"
+        && w.dom.class_name(id) == "CompressorSoundEffect"
+        && !w.dom.is_a(target, "Sound")
+        && !w.dom.is_a(target, "SoundGroup")
+    {
+        return Some("CompressorSoundEffect.SideChain must be Sound or SoundGroup".into());
+    }
     let &(owner, _, class) = REF_CLASSES
         .iter()
         .find(|(owner, p, _)| *p == name && w.dom.is_a(id, owner))?;

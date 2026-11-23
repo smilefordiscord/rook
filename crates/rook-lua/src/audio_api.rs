@@ -102,7 +102,9 @@ pub fn is_effect(class: &str) -> bool {
 pub fn filter(dom: &Dom, id: InstanceId) -> Filter {
     let d = Filter::default();
     let f = |name: &str, default: f32| {
-        let v = dom.float_property(id, name).unwrap_or(default);
+        let v = (dom.float_property(id, name))
+            .filter(|v| !v.is_nan())
+            .unwrap_or(default);
         keep("AudioFilter", name, f64::from(v)) as f32
     };
     Filter {

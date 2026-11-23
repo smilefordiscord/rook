@@ -1,6 +1,6 @@
 # SoundService, SoundGroups and effects
 
-Checked against Studio 0.742 on 2026-10-15.
+Checked against Studio 0.748 on 2026-11-23.
 
 Each of these changes what the player hears: a Sound's own effects, its
 SoundGroup (and the groups that one is nested in) with that group's
@@ -101,9 +101,8 @@ the same file the same way
 
 The other five share the audio API's effect of the same kind
 ([the audio API](audio-api.md)), each property kept to the range
-creator-docs gives the legacy class. A legacy effect's property set to
-NaN plays at its default (Inference). None of their levels or sounds is
-measured against Studio:
+creator-docs gives the legacy class when it plays. None of their levels
+or sounds is measured against Studio:
 
 - **ChorusSoundEffect** (Confirmed one effect with AudioChorus: Studio
   gave both the same level). `Depth`, `Mix` 0 to 1, `Rate` 0 to 20 Hz;
@@ -115,7 +114,11 @@ measured against Studio:
   `Threshold` -80 to 0 dB, `Attack` 0.1 to 1 s, `Release` 0 to 5 s,
   `GainMakeup` -30 to 30 dB (creator-docs). Creator-docs gives `Ratio` no
   range; Rook keeps it to AudioCompressor's 1 to 50. `SideChain`, a Sound
-  or SoundGroup that ducks the compressor, isn't followed.
+  or SoundGroup that ducks the compressor, isn't followed. It takes
+  nothing else (Confirmed: a Part is "CompressorSoundEffect.SideChain
+  must be Sound or SoundGroup", a string "Unable to assign property
+  SideChain. Instance expected, got string"), and still points at a Sound
+  that has been destroyed.
 - **FlangeSoundEffect** (Inference: FMOD's flange, whose controls,
   ranges and 40 ms span it has). One copy of the sound whose delay sweeps
   from none to `Depth` × 40 ms (`Depth` 0.01 to 1, creator-docs) and back
@@ -125,6 +128,17 @@ measured against Studio:
   `Duty` 0 to 1, `Frequency` 0.1 to 20 Hz (creator-docs), the swing's
   other controls at AudioTremolo's defaults (a triangle, no skew, not
   squared).
+
+*What scripts read back* (Confirmed in Studio 0.748, conformance case
+`content/sound_effects`). Every legacy effect's number properties read
+back whatever was set, however far outside creator-docs' range: -1e9,
+1e9 and both infinities on all nine classes. NaN is ignored: the value
+before stays. A NaN saved in a file plays at the property's default
+(Inference). `Priority` is a 32-bit integer: a fraction is cut toward
+zero (2.7 is 2, -2.7 is -2), and NaN or anything outside the integer's
+range reads -2147483648 on either side; a string that reads as a number
+is taken. `Enabled` takes any value by truthiness (0 is true, nil
+false).
 
 *Order* (Confirmed). Higher `Priority` runs first, and `Priority` 0 means
 the effect's own base priority (creator-docs). The base priorities were
@@ -233,13 +247,15 @@ that has been destroyed, and Rook then ignores it.
   Rook plays it from where the sound was when it was called (Inference),
   loading the file if nothing had loaded it yet.
 
-The script-visible rules are the conformance case `content/sound_groups`:
+The script-visible rules are the conformance cases `content/sound_groups`
+and `content/sound_effects`:
 
 - SoundService's defaults;
 - SoundGroup `Volume` and its limits;
 - `Sound.SoundGroup`;
 - every effect class's `Enabled`, `Priority` and defaults;
-- effect properties reading back unclamped;
+- effect properties reading back unclamped, and NaN ignored;
+- CompressorSoundEffect's `SideChain`;
 - `PlayLocalSound` on a server.
 
 The engine test `effects_groups_and_local_sounds` checks the rest on a

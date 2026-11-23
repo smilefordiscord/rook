@@ -172,8 +172,9 @@ fn effects_groups_and_local_sounds() {
     );
     assert_eq!(sound.group, Some(inner));
     // The five unmeasured effects share base priority 0, so the later
-    // child runs first. The tremolo's NaN `Frequency` plays as the
-    // default, where it stuck in the swing's phase and silenced the mix.
+    // child runs first. The tremolo's NaN `Frequency` is ignored, as in
+    // Studio, where it once stuck in the swing's phase and silenced the
+    // mix.
     let b = named(ss, "B");
     let sound = playing.iter().find(|s| s.id == b).unwrap();
     assert_eq!(
