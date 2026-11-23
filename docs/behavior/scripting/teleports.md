@@ -139,6 +139,10 @@ place id is the destination's, its spawn name the one asked for.
   `teleportData`) is copied as remote arguments are; instances are
   removed with an error in the output (creator-docs). The arriving client
   reads it with `GetLocalPlayerTeleportData` (nil on a server).
+- `SetTeleportGui` takes a ScreenGui (creator-docs) or nil, which clears
+  it; anything else raises `Parameter 1 must be ScreenGui in
+  SetTeleportGui.` (Inference: the words Roblox uses for an object of the
+  wrong class).
 - `SetTeleportGui`'s ScreenGui (or a legacy method's
   `customLoadingScreen` on a client) goes with the player: copied with its
   descendants, references outside it cleared (creator-docs), put in the new

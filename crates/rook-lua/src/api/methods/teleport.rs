@@ -388,8 +388,17 @@ fn wait_lookup(lua: &Lua, args: MultiValue) -> ApiResult<Outcome> {
     Ok(Outcome::Yield)
 }
 
+/// Confirmed (creator-docs SetTeleportGui): it takes "the loading
+/// ScreenGui". Inference: anything else raises in the words Roblox's
+/// methods use for an object of the wrong class (measured for
+/// `SetPartCollisionGroup`), and nil clears it.
 fn set_teleport_gui(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
     let gui = a.object(0)?;
+    if gui.is_some_and(|g| !with_world(lua, |w| w.dom.is_a(g, "ScreenGui"))) {
+        return Err(ScriptError(
+            "Parameter 1 must be ScreenGui in SetTeleportGui.".into(),
+        ));
+    }
     with_world(lua, |w| w.teleports.gui = gui);
     Outcome::ret(lua, ())
 }

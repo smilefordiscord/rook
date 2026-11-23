@@ -164,3 +164,31 @@ fn legacy_teleports_take_their_player_and_spawn() {
         ]
     );
 }
+
+/// Confirmed (creator-docs SetTeleportGui): it takes a ScreenGui.
+/// Inference: anything else raises, and nil clears it.
+#[test]
+fn set_teleport_gui_takes_only_a_screen_gui() {
+    let rt = Runtime::new(Dom::new(), Clock::Fixed { step: 1.0 / 60.0 }).unwrap();
+    rt.world_mut().is_client = true;
+    rt.run_source(
+        "StarterPlayerScripts.LocalScript",
+        r#"
+        local TeleportService = game:GetService("TeleportService")
+        print(pcall(TeleportService.SetTeleportGui, TeleportService, Instance.new("Frame")))
+        print(pcall(TeleportService.SetTeleportGui, TeleportService, Instance.new("ScreenGui")))
+        print(pcall(TeleportService.SetTeleportGui, TeleportService, nil))
+        "#,
+        None,
+    )
+    .unwrap();
+    assert_eq!(
+        finish(&rt, 0),
+        [
+            "false Parameter 1 must be ScreenGui in SetTeleportGui.",
+            "true",
+            "true",
+        ]
+    );
+    assert_eq!(rt.world().teleports.gui, None);
+}
