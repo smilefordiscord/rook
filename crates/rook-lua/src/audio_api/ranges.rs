@@ -65,16 +65,25 @@ const MID_RANGE: (f32, f32) = (200.0, 20_000.0);
 
 /// The range `class`'s `property` keeps to, if it has one: what scripts
 /// read back, and what the mixer plays a value saved outside it at.
-pub fn range(class: &str, property: &str) -> Option<(f64, f64)> {
+fn range(class: &str, property: &str) -> Option<(f64, f64)> {
     RANGES
         .iter()
         .find(|(c, p, _, _)| *c == class && *p == property)
         .map(|&(_, _, lo, hi)| (lo, hi))
 }
 
+/// `v` kept to `class`'s `property`'s range, if it has one. NaN is the
+/// highest value (observed for AudioPlayer's `Volume`; Inference for the
+/// rest).
+pub fn keep(class: &str, property: &str, v: f64) -> f64 {
+    match range(class, property) {
+        Some((_, hi)) if v.is_nan() => hi,
+        Some((lo, hi)) => v.clamp(lo, hi),
+        None => v,
+    }
+}
+
 /// Store `value` within its range, if `name` has one on `id`'s class.
-/// NaN reads back as the highest value (observed for AudioPlayer's
-/// `Volume`; Inference for the rest).
 #[expect(
     clippy::disallowed_methods,
     reason = "stores the value in the variant the property already holds"
@@ -97,9 +106,8 @@ pub(crate) fn clamp(
                 .set_property_by_name(id, name, Value::NumberRange(range)),
         );
     }
-    let (lo, hi) = range(class, name)?;
-    let v = value.as_number()?;
-    let v = if v.is_nan() { hi } else { v.clamp(lo, hi) };
+    range(class, name)?;
+    let v = keep(class, name, value.as_number()?);
     let stored = match w.dom.property_by_name(id, name) {
         Some(Value::Float64(_)) => Value::Float64(v),
         _ => Value::Float32(v as f32),

@@ -13,7 +13,7 @@ mod ranges;
 
 pub use curves::{read_curve, write_curve};
 pub(crate) use ranges::clamp;
-pub use ranges::range;
+pub use ranges::keep;
 
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::collections::BTreeSet;
@@ -101,7 +101,10 @@ pub fn is_effect(class: &str) -> bool {
 /// and `GetGainAt` reads.
 pub fn filter(dom: &Dom, id: InstanceId) -> Filter {
     let d = Filter::default();
-    let f = |name: &str, default: f32| dom.float_property(id, name).unwrap_or(default);
+    let f = |name: &str, default: f32| {
+        let v = dom.float_property(id, name).unwrap_or(default);
+        keep("AudioFilter", name, f64::from(v)) as f32
+    };
     Filter {
         kind: dom
             .enum_item_property(id, "FilterType")

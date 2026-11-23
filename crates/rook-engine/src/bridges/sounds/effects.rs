@@ -9,35 +9,35 @@ use super::*;
 /// The effect a SoundEffect instance is, if Rook plays its class. Defaults
 /// are Studio's.
 fn effect(dom: &Dom, id: InstanceId) -> Option<Effect> {
-    let f = |name: &str, default: f32| dom.float_property(id, name).unwrap_or(default);
+    // Scripts can set these to NaN, which would stick in an effect's state
+    // and silence the mix for good. Inference: NaN plays as the default.
+    let f = |name: &str, default: f32| {
+        (dom.float_property(id, name))
+            .filter(|v| !v.is_nan())
+            .unwrap_or(default)
+    };
     Some(match dom.class_name(id) {
         "EqualizerSoundEffect" => Effect::Equalizer {
-            low: dom.float_property(id, "LowGain").unwrap_or(-20.0),
-            mid: dom.float_property(id, "MidGain").unwrap_or(-10.0),
-            high: dom.float_property(id, "HighGain").unwrap_or(0.0),
+            low: f("LowGain", -20.0),
+            mid: f("MidGain", -10.0),
+            high: f("HighGain", 0.0),
             range: rook_audio::effects::CROSSOVERS,
         },
         "ReverbSoundEffect" => Effect::Reverb(Reverb {
-            decay: dom.float_property(id, "DecayTime").unwrap_or(1.5),
-            density: dom.float_property(id, "Density").unwrap_or(1.0),
-            diffusion: dom.float_property(id, "Diffusion").unwrap_or(1.0),
+            decay: f("DecayTime", 1.5),
+            density: f("Density", 1.0),
+            diffusion: f("Diffusion", 1.0),
             // Within ReverbSoundEffect's -80 to 10 dB (creator-docs),
             // narrower than AudioReverb's.
-            dry: dom
-                .float_property(id, "DryLevel")
-                .unwrap_or(-6.0)
-                .clamp(-80.0, 10.0),
-            wet: dom
-                .float_property(id, "WetLevel")
-                .unwrap_or(0.0)
-                .clamp(-80.0, 10.0),
+            dry: f("DryLevel", -6.0).clamp(-80.0, 10.0),
+            wet: f("WetLevel", 0.0).clamp(-80.0, 10.0),
             ..Reverb::default()
         }),
         "DistortionSoundEffect" => Effect::Distortion {
-            level: dom.float_property(id, "Level").unwrap_or(0.75),
+            level: f("Level", 0.75),
         },
         "PitchShiftSoundEffect" => Effect::PitchShift {
-            octave: dom.float_property(id, "Octave").unwrap_or(1.25),
+            octave: f("Octave", 1.25),
         },
         // The legacy effects keep to the ranges creator-docs gives each
         // property, though they read back whatever was set.

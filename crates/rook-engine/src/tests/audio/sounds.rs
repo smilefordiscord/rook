@@ -127,7 +127,9 @@ fn effects_groups_and_local_sounds() {
         local plain = new('Plain') plain:Play()
         local b = new('B')
         for _, class in { 'ChorusSoundEffect', 'EchoSoundEffect', 'CompressorSoundEffect', 'FlangeSoundEffect', 'TremoloSoundEffect' } do
-            Instance.new(class).Parent = b
+            local e = Instance.new(class)
+            if class == 'TremoloSoundEffect' then e.Frequency = 0/0 end
+            e.Parent = b
         end
         b:Play()
         SS.AmbientReverb = Enum.ReverbType.Cave
@@ -170,7 +172,8 @@ fn effects_groups_and_local_sounds() {
     );
     assert_eq!(sound.group, Some(inner));
     // The five unmeasured effects share base priority 0, so the later
-    // child runs first.
+    // child runs first. The tremolo's NaN `Frequency` plays as the
+    // default, where it stuck in the swing's phase and silenced the mix.
     let b = named(ss, "B");
     let sound = playing.iter().find(|s| s.id == b).unwrap();
     assert_eq!(

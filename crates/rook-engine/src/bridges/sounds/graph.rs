@@ -30,7 +30,7 @@ pub(super) fn effect(dom: &Dom, id: InstanceId) -> Option<Effect> {
     let class = dom.class_name(id);
     let f = |name: &str, default: f32| {
         let v = dom.float_property(id, name).unwrap_or(default);
-        rook_lua::audio_api::range(class, name).map_or(v, |(lo, hi)| v.clamp(lo as f32, hi as f32))
+        rook_lua::audio_api::keep(class, name, f64::from(v)) as f32
     };
     Some(match class {
         "AudioFader" => Effect::Fader {

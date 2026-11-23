@@ -102,8 +102,9 @@ the same file the same way
 
 The other five share the audio API's effect of the same kind
 ([the audio API](audio-api.md)), each property kept to the range
-creator-docs gives the legacy class. None of their levels or sounds is
-measured against Studio yet:
+creator-docs gives the legacy class. A legacy effect's property set to
+NaN plays at its default (Inference). None of their levels or sounds is
+measured against Studio:
 
 - **ChorusSoundEffect** (Confirmed one effect with AudioChorus: Studio
   gave both the same level). `Depth`, `Mix` 0 to 1, `Rate` 0 to 20 Hz;
