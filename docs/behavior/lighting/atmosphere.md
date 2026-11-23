@@ -1,7 +1,7 @@
 # Atmosphere
 
 Checked against Studio 0.745 on 2026-11-23, by its install's shaders and
-the creator docs only: nothing here is measured in Studio yet. The rules
+the creator docs only: nothing here is measured in Studio. The rules
 come from the creator docs (Atmosphere, the "Atmospheric effects" guide)
 and the form of the shaders in the install's `shaders_glsl3.pack`
 (`version-8d7a1009c17e4ff8`), read for facts as the

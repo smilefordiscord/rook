@@ -36,7 +36,8 @@ pub(super) fn atmosphere(dom: &Dom, lighting: InstanceId) -> Option<Atmosphere> 
         let c = dom
             .color3_property(id, name)
             .map_or(default, Color3::to_array);
-        c.map(|v| v.clamp(0.0, 1.0))
+        // A script's NaN reads as 0: `clamp` would keep it.
+        c.map(|v| if v.is_nan() { 0.0 } else { v.clamp(0.0, 1.0) })
     };
     let density = float("Density", 0.395).min(1.0);
     let decay = color("Decay", [92.0 / 255.0, 60.0 / 255.0, 13.0 / 255.0]);
@@ -90,5 +91,23 @@ mod tests {
         dom.set_parent(air, None).unwrap();
         cache.apply(&dom, &changes);
         assert!(cache.scene.lighting.atmosphere.is_none());
+    }
+
+    /// A color a script made NaN reaches the shaders as 0, not NaN.
+    #[test]
+    fn colors_that_are_not_numbers_read_as_zero() {
+        let mut dom = Dom::new();
+        let lighting = dom.get_service("Lighting").unwrap();
+        let air = dom.create_by_name("Atmosphere").unwrap();
+        dom.set_parent(air, Some(lighting)).unwrap();
+        let nan = Value::Color3(Color3::new(f32::NAN, 1.0, 0.5));
+        dom.set_property_by_name(air, "Color", nan.clone()).unwrap();
+        dom.set_property_by_name(air, "Decay", nan).unwrap();
+        let a = atmosphere(&dom, lighting).unwrap();
+        assert_eq!(a.color, [0.0, 1.0, 0.25]);
+        assert_eq!(
+            a.glare_falloff,
+            [GLARE_SHARPNESS / 0.05, GLARE_SHARPNESS, 8.0]
+        );
     }
 }

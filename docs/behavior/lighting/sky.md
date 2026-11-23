@@ -109,13 +109,14 @@ measured; that it's the default sky follows from the failed case (Inference).
 
 ## The sun and moon
 
-Not yet measured in Studio; from the creator docs (Sky, the Skyboxes
+Not measured in Studio; from the creator docs (Sky, the Skyboxes
 guide) and the install's files, read on 2026-11-23.
 
 - A Sky's `CelestialBodiesShown` off hides the sun, moon and stars;
   `SunAngularSize` and `MoonAngularSize` (degrees, default 21 and 11) are
-  clamped to 0 to 60, and 0 hides that body alone (Confirmed: creator
-  docs). Their images are `SunTextureId` and `MoonTextureId`, by default
+  clamped to 0 to 60, and 0 hides that body alone (Confirmed for the sun
+  by the creator docs; Inference for the moon, whose page gives no
+  range). Their images are `SunTextureId` and `MoonTextureId`, by default
   the install's `content/sky/sun.jpg` and `moon.jpg` (128 × 128 JPEGs, a
   white disc with a glow, and the moon, on black).
 - They rise and set with the time of day (creator docs); the sun's disc

@@ -88,7 +88,8 @@ impl SceneCache {
 
     /// One body: its image by its `Content` property, its legacy name or
     /// `default`; its angular size in degrees, clamped to 0 to 60
-    /// (Confirmed: creator-docs Sky).
+    /// (Confirmed for the sun by creator-docs Sky; Inference for the
+    /// moon, whose page gives no range).
     fn disc(
         &mut self,
         dom: &Dom,

@@ -39,7 +39,9 @@ fn hazed(d: vec3<f32>, sky: vec3<f32>) -> vec3<f32> {
     // the sky's (Approximation).
     let sky_light = light_units3(plain_sky_toward(d)) * g.sky_tint.rgb + night_sky(d);
     let around = dot(sky_light, vec3(0.2126, 0.7152, 0.0722));
-    let toward_sun = 0.5 + 0.5 * dot(d, g.sun_dir.xyz);
+    // Kept from rounding below 0 opposite the sun: `pow` of a negative
+    // number is undefined.
+    let toward_sun = max(0.5 + 0.5 * dot(d, g.sun_dir.xyz), 0.0);
     let lobe = clamp(pow(vec3(toward_sun), g.atmosphere_glare.xyz) * (1.0 - kept), vec3(0.0), vec3(1.0));
     let haze = around * g.atmosphere_color.rgb + g.sun_color.rgb * lobe * g.atmosphere.w;
     return mix(haze, sky, kept);
