@@ -5,6 +5,10 @@ Every release, newest first. How versions are numbered is in
 
 ## [Unreleased]
 
+- A place can be opened for editing, with Roblox Studio plugins running in it as in Studio: their toolbars, dock widgets, mouse and settings, the Selection, and undo through ChangeHistoryService. Rook could only play places, and ran no plugins. See [plugins](docs/behavior/studio/plugins.md) and [change history](docs/behavior/studio/history.md).
+- `ReflectionService` lists a class's properties as Studio does. Rook raised a "not implemented" error for it. See [stubs](docs/guide/stubs.md#studio-plugins).
+- `LogService.MessageOut` fires for every line of output, as in Roblox. Rook never fired it. See [data and logging](docs/design/data-and-logging.md).
+- Adornments under CoreGui draw, as those under Workspace do. Rook drew none there. See [adornments](docs/behavior/rendering/adornments.md).
 - `require` takes a path from the calling script (`./`, `../` and `@self`), with Studio's errors. Rook only took a ModuleScript or an asset id, so libraries that require their own modules by path didn't load. See [require by string](docs/behavior/scripting/require-by-string.md).
 - `Model:GetScale`, `Model:ScaleTo` and `WorldRoot:BulkMoveTo` work as in Roblox. Rook raised an error for them. See [model scale](docs/behavior/pivots.md#model-scale) and [BulkMoveTo](docs/behavior/pivots.md#bulkmoveto).
 - EncodingService's Base64 and zstd methods work as in Roblox, with its errors. Rook raised an error for them. See [encoding](docs/behavior/scripting/encoding.md).

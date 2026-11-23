@@ -39,6 +39,13 @@ Everything Rook supports today. What's coming next is in the [roadmap](../roadma
 - **Multi-place games**: a `universe.toml` beside the place names the game's places by PlaceId, and `TeleportService` moves players between them, to public or reserved servers, with their teleport data, join data and loading GUI ([teleports](../behavior/scripting/teleports.md)).
 - MarketplaceService's purchase prompts, from a server or client, make Studio's test purchases: the player answers Rook's own prompt, the session owns what was bought, and developer products' receipts go to `ProcessReceipt` ([marketplace](../behavior/scripting/marketplace.md)).
 
+## Editing
+
+- **Edit mode** for an editor built on Rook: a place opened for editing runs no place script and simulates nothing, while RunService answers as in Studio's Edit mode and fires its `Heartbeat` and render events ([plugins](../behavior/studio/plugins.md)).
+- **Studio plugins** load from their model files and run with the Plugin capability: toolbars and buttons, dock widgets laid out where the editor puts them, the plugin's mouse, settings kept between runs, and `DockWidgetPluginGuiInfo` as Studio prints and checks it.
+- **The Selection** and **ChangeHistoryService** as measured in Studio: when `SelectionChanged` fires, waypoints, recordings, undo and redo ([change history](../behavior/studio/history.md)). `LogService.MessageOut` announces each line of output.
+- Saving a place leaves out Studio's own services.
+
 ## Physics
 
 - Workspace is simulated with **Rapier** on the server at 240 Hz, with `Workspace.Gravity` and `FallenPartsDestroyHeight`. Positions and velocities replicate to clients.

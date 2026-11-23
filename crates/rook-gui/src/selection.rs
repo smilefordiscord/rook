@@ -3,7 +3,7 @@
 use rook_dom::{Dom, InstanceId};
 
 use crate::Gui;
-use crate::order::{self, Clip};
+use crate::order;
 
 impl Gui {
     /// The object `GuiService:Select(parent)` selects, as laid out now: of
@@ -13,7 +13,7 @@ impl Gui {
     pub fn first_selectable(&self, dom: &Dom, parent: InstanceId) -> Option<InstanceId> {
         let mut best: Option<(f32, f32, InstanceId)> = None;
         // Bottom first, so a later tie is drawn over the one kept.
-        for screen in order::screens(dom) {
+        for screen in order::screens(dom, &self.layout) {
             if !(screen == parent || dom.is_ancestor_of(screen, parent)) {
                 continue;
             }
@@ -21,7 +21,12 @@ impl Gui {
                 continue;
             };
             let (screen_min, screen_max) = (bounds.top_left(), bounds.top_left() + bounds.size());
-            for s in order::stack(dom, &self.layout, screen, Clip::NONE) {
+            for s in order::stack(
+                dom,
+                &self.layout,
+                screen,
+                order::root_clip(&self.layout, screen),
+            ) {
                 if !dom.is_ancestor_of(parent, s.id)
                     || dom.bool_property(s.id, "Selectable") != Some(true)
                     || dom.bool_property(s.id, "Interactable") == Some(false)

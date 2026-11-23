@@ -244,6 +244,7 @@ fn play(args: &Args) -> anyhow::Result<()> {
         // Shown at this size offscreen; a window gives its own.
         viewport: Some((args.width, args.height)),
         launch_data: args.launch_data.clone(),
+        studio: false,
     };
     if args.windowed() && !args.crash_test {
         // The player's settings, which only a window's player changes.

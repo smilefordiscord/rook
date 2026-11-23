@@ -15,6 +15,10 @@ pub(super) fn property_security(owner: &str, name: &str) -> [Security; 2] {
 pub(crate) enum Identity {
     /// Game scripts: `None` security only.
     Game,
+    /// Plugins' scripts and the modules in them, which also reach
+    /// `PluginSecurity` members (creator-docs Plugin: plugins run with
+    /// Plugin capability).
+    Plugin,
     /// Roblox's own CoreScripts and the modules they require (code that
     /// came compiled), which also reach Plugin, LocalUser and RobloxScript
     /// members (creator-docs SecurityCapabilities: CoreScripts hold
@@ -25,6 +29,7 @@ pub(crate) enum Identity {
 pub(super) fn allowed(sec: Security, identity: Identity) -> bool {
     match identity {
         Identity::Game => sec == Security::None,
+        Identity::Plugin => matches!(sec, Security::None | Security::PluginSecurity),
         Identity::Core => !matches!(
             sec,
             Security::RobloxSecurity | Security::NotAccessibleSecurity
@@ -238,9 +243,12 @@ pub(super) fn find_member(
 ) -> (Option<Member>, Identity) {
     let c = ctx(lua);
     let found = find_member_in(&c, id, key, Identity::Game).map(|(_, m)| m);
-    if needs_core(found, write) && crate::api::scripts::caller_is_core(lua) {
-        let core = find_member_in(&c, id, key, Identity::Core).map(|(_, m)| m);
-        return (core, Identity::Core);
+    if needs_core(found, write) {
+        let identity = crate::api::scripts::caller_identity(lua);
+        if identity != Identity::Game {
+            let elevated = find_member_in(&c, id, key, identity).map(|(_, m)| m);
+            return (elevated, identity);
+        }
     }
     (found, Identity::Game)
 }
@@ -320,15 +328,16 @@ pub(crate) fn get_member(
         return Ok((LuaValue::String(lua.create_string(name)?), false, None));
     }
     let mut found = find_member_in(&c, id, key, Identity::Game);
-    // Members CoreScripts reach aren't cached for the class (as a method
-    // or a fast read), or game scripts would reach them too.
-    let identity =
-        if needs_core(found.map(|(_, m)| m), false) && crate::api::scripts::caller_is_core(lua) {
-            found = find_member_in(&c, id, key, Identity::Core);
-            Identity::Core
-        } else {
-            Identity::Game
-        };
+    // Members CoreScripts and plugins reach aren't cached for the class
+    // (as a method or a fast read), or game scripts would reach them too.
+    let identity = if needs_core(found.map(|(_, m)| m), false) {
+        crate::api::scripts::caller_identity(lua)
+    } else {
+        Identity::Game
+    };
+    if identity != Identity::Game {
+        found = find_member_in(&c, id, key, identity);
+    }
     let member = found.map(|(_, m)| m);
     let method = matches!(member, Some(Member::Method { .. })) && identity == Identity::Game;
     let mut fast = None;

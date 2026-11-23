@@ -10,13 +10,19 @@ use crate::layout::{Layout, Placed, through_folders, visible};
 
 /// The local player's ScreenGuis that show, bottom first, then CoreGui's
 /// over them all (what Roblox's CoreScripts draw). Measured: ScreenGuis
-/// stack by `DisplayOrder`, later ones on top on a tie.
-pub(crate) fn screens(dom: &Dom) -> Vec<InstanceId> {
-    let Some(player_gui) = dom
+/// stack by `DisplayOrder`, later ones on top on a tie. While editing,
+/// StarterGui's show in the player's place (when its
+/// `ShowDevelopmentGui` is on, creator-docs StarterGui), and plugins'
+/// enabled dock widgets that an editor placed go over everything.
+pub(crate) fn screens(dom: &Dom, layout: &Layout) -> Vec<InstanceId> {
+    let player_gui = dom
         .local_player()
-        .and_then(|p| dom.find_first_child_of_class(p, "PlayerGui"))
-    else {
-        return Vec::new();
+        .and_then(|p| dom.find_first_child_of_class(p, "PlayerGui"));
+    let starter = dom
+        .find_service("StarterGui")
+        .filter(|&s| layout.editing && dom.bool_property(s, "ShowDevelopmentGui") != Some(false));
+    let Some(holder) = player_gui.or(starter) else {
+        return widgets(dom, layout);
     };
     let ordered = |holder: InstanceId| {
         let mut screens = through_folders(dom, holder, |id| dom.class_name(id) == "ScreenGui");
@@ -24,11 +30,38 @@ pub(crate) fn screens(dom: &Dom) -> Vec<InstanceId> {
         screens.sort_by_key(|&s| dom.number_property(s, "DisplayOrder").unwrap_or(0.0) as i64);
         screens
     };
-    let mut screens = ordered(player_gui);
+    let mut screens = ordered(holder);
     if let Some(core) = dom.find_service("CoreGui") {
         screens.extend(ordered(core));
     }
+    screens.extend(widgets(dom, layout));
     screens
+}
+
+/// The enabled dock widgets an editor placed, in PluginGuiService's order.
+fn widgets(dom: &Dom, layout: &Layout) -> Vec<InstanceId> {
+    let Some(service) = dom.find_service("PluginGuiService") else {
+        return Vec::new();
+    };
+    (dom.children(service).iter().copied())
+        .filter(|w| {
+            layout.widgets.contains_key(w) && dom.bool_property(*w, "Enabled") == Some(true)
+        })
+        .collect()
+}
+
+/// What clips a screen's root: a dock widget's area, or nothing.
+pub(crate) fn root_clip(layout: &Layout, root: InstanceId) -> Clip {
+    match layout.widgets.get(&root) {
+        Some(&[x, y, w, h]) => {
+            let top = y - crate::layout::GUI_INSET;
+            Clip {
+                rect: [x, top, x + w, top + h],
+                turned: false,
+            }
+        }
+        None => Clip::NONE,
+    }
 }
 
 #[derive(Debug, Clone, Copy)]

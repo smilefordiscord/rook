@@ -58,7 +58,7 @@ pub(crate) fn enum_item(lua: &Lua, enum_name: &str, value: u32) -> mlua::Result<
     }
 }
 
-fn has_value(enum_id: EnumId, value: u32) -> bool {
+pub(crate) fn has_value(enum_id: EnumId, value: u32) -> bool {
     database()
         .enum_info(enum_id)
         .items

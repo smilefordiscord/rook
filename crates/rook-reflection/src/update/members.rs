@@ -28,6 +28,10 @@ impl Members {
                         if safety != ThreadSafety::ReadSafe {
                             out.property_safety.insert(member.name.clone(), safety);
                         }
+                        if let Some(category) = member.category.as_ref().filter(|c| *c != "Data") {
+                            out.property_category
+                                .insert(member.name.clone(), category.clone());
+                        }
                     }
                     "Function" | "Callback" => {
                         let f = Function {

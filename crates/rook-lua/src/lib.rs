@@ -14,6 +14,7 @@ mod json;
 mod memory_stores;
 mod net;
 pub mod runtime;
+pub mod studio;
 mod styles;
 pub mod teleport;
 mod types;

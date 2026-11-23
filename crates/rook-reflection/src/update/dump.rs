@@ -63,6 +63,9 @@ pub(super) struct Member {
     pub default: Option<String>,
     #[serde(default)]
     thread_safety: Option<String>,
+    /// Properties only: the group Studio's Properties window shows it in.
+    #[serde(default)]
+    pub category: Option<String>,
 }
 
 #[derive(Deserialize, PartialEq)]

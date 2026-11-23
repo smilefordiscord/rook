@@ -209,6 +209,12 @@ impl<'a> Pass<'a> {
                     (Vec2::new(0.0, -GUI_INSET), self.screen)
                 }
             }
+            // Where the editor shows it, from its top left (GUI
+            // coordinates start below the top bar's inset).
+            "DockWidgetPluginGui" => match self.out.widgets.get(&collector) {
+                Some(&[x, y, w, h]) => (Vec2::new(x, y - GUI_INSET), Vec2::new(w, h)),
+                None => (Vec2::ZERO, Vec2::ZERO),
+            },
             _ => (Vec2::ZERO, Vec2::ZERO),
         }
     }

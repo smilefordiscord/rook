@@ -6,6 +6,7 @@
 pub(crate) mod color;
 pub(crate) mod content;
 pub(crate) mod datetime;
+pub(crate) mod dock_widget_info;
 pub(crate) mod enums;
 pub(crate) mod format;
 pub(crate) mod gui;
@@ -51,6 +52,7 @@ pub(crate) fn install(lua: &Lua) -> mlua::Result<()> {
     space::query::install(lua)?;
     datetime::install(lua)?;
     shared_table::install(lua)?;
+    dock_widget_info::install(lua)?;
     Ok(())
 }
 

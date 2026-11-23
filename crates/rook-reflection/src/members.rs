@@ -44,6 +44,10 @@ pub struct ClassMembers {
     /// which almost every property's is.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub property_safety: BTreeMap<String, ThreadSafety>,
+    /// The group Studio's Properties window shows each property in
+    /// (the dump's `Category`), for those not in `Data`, the most common.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub property_category: BTreeMap<String, String>,
 }
 
 impl ClassMembers {

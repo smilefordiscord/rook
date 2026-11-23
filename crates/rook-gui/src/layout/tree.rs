@@ -58,7 +58,7 @@ pub(crate) fn on_screen(dom: &Dom, top: InstanceId) -> bool {
         return false;
     };
     match dom.class_name(holder) {
-        "StarterGui" | "CoreGui" => dom.parent(holder) == Some(dom.root()),
+        "StarterGui" | "CoreGui" | "PluginGuiService" => dom.parent(holder) == Some(dom.root()),
         "PlayerGui" => {
             let player = dom.parent(holder);
             let players = player.and_then(|p| dom.parent(p));

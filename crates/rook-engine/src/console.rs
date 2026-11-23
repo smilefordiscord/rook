@@ -24,6 +24,19 @@ type Output = Box<dyn FnMut(String) + Send>;
 
 static OUTPUT: Mutex<Option<Output>> = Mutex::new(None);
 
+type Listener = Box<dyn Fn(&str, &LogEntry) + Send>;
+
+static LISTENER: Mutex<Option<Listener>> = Mutex::new(None);
+
+/// Also hand every entry printed to `listener`, with the side that printed
+/// it (`Server`, `Client`, `Rook`...), on the thread printing it: an
+/// editor's output window shows a play test's output this way.
+pub fn set_listener(listener: Option<Listener>) {
+    *LISTENER
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner) = listener;
+}
+
 /// Send every printed line to `output` instead of stdout (`None` restores
 /// stdout). Lines keep their color codes unless `NO_COLOR` is set.
 pub fn set_output(output: Option<Output>) {
@@ -89,6 +102,13 @@ pub fn print_entry(side: &str, entry: &LogEntry) {
 }
 
 fn print_to(side: &str, entry: &LogEntry, terminal: bool) {
+    if let Some(listener) = LISTENER
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .as_ref()
+    {
+        listener(side, entry);
+    }
     let dim = Style::new().dimmed();
     let s = style(entry.kind);
     let time = chrono::DateTime::<chrono::Local>::from(entry.wall).format("%H:%M:%S%.3f");

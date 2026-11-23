@@ -18,6 +18,7 @@ mod rigs;
 mod scripts;
 pub mod session;
 pub mod settings;
+pub mod studio;
 pub mod universe;
 
 pub use bridges::camera::{CameraView, MouseLock, SavedCamera};
@@ -47,6 +48,8 @@ use session::threads;
 pub enum EngineError {
     #[error(transparent)]
     Load(#[from] rook_formats::LoadError),
+    #[error(transparent)]
+    Save(#[from] rook_formats::SaveError),
     #[error("Luau setup failed: {0}")]
     Lua(String),
     #[error(transparent)]
@@ -124,6 +127,9 @@ pub struct Options {
     /// zero while Rook's read 0 × 0 until the first frame). `None` until
     /// the host sets one.
     pub viewport: Option<(u32, u32)>,
+    /// A play test started from an editor: RunService says so, as in
+    /// Studio's Play and Run modes (see [`studio`]).
+    pub studio: Option<studio::StudioMode>,
 }
 
 impl Default for Options {
@@ -140,6 +146,7 @@ impl Default for Options {
             http_local_addresses: None,
             user_settings: None,
             viewport: None,
+            studio: None,
         }
     }
 }
@@ -308,6 +315,7 @@ impl DataModel {
                 w.physics.sync(&mut w.dom);
             } else {
                 w.physics.note_ownership(&w.dom);
+                w.physics.note_joint_changes(&w.dom);
             }
             w.gui.note_changes(&w.dom);
             w.note_style_changes();

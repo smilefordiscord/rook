@@ -46,7 +46,9 @@ impl Runtime {
             let mut w = self.world_mut();
             let w = &mut *w;
             let start = w.dom.journal().end();
-            w.gui.sync(&mut w.dom);
+            // Layout writes what it works out; nobody's edit.
+            let (gui, dom) = (&mut w.gui, &mut w.dom);
+            dom.unrecorded(|dom| gui.sync(dom));
             start
         };
         self.dispatch_since(start);

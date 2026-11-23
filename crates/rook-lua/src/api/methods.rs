@@ -35,6 +35,11 @@ mod materials;
 mod parallel;
 pub(crate) mod physics;
 mod player_scripts;
+mod reflection;
+mod studio;
+pub(crate) use studio::{
+    studio_drop_moved, studio_redo, studio_select, studio_selection, studio_undo,
+};
 pub(crate) mod prompts;
 pub(crate) mod remotes;
 pub(crate) mod teleport;
@@ -95,6 +100,8 @@ pub(crate) fn native(owner: &str, name: &str) -> Option<RawMethod> {
             localization::native,
             core::native,
             parallel::native,
+            studio::native,
+            reflection::native,
         ],
         owner,
         name,
@@ -156,10 +163,6 @@ fn inert(lua: &Lua, _: InstanceId, _: &Args) -> ApiResult<Outcome> {
 
 fn true_(lua: &Lua, _: InstanceId, _: &Args) -> ApiResult<Outcome> {
     Outcome::ret(lua, true)
-}
-
-fn false_(lua: &Lua, _: InstanceId, _: &Args) -> ApiResult<Outcome> {
-    Outcome::ret(lua, false)
 }
 
 #[cfg(test)]

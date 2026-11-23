@@ -114,3 +114,18 @@ made inert without an entry in the first table.
 | Gamepads | Up to eight pads through gilrs: connecting and disconnecting, buttons, thumbsticks and triggers with Studio's events, values and order, `GetGamepadState`'s persistent objects, `LastInputType`, `PreferredInput`, window focus as an input, PlayStation and Xbox key names and images, ContextActionService hearing input before UserInputService, `BindActivate`'s keys kept, and HapticService running each pad's large and small motors (see [gamepads](../behavior/input/gamepads.md)) | Tools don't activate from `BindActivate` yet; gamepad GUI selection; Escape's Cancel to bindings; HapticService's motors not compared with Studio on a pad (what scripts see is), and trigger motors never run; `HapticEffect` | M19 steps 3 and 4; M9 step 7 |
 | `AutomaticSize` with children sized by scale | Without a UI layout, they're sized against the object's own `Size` | Studio's results depend on earlier layouts (see [GUI](../behavior/gui/layout.md#automaticsize)) | M8 step 11 |
 | `WorldRoot:Shapecast`, `ArePartsTouchingOthers` | Not implemented (no archive files use them) | Casting a part; the touching test | M3 step 6 |
+
+## Studio plugins
+
+What [plugins](../behavior/studio/plugins.md) in an editor built on Rook
+reach, owned by the unscheduled [Studio](../roadmap/unscheduled.md#ideas)
+idea until it has a milestone.
+
+| Member or behavior | What Rook does now | What is missing | Taken over by |
+|---|---|---|---|
+| Plugin members | `CreateToolbar`, `Activate`, `Deactivate`, `IsActivated`, `IsActivatedWithExclusiveMouse`, `GetMouse`, `GetSetting`, `SetSetting`, `OpenScript`, `GetStudioUserId`, `CreateDockWidgetPluginGui` (and its `Async` form); PluginToolbar's `CreateButton`, the button's `SetActive`; PluginGui's `BindToClose` and `GetRelativeMousePosition` | `CreatePluginAction`, `CreatePluginMenu`, `StartDrag`, `StartDecalDrag`, `SelectRibbonTool`, `GetSelectedRibbonTool`, the CSG calls (`Union`, `Intersect`, `Negate`, `Separate`), the asset prompts (`PromptForExistingAssetId`, `PromptSaveSelection`, `SaveSelectedToRoblox`), the FBX imports, `CreateQWidgetPluginGui`, the plugin sounds, `OpenWikiPage`, `GetItem`/`SetItem`, `Invoke`/`OnInvoke` | Studio (unscheduled) |
+| `RunService:Run`, `Pause`, `Stop` | Not implemented | Run mode started from a plugin | Studio (unscheduled) |
+| A dock widget's `AbsolutePosition` | Counts from the window's top left, where its GUI is laid out (Approximation) | Counting from the widget's own top left, as `GetRelativeMousePosition` does | Studio (unscheduled) |
+| The plugin's mouse `TargetFilter` | Not applied (Approximation) | `Hit` and `Target` past the filter | Studio (unscheduled) |
+| Edit mode's `Heartbeat` | Fires once a frame (Approximation) | Studio fires it four times for each `RenderStepped` | Studio (unscheduled) |
+| `ReflectionService` | `GetPropertiesOfClass` as Studio 0.748 answers, `GetClass`, `GetClasses`; `Permits.Read`/`Write` hold the capability as a string (Approximation) | A SecurityCapabilities datatype for `Permits`; `GetClass`'s `Display`, `Permits` and `Serialized`; `GetEventsOfClass`, `GetMethodsOfClass`, `GetPropertyNames`, `GetStyledPropertyNames` | Studio (unscheduled) |

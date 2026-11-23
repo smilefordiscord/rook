@@ -220,6 +220,12 @@ impl Dom {
 
     pub(crate) fn move_unchecked(&mut self, id: InstanceId, parent: Option<InstanceId>) {
         let old_parent = self.instances[id].parent;
+        if self.records_move(old_parent, parent) {
+            self.note_undo(Undo::Parent {
+                id,
+                old: old_parent,
+            });
+        }
         let journal = self.journal.is_enabled();
         let old_ancestors: Vec<_> = if journal {
             old_parent

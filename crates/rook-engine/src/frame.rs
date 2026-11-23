@@ -40,6 +40,10 @@ impl DataModel {
             };
             (w.scheduler.now(), dt)
         };
+        if self.is_editing() {
+            self.edit_frame(dt);
+            return;
+        }
         let rs = self.run_service;
         if self.role == Role::Server {
             // Inference: before scripts resume, so one that waited a frame
@@ -76,6 +80,7 @@ impl DataModel {
             self.runtime.world_mut().input.mouse_delta = (0.0, 0.0);
         }
         self.start_new_scripts();
+        self.runtime.announce_output();
         {
             // Scripts' terrain edits, for the renderer and replication.
             let mut w = self.runtime.world_mut();
@@ -86,6 +91,38 @@ impl DataModel {
             self.trim_journal();
         } else {
             // The session trims once the replicator has read the frame.
+            self.read_journal();
+        }
+    }
+
+    /// An Edit-mode frame: plugins' threads resume and GUI is laid out
+    /// and hovered, but nothing simulates and no place script starts
+    /// (Confirmed: creator-docs RunService:IsEdit). Of RunService's
+    /// events only `Heartbeat`, then `RenderStepped` and `PreRender`, fire
+    /// (Measured; docs/behavior/studio/plugins.md#edit-mode).
+    fn edit_frame(&mut self, dt: f64) {
+        let rs = self.run_service;
+        self.update_content();
+        self.update_web();
+        self.runtime.resume_due(Queue::Legacy);
+        // As in a running frame, `task` threads resume just before Heartbeat.
+        self.runtime.resume_due(Queue::Task);
+        // Approximation: once a frame; Studio fired it four times for each
+        // RenderStepped (240 Hz against 60).
+        self.fire(rs, "Heartbeat", dt);
+        self.runtime.render_step(dt);
+        self.fire(rs, "RenderStepped", dt);
+        self.fire(rs, "PreRender", dt);
+        self.sync_viewport_size();
+        self.ease_scrolls(dt);
+        self.runtime.world_mut().gui.blink_caret(dt);
+        self.lay_out_gui();
+        self.refresh_gui_hover();
+        self.runtime.world_mut().input.mouse_delta = (0.0, 0.0);
+        self.runtime.announce_output();
+        if self.auto_trim {
+            self.trim_journal();
+        } else {
             self.read_journal();
         }
     }

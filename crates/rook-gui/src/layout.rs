@@ -108,6 +108,12 @@ pub(crate) struct Layout {
     pub(crate) texts: FxHashMap<InstanceId, Laid>,
     pub(crate) scrolls: FxHashMap<InstanceId, Scroll>,
     pub(crate) world: std::collections::BTreeMap<InstanceId, (Hung, Vec2)>,
+    /// Where an editor shows each plugin's dock widget: left, top, width
+    /// and height in window pixels (see [`crate::Gui::set_widget_rect`]).
+    pub(crate) widgets: FxHashMap<InstanceId, [f32; 4]>,
+    /// The DataModel is being edited: with no local player, StarterGui's
+    /// ScreenGuis show (see [`crate::Gui::set_editing`]).
+    pub(crate) editing: bool,
 }
 
 /// A text object's text, with what it was laid out from, so an unchanged

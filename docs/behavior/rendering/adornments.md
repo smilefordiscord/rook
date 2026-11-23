@@ -13,7 +13,8 @@ LineHandleAdornment 26 (49), ImageHandleAdornment 57 (220), Handles 37
 
 Every kind here draws only on its `Adornee` (Observed: one merely inside
 a part draws nothing), wherever it is in Workspace. Rook also draws those
-under a PlayerGui (Inference: adornments draw there in Roblox). `Visible`
+under a PlayerGui or CoreGui, where Roblox's CoreScripts and Studio's
+plugins put theirs (Inference: adornments draw there in Roblox). `Visible`
 off hides them, `Transparency` fades them, the default `Color3` is
 (13, 105, 172), and parts in front hide them unless noted. Rook draws
 them as extra entries riding along with their part

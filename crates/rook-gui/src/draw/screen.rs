@@ -13,7 +13,7 @@ use super::overlays::{messages, prompt};
 use super::{Draw, Focus, Text};
 use crate::images::Images;
 use crate::layout::{GUI_INSET, Layout, top_of};
-use crate::order::{self, Clip, Stacked};
+use crate::order::{self, Stacked};
 
 #[derive(Debug)]
 struct Collector {
@@ -26,7 +26,7 @@ struct Collector {
 
 impl Collector {
     fn new(dom: &Dom, layout: &Layout, root: InstanceId) -> Self {
-        let stack = order::stack(dom, layout, root, Clip::NONE);
+        let stack = order::stack(dom, layout, root, order::root_clip(layout, root));
         let mut c = Self {
             root,
             at: FxHashMap::default(),
@@ -290,7 +290,7 @@ fn stack_all(
         .filter(|c| !restack.contains(&c.root))
         .map(|c| (c.root, c))
         .collect();
-    (order::screens(dom).into_iter())
+    (order::screens(dom, layout).into_iter())
         .map(|root| {
             kept.remove(&root)
                 .unwrap_or_else(|| Collector::new(dom, layout, root))

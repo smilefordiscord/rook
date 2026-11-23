@@ -249,6 +249,36 @@ impl Gui {
         self.screen_changed();
     }
 
+    /// Show plugin dock widget `widget` at `rect` (left, top, width and
+    /// height in window pixels), or nowhere: an editor places its plugins'
+    /// widgets, and they lay out and take input there
+    /// (docs/behavior/studio/plugins.md#dock-widgets).
+    pub fn set_widget_rect(&mut self, widget: InstanceId, rect: Option<[f32; 4]>) {
+        let before = self.layout.widgets.get(&widget).copied();
+        if before == rect {
+            return;
+        }
+        match rect {
+            Some(r) => self.layout.widgets.insert(widget, r),
+            None => self.layout.widgets.remove(&widget),
+        };
+        self.screen_changed();
+    }
+
+    /// Where dock widget `widget` is shown: left, top, width and height.
+    pub fn widget_rect(&self, widget: InstanceId) -> Option<(f32, f32, f32, f32)> {
+        (self.layout.widgets.get(&widget)).map(|&[x, y, w, h]| (x, y, w, h))
+    }
+
+    /// The DataModel is being edited: with no local player, StarterGui's
+    /// ScreenGuis show as the player's would (Studio's edit view).
+    pub fn set_editing(&mut self, editing: bool) {
+        if self.layout.editing != editing {
+            self.layout.editing = editing;
+            self.screen_changed();
+        }
+    }
+
     /// Everything lays out again, on the screen as it is now.
     fn screen_changed(&mut self) {
         self.stale = true;
