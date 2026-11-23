@@ -1,21 +1,38 @@
 # Clouds
 
-Checked against Studio 0.745 on 2026-11-23, by its install's shaders and
-data files and the creator docs only: nothing here is measured in Studio
-yet. The rules come from the creator docs (Clouds, the "Dynamic clouds"
-and "Global wind" guides), the form of the cloud shaders in the install's
+Checked against Studio 0.748 on 2026-11-23. Only the
+[properties](#its-properties) as scripts see them are measured in Studio;
+the rest comes from the creator docs (Clouds, the "Dynamic clouds" and
+"Global wind" guides), the form of the cloud shaders in the install's
 `shaders_glsl3.pack` and the textures beside them in `content/sky/`
 (`version-8d7a1009c17e4ff8`), read for facts as the
 [clean-implementation policy](../../design/policies.md#clean-implementation)
 allows.
 
+## Its properties
+
+Measured in Studio 0.748 on 2026-11-23 (conformance case
+`lighting/clouds_clamps`):
+
+- A new Clouds has Cover 0.5, Density 0.7, Color (1, 1, 1) and `Enabled`
+  on.
+- Cover and Density are kept within 0 to 1: a value set outside reads
+  back at the nearer end (`inf` reads 1), and NaN stays NaN.
+- A Clouds may be parented anywhere: a Folder, Workspace, Terrain,
+  Lighting and a Part all take one, and it stays in Terrain.
+
+Rook keeps the same ranges (`crates/rook-lua/src/api/properties/ranges.rs`),
+and draws a NaN Cover, Density or Color channel as 0 (Inference: how Studio
+draws one isn't measured).
+
 ## What the docs say
 
-- Clouds draw only under Terrain; a Clouds anywhere else draws nothing.
+- Clouds draw only under Terrain; a Clouds anywhere else draws nothing
+  (it may still be [parented](#its-properties) anywhere).
   `Enabled` turns one off, for switching between several in a place.
-- Cover, 0 to 1: how much of the sky's cloud layer the clouds span, from
+- Cover, 0 to 1 (Confirmed): how much of the sky's cloud layer the clouds span, from
   sparse to full.
-- Density, 0 to 1: how thick each cloud is, mostly its transparency; low
+- Density, 0 to 1 (Confirmed): how thick each cloud is, mostly its transparency; low
   is light and see-through, high heavy and dark.
 - Color: the clouds' material color; Lighting and Atmosphere also change
   how they look.

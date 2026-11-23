@@ -1,0 +1,11 @@
+-- studio 0.748.0.7481526
+-- signals: deferred
+Clouds Cover=0.5 Density=0.7 Color=1,1,1 Enabled=true
+Clouds Cover 0.5 -1=0 0.25=0.25 2=1 1e+09=1 nan=nan inf=1
+Clouds Density 0.7 -1=0 0.25=0.25 2=1 1e+09=1 nan=nan inf=1
+Clouds parent Folder ok Folder
+Clouds parent Workspace ok Workspace
+Clouds parent Terrain ok Terrain
+Clouds parent Lighting ok Lighting
+Clouds parent Part ok Part
+Clouds in Terrain stays true

@@ -17,19 +17,19 @@ pub(super) fn clouds(dom: &Dom) -> Option<Clouds> {
     let id = (dom.children(terrain).iter().copied()).find(|&c| {
         dom.class_name(c) == "Clouds" && dom.bool_property(c, "Enabled").unwrap_or(true)
     })?;
-    let unit = |name, default: f32| {
-        dom.float_property(id, name)
-            .unwrap_or(default)
-            .clamp(0.0, 1.0)
-    };
+    // A script's NaN stays NaN in Studio (Confirmed: conformance case
+    // `lighting/clouds_clamps`); it reaches the shaders as 0 (Inference:
+    // how Studio draws one isn't measured), where `clamp` would keep it.
+    let unit = |v: f32| if v.is_nan() { 0.0 } else { v.clamp(0.0, 1.0) };
+    let float = |name, default| unit(dom.float_property(id, name).unwrap_or(default));
     let color = dom
         .color3_property(id, "Color")
         .map_or([1.0; 3], Color3::to_array);
     Some(Clouds {
-        cover: unit("Cover", 0.5),
-        density: unit("Density", 0.7),
+        cover: float("Cover", 0.5),
+        density: float("Density", 0.7),
         // As Studio's shaders take a color: its sRGB value squared.
-        color: color.map(|c| c.clamp(0.0, 1.0).powi(2)),
+        color: color.map(|c| unit(c).powi(2)),
     })
 }
 
@@ -90,6 +90,27 @@ mod tests {
         dom.set_parent(clouds, None).unwrap();
         cache.apply(&dom, &lighting());
         assert!(cache.scene.lighting.clouds.is_none());
+    }
+
+    /// Numbers a script made NaN reach the shaders as 0, not NaN.
+    #[test]
+    fn numbers_that_are_not_numbers_read_as_zero() {
+        let mut dom = Dom::new();
+        let workspace = dom.get_service("Workspace").unwrap();
+        let terrain = dom.create_by_name("Terrain").unwrap();
+        dom.set_parent(terrain, Some(workspace)).unwrap();
+        let id = dom.create_by_name("Clouds").unwrap();
+        dom.set_parent(id, Some(terrain)).unwrap();
+        for name in ["Cover", "Density"] {
+            dom.set_property_by_name(id, name, Value::Float32(f32::NAN))
+                .unwrap();
+        }
+        let nan = Color3::new(f32::NAN, 1.0, 0.5);
+        dom.set_property_by_name(id, "Color", Value::Color3(nan))
+            .unwrap();
+        let c = clouds(&dom).expect("Clouds");
+        assert_eq!((c.cover, c.density), (0.0, 0.0));
+        assert_eq!(c.color, [0.0, 1.0, 0.25]);
     }
 
     /// Clouds outside Terrain draw nothing, as on Roblox: in Workspace, in
