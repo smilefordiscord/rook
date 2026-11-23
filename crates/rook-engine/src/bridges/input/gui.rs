@@ -358,12 +358,12 @@ impl DataModel {
         scrolled.is_some() || self.any_active(&hits)
     }
 
-    /// Move the wheel's eased scrolls a frame on.
-    pub(crate) fn ease_scrolls(&self) {
+    /// Move the wheel's eased scrolls on by a frame `dt` seconds long.
+    pub(crate) fn ease_scrolls(&self, dt: f64) {
         let moves = {
             let mut w = self.runtime.world_mut();
             let w = &mut *w;
-            w.gui.ease_scrolls(&w.dom)
+            w.gui.ease_scrolls(&w.dom, dt)
         };
         for (id, at) in moves {
             self.set_property(id, "CanvasPosition", Value::Vector2(Vector2(at)));

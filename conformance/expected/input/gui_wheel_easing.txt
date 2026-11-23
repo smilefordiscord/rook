@@ -1,0 +1,12 @@
+-- studio 0.748.0.7481526
+-- signals: deferred
+window 187, 200 canvas 200, 1000 at 300
+turn 1 begins processed true
+turn 1 notches -1 from 300 to 400 lands after 0.25 spring hz 4.5 off 1
+turn 2 begins processed true
+turn 2 notches -3 from 400 to 700 lands after 0.3 spring hz 4.5 off 1
+turn 3 begins processed true
+turn 3 notches 1 from 700 to 600 lands after 0.25 spring hz 4.5 off 1
+turn 4 begins processed true
+turn 4 notches -3 from 600 to 800 lands after 0.25 spring hz 4.5 off 1
+end 800

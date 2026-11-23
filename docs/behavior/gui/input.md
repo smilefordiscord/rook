@@ -10,7 +10,9 @@ conformance cases `input/gui_buttons`, `input/gui_overlap`,
 `input/gui_wheel`, `input/textbox` and `input/textbox_removal` hold the
 decisive orders; Rook passes all five. `input/world_gui_overlap`, the
 screen over a SurfaceGui, was recorded the same way in Studio 0.747 on
-2026-11-13, and Rook passes it too.
+2026-11-13, and Rook passes it too. `input/gui_wheel_easing`, the wheel's
+ease traced frame by frame, was recorded in Studio 0.748 on 2026-11-22 at
+60 and at 240 frames a second; Rook passes it.
 
 Code: hit-testing in `rook-gui` (`input/hits.rs`, walking `order.rs`, the
 draw order), the wheel and bar drags in `input/scrolling.rs`, tints and
@@ -108,8 +110,14 @@ hover images in `draw/objects/frame.rs` and `draw/objects/image.rs`, the caret i
 - Over an object the wheel fires `MouseWheelForward` or `Backward` on
   it, with `InputChanged` (MouseWheel, `Position.Z` ±1); the first wheel
   step on a button came as `InputBegan` instead (Observed once).
-- **ScrollingFrames** move 100 pixels per notch, eased: e^(−25 t) of the
-  way is left after t seconds (97.7 of 100 pixels after 0.15 s). The
+- **ScrollingFrames** move 100 pixels per notch, eased as a critically
+  damped spring of 4.5 Hz: (1 + ωt) e^(−ωt) of the way is left after t
+  seconds, ω = 2π × 4.5 (measured frame by frame in Studio 0.748, the
+  case `input/gui_wheel_easing`: 8.6 of 100 pixels after one 60 Hz frame,
+  24.7 after two, 98.97 after 14). It starts gently, so a notch lands
+  0.25 s after it's turned and a flick of three 0.3 s after, at 60 or 240
+  frames a second alike; the canvas lands in the frame that would leave
+  less than a pixel. Rook steps the spring by each frame's length. The
   wheel goes to the innermost ScrollingFrame under the cursor that can
   still move that way, then to its ancestors: an inner frame at its end
   passed the notch to the outer one, but one still easing towards its end

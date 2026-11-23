@@ -98,7 +98,7 @@ fn auto_button_color_tints_the_background() {
 /// Ease `gui`'s wheel scrolls until they land, as the engine does.
 fn settle(gui: &mut Gui, dom: &mut Dom) {
     for _ in 0..60 {
-        for (id, at) in gui.ease_scrolls(dom) {
+        for (id, at) in gui.ease_scrolls(dom, 1.0 / 60.0) {
             set(dom, id, "CanvasPosition", v2(at.x, at.y));
         }
         gui.sync(dom);

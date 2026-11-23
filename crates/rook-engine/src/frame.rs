@@ -103,7 +103,7 @@ impl DataModel {
         // Prompts follow the settled camera, before GUI is laid out, so
         // the GUI their handlers make is drawn this frame.
         self.runtime.update_prompts();
-        self.ease_scrolls();
+        self.ease_scrolls(dt);
         self.runtime.world_mut().gui.blink_caret(dt);
         self.lay_out_gui();
         self.runtime.sync_overheads();

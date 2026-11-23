@@ -11,14 +11,19 @@ use crate::layout::Scroll;
 /// Measured: one notch moves a canvas 100 pixels.
 const NOTCH: f32 = 100.0;
 
-/// Measured: an eased scroll leaves e^(-25 t) of the way to go after t
-/// seconds (97.7 of a 100-pixel notch after 0.15 s): this much per 60 Hz
-/// frame. Inference: it lands once less than a pixel is left.
-const EASE_LEFT: f32 = 0.659;
+/// Measured (Studio 0.748, frame by frame at 60 Hz): the canvas follows
+/// the wheel's target as a critically damped spring of 4.5 Hz, leaving
+/// (1 + ωt) e^(-ωt) of the way to go after t seconds (8.6 of a 100-pixel
+/// notch covered after a frame, 24.7 after two, 98.97 after 14), and lands
+/// in the frame that would leave less than a pixel.
+const SPRING: f32 = 4.5 * std::f32::consts::TAU;
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct Eased {
     target: Vec2,
+    /// Canvas pixels a second: a notch turned while it moves keeps it
+    /// going (inference: a spring's state carries it).
+    velocity: Vec2,
     /// What it last set `CanvasPosition` to: a script moving the canvas
     /// since stops it.
     written: Vec2,
@@ -85,19 +90,27 @@ impl Gui {
                 .map_or(scroll.position, |e| e.target);
             let mut target = from;
             target[axis] = (from[axis] - notches * NOTCH).clamp(0.0, reach);
-            let written = self
+            let (velocity, written) = self
                 .scrolling
                 .get(&id)
-                .map_or(scroll.position, |e| e.written);
-            self.scrolling.insert(id, Eased { target, written });
+                .map_or((Vec2::ZERO, scroll.position), |e| (e.velocity, e.written));
+            let eased = Eased {
+                target,
+                velocity,
+                written,
+            };
+            self.scrolling.insert(id, eased);
             return Some(id);
         }
         None
     }
 
-    /// Move each wheel scroll on a frame. Returns the `CanvasPosition`s
-    /// to set, for the caller to set as a script would (firing Changed).
-    pub fn ease_scrolls(&mut self, dom: &Dom) -> Vec<(InstanceId, Vec2)> {
+    /// Move each wheel scroll on by a frame `dt` seconds long. Returns the
+    /// `CanvasPosition`s to set, for the caller to set as a script would
+    /// (firing Changed).
+    pub fn ease_scrolls(&mut self, dom: &Dom, dt: f64) -> Vec<(InstanceId, Vec2)> {
+        let dt = dt.max(0.0) as f32;
+        let decay = (-SPRING * dt).exp();
         let mut out = Vec::new();
         self.scrolling.retain(|&id, eased| {
             let Some(now) = dom.vector2_property(id, "CanvasPosition").map(|v| v.0) else {
@@ -106,11 +119,16 @@ impl Gui {
             if now != eased.written {
                 return false;
             }
-            let left = (eased.target - now) * EASE_LEFT;
+            // The critically damped spring's own motion over `dt`, from
+            // `left` out with `velocity`, exactly (whatever the frame rate).
+            let left = now - eased.target;
+            let pull = eased.velocity + SPRING * left;
+            let left = (left + pull * dt) * decay;
+            eased.velocity = (eased.velocity - SPRING * pull * dt) * decay;
             let next = if left.abs().max_element() < 1.0 {
                 eased.target
             } else {
-                eased.target - left
+                eased.target + left
             };
             eased.written = next;
             out.push((id, next));
