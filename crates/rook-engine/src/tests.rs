@@ -339,8 +339,11 @@ Connection: close
 ",
                 reply.body.len()
             ));
-            stream.write_all(head.as_bytes()).unwrap();
-            stream.write_all(&reply.body).unwrap();
+            // The client may hang up mid-answer, as one refusing an answer
+            // too long for it does.
+            let _ = stream
+                .write_all(head.as_bytes())
+                .and_then(|()| stream.write_all(&reply.body));
         }
     };
     rook_platform::get()

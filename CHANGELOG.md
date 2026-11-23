@@ -5,7 +5,7 @@ Every release, newest first. How versions are numbered is in
 
 ## [Unreleased]
 
-- A server sends HttpService's `GetAsync`, `PostAsync` and `RequestAsync` requests when its place enables HTTP, and returns their answers as Roblox does; clients are refused, as in Roblox. Rook refused every request as if HTTP were off. See [HTTP requests](docs/behavior/scripting/http-requests.md).
+- A server sends HttpService's `GetAsync`, `PostAsync` and `RequestAsync` requests when its place enables HTTP, only to the public internet unless a developer setting allows local addresses, and returns their answers as Roblox does without its frames waiting on them; clients are refused, as in Roblox. Rook refused every request as if HTTP were off. See [HTTP requests](docs/behavior/scripting/http-requests.md).
 - A member's argument that doesn't cast names a table as `Array` or `Dictionary` in its error, and an EnumItem as its enum, as in Roblox. Rook named either by its type in some members' errors.
 - A member function called with an instance of another class in place of `self` raises `Expected ':' not '.'`, as in Roblox. Rook ran the member on whatever instance it was given. See [member lookup](docs/behavior/scripting/member-lookup.md#calling-a-member-function).
 - Light, shadows and the sky's light follow the camera to where it moves on a busy or slow machine. Rook could keep lighting only where the camera had been, for as long as the machine stayed busy. See [local lights](docs/behavior/lighting/local-lights.md).

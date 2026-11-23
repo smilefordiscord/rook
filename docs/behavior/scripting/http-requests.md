@@ -7,7 +7,8 @@ script's requests to any site (`rook_lua`'s `api::methods::web::http`).
 The engine sends them through the host's network
 (`rook_platform::network`), each on a thread of its own, while the
 calling script waits, as for Roblox's web APIs ([web
-endpoints](../../design/web-endpoints.md)). Sources are the creator docs'
+endpoints](../../design/web-endpoints.md)). Where they may go is checked
+there too ([where a request may go](#where-a-request-may-go)). Sources are the creator docs'
 [HttpService](https://create.roblox.com/docs/reference/engine/classes/HttpService),
 [In-game HTTP requests](https://create.roblox.com/docs/cloud-services/http-service),
 `Enum.HttpError` and `Enum.HttpCompression`.
@@ -38,9 +39,40 @@ endpoints](../../design/web-endpoints.md)). Sources are the creator docs'
   the last 60 seconds of game time, and the message is the one the
   creator docs give for the Open Cloud limit, without "Open Cloud".
 
-The calling thread waits for the answer, as every web call does in Rook;
-headless runs, which must repeat exactly, wait for every answer within
-the frame.
+The calling thread waits for the answer, as every web call does in Rook,
+while the frame loop carries on: no host's frame (the player's, a
+server's, a headless run's) ever waits for one, so a slow or silent
+server holds up only the script that asked. The answer resumes it on the
+first frame after it arrives.
+
+## Where a request may go
+
+- Only to addresses on the public internet. A host whose name resolves
+  only to addresses off it raises `HttpError: ConnectFail`: unspecified
+  (`0.0.0.0`, `::`), loopback (`localhost`, `127.0.0.1`, `::1`), private
+  (RFC 1918, `fc00::/7`), link-local (`169.254.0.0/16`, the cloud
+  metadata address included, and `fe80::/10`), shared (CGNAT,
+  `100.64.0.0/10`), multicast, broadcast, and the other ranges IANA keeps
+  off the internet (documentation, benchmarking, reserved). An IPv4
+  address inside IPv6 (`::ffff:127.0.0.1`, NAT64, 6to4) counts as
+  itself. *Inference:* Roblox's game servers reach only the internet,
+  so connecting to any of these fails; the creator docs don't say.
+- The check is on the addresses a name resolves to, not on the name,
+  and the connection is made only to an address that passed, so a name
+  that resolves to a local address, or changes what it resolves to
+  between a check and the connection, can't get round it. A name with
+  both kinds connects to its public ones.
+- Every redirect is checked as the first URL is: one to Roblox's web
+  domains raises `HttpService is not allowed to access ROBLOX resources`,
+  one to a local address `HttpError: ConnectFail` (*Inference*).
+- Requests go straight to the host, never through a proxy the
+  environment names, which would resolve the name out of the check's
+  sight.
+- *Rook extension:* the developer setting `httpLocalAddresses`
+  ([run-time settings](../../design/data-and-logging.md#run-time-settings)),
+  off by default, lets requests reach local addresses, so a place can
+  talk to a backend of its developer's own on the same machine or the
+  LAN. Roblox's own web domains stay refused.
 
 ## What is sent
 
@@ -73,8 +105,11 @@ the frame.
   (`Rook/<version>`) and no `Roblox-Id`, as its places have no id on
   Roblox.
 - Redirects are followed, up to 10 (*Approximation:* Roblox's count isn't
-  documented). Answers come decompressed; a body past 16 MiB is cut off
-  there.
+  documented), each checked ([where a request may go](#where-a-request-may-go)).
+  Answers come decompressed; one over 16 MiB raises `HttpError:
+  OutOfMemory` rather than arriving cut short (*Inference:* the enum's
+  item for running out of memory on the answer; *Approximation:* Roblox's
+  limit isn't documented).
 
 ## What comes back
 
@@ -99,13 +134,15 @@ the frame.
   | Why | Raises |
   |---|---|
   | The URL can't be parsed | `HttpError: InvalidUrl` |
+  | A header or the method has characters HTTP doesn't allow | `HttpError: Unknown` |
   | The host's name doesn't resolve | `HttpError: DnsResolve` |
-  | Nothing takes the connection | `HttpError: ConnectFail` |
+  | Nothing takes the connection, or the host is local ([where a request may go](#where-a-request-may-go)) | `HttpError: ConnectFail` |
   | No answer within the time limit | `HttpError: TimedOut` |
   | Over 10 redirects | `HttpError: TooManyRedirects` |
   | A redirect without a usable `Location` | `HttpError: InvalidRedirect` |
   | TLS fails, the certificate included | `HttpError: SslConnectFail` |
   | The server closes the connection mid-answer | `HttpError: ConnectionClosed` |
+  | The answer is over 16 MiB | `HttpError: OutOfMemory` |
   | Anything else | `HttpError: NetFail` |
 
 ## Not yet

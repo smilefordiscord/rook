@@ -1,10 +1,16 @@
 use std::io::Read;
 
 use crate::tests::*;
-use rook_platform::network::{NetworkError, Response};
+use rook_platform::network::{NetworkError, Reach, Response};
 
 /// A server runtime whose place has HTTP enabled, running `source`.
 fn enabled(source: &str) -> Runtime {
+    enabled_with(false, source)
+}
+
+/// [`enabled`], on a host that lets requests reach local addresses with
+/// `local`.
+fn enabled_with(local: bool, source: &str) -> Runtime {
     let rt = Runtime::new(Dom::new(), Clock::Fixed { step: 1.0 / 60.0 }).unwrap();
     {
         let mut w = rt.world_mut();
@@ -13,6 +19,7 @@ fn enabled(source: &str) -> Runtime {
             .set_property_by_name(http, "HttpEnabled", rook_types::Value::Bool(true))
             .unwrap();
     }
+    rt.set_http_local_addresses(local);
     rt.run_source("Workspace.Script", source, None).unwrap();
     rt
 }
@@ -98,6 +105,7 @@ fn get_and_post_send_their_arguments_and_return_the_body() {
         ("GET", "https://example.com/a?b=1")
     );
     assert_eq!(get.headers, [("X-Key".to_owned(), "k".to_owned())]);
+    assert_eq!(get.reach, Reach::Script { local: false });
     assert_eq!(
         (form.method.as_str(), form.body.as_slice()),
         ("POST", b"x=1".as_slice())
@@ -154,6 +162,52 @@ fn get_and_post_raise_for_failures() {
             "false HttpError: DnsResolve",
         ]
     );
+}
+
+/// Why the network refused or gave up, as each raises.
+#[test]
+fn refusals_and_limits_raise_their_errors() {
+    let rt = enabled(
+        r#"
+        local http = game:GetService("HttpService")
+        for i = 1, 4 do
+            task.spawn(function()
+                print(pcall(http.GetAsync, http, "https://example.com/" .. i))
+            end)
+        end
+        "#,
+    );
+    let sent = rt.take_web_requests();
+    rt.deliver_web(sent[0].0, Err(NetworkError::NotPublic("10.0.0.1".into())));
+    rt.deliver_web(
+        sent[1].0,
+        Err(NetworkError::RobloxDomain("www.roblox.com".into())),
+    );
+    rt.deliver_web(sent[2].0, Err(NetworkError::TooLarge(16 << 20)));
+    rt.deliver_web(
+        sent[3].0,
+        Err(NetworkError::InvalidRequest("header".into())),
+    );
+    assert_eq!(
+        finish(&rt, 1),
+        [
+            "false HttpError: ConnectFail",
+            "false HttpService is not allowed to access ROBLOX resources",
+            "false HttpError: OutOfMemory",
+            "false HttpError: Unknown",
+        ]
+    );
+}
+
+/// The host's setting lets requests reach local addresses.
+#[test]
+fn the_host_can_let_requests_reach_local_addresses() {
+    let rt = enabled_with(
+        true,
+        r#"task.spawn(game.HttpService.GetAsync, game.HttpService, "http://127.0.0.1/")"#,
+    );
+    let sent = rt.take_web_requests();
+    assert_eq!(sent[0].1.reach, Reach::Script { local: true });
 }
 
 /// `RequestAsync` answers whatever the status, with Roblox's fields.

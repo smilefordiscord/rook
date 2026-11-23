@@ -133,18 +133,25 @@ pub fn roblox_domain(url: &str) -> Option<(String, String)> {
         .rsplit_once('@')
         .map_or(authority, |(_, host)| host);
     let host = host.split_once(':').map_or(host, |(host, _)| host);
+    let domain = roblox_host_domain(host)?;
+    let path = if path.starts_with(['?', '#']) {
+        format!("/{path}")
+    } else {
+        path.to_owned()
+    };
+    Some((domain, path))
+}
+
+/// The Roblox web domain a host name (`users.roblox.com`, any case, with
+/// or without DNS's trailing dot) is, or `None` for any other host.
+pub fn roblox_host_domain(host: &str) -> Option<String> {
     let host = host.trim_end_matches('.').to_ascii_lowercase();
     let domain = if host == ROBLOX {
         "www"
     } else {
         host.strip_suffix(ROBLOX)?.strip_suffix('.')?
     };
-    let path = if path.starts_with(['?', '#']) {
-        format!("/{path}")
-    } else {
-        path.to_owned()
-    };
-    Some((domain.to_owned(), path))
+    Some(domain.to_owned())
 }
 
 fn roblox_host(domain: &str) -> String {

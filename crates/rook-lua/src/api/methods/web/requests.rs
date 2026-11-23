@@ -17,7 +17,7 @@ use std::time::Duration;
 
 use mlua::{Function, Lua, MultiValue, Table, Thread, Value as LuaValue};
 use rook_platform::endpoints::Endpoints;
-use rook_platform::network::{NetworkError, Response};
+use rook_platform::network::{NetworkError, Reach, Response};
 
 use crate::runtime::ctx::args::Args;
 use crate::runtime::ctx::{ApiResult, Outcome, api_fn, with_world};
@@ -30,6 +30,7 @@ pub struct WebRequest {
     pub body: Vec<u8>,
     /// How long it may take, when shorter than the network's own limit.
     pub timeout: Option<Duration>,
+    pub reach: Reach,
 }
 
 impl WebRequest {
@@ -40,6 +41,7 @@ impl WebRequest {
             headers: Vec::new(),
             body: Vec::new(),
             timeout: None,
+            reach: Reach::Any,
         }
     }
 
@@ -51,6 +53,7 @@ impl WebRequest {
             headers: vec![("Content-Type".into(), "application/json".into())],
             body: body.to_string().into_bytes(),
             timeout: None,
+            reach: Reach::Any,
         }
     }
 }
@@ -73,6 +76,9 @@ pub struct WebRequests {
     /// When each of HttpService's requests in the last minute went out
     /// (scheduler seconds, oldest first), for its per-minute limit.
     pub(crate) script_sent: VecDeque<f64>,
+    /// HttpService's requests may reach local addresses (the host's
+    /// `httpLocalAddresses` setting, a Rook extension).
+    pub local_addresses: bool,
 }
 
 impl std::fmt::Debug for WebRequests {

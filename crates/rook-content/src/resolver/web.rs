@@ -4,7 +4,7 @@
 
 use std::time::Duration;
 
-use rook_platform::network::{Request, Response};
+use rook_platform::network::{Reach, Request, Response};
 
 use crate::{Failure, FailureKind};
 
@@ -55,6 +55,7 @@ pub(super) fn download(url: &str, max_bytes: u64) -> Result<Vec<u8>, Failure> {
         body: &[],
         max_bytes,
         timeout: None,
+        reach: Reach::Any,
     })?;
     if response.status == 200 {
         Ok(response.body)

@@ -84,6 +84,7 @@ Each is given by its flag, then its variable, then its default; the first that g
 | `assetDelivery` | `ROOK_ASSET_DELIVERY` | | developer | on in `rook-player` and `cargo xtask content`, off in headless runs | Whether content may be downloaded (asset delivery, Roblox's packages) |
 | `dataFolder` | `ROOK_DATA_DIR` | | developer | the platform's folders | Everything under one folder |
 | `coreScripts` | `ROOK_CORE_SCRIPTS` | `--core-scripts` | developer | `off` | Run Roblox's own CoreScripts on each client ([CoreScripts](../behavior/gui/core-scripts.md)); the flag is `rook-player`'s and `cargo xtask run-headless --join`'s |
+| `httpLocalAddresses` | `ROOK_HTTP_LOCAL_ADDRESSES` | | developer | `off` | *Rook extension:* let HttpService's requests reach this machine, the LAN and other addresses off the public internet, which Roblox's game servers can't, so a place can talk to a backend of your own ([where a request may go](../behavior/scripting/http-requests.md#where-a-request-may-go)) |
 
 ### The Open Cloud key
 

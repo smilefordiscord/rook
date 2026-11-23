@@ -131,12 +131,12 @@ impl DataModel {
     }
 
     /// Send scripts' new web requests and deliver the answers that came
-    /// back, all of them when runs must repeat exactly (as for sounds).
-    fn update_web(&mut self) {
+    /// back, without waiting for the rest (see `bridges::web`).
+    fn update_web(&self) {
         for (id, request) in self.runtime.take_web_requests() {
             self.web.send(id, request);
         }
-        for (id, answer) in self.web.finished(self.content.wait_for_sounds) {
+        for (id, answer) in self.web.finished() {
             self.runtime.deliver_web(id, answer);
         }
     }

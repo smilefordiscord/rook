@@ -51,6 +51,12 @@ impl Runtime {
         self.world_mut().web.endpoints = endpoints;
     }
 
+    /// Whether HttpService's requests may reach local addresses (off, as
+    /// on Roblox, unless the host's setting turns it on).
+    pub fn set_http_local_addresses(&self, allowed: bool) {
+        self.world_mut().web.local_addresses = allowed;
+    }
+
     /// Web requests members wait on, by request id, asked for
     /// since the last call.
     pub fn take_web_requests(&self) -> Vec<(u64, WebRequest)> {

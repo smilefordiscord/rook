@@ -190,6 +190,14 @@ pub fn threads() -> Option<usize> {
     })
 }
 
+/// Whether HttpService's requests may reach local addresses (loopback,
+/// the LAN, link-local), which Roblox's game servers can't: a Rook
+/// extension, off unless `httpLocalAddresses` turns it on, so a developer
+/// can point a place at a backend of their own on this machine or the LAN.
+pub fn http_local_addresses() -> bool {
+    HTTP_LOCAL_ADDRESSES.switch(None) == Some(true)
+}
+
 /// The frame rate cap the settings give over the player's `FramerateCap`,
 /// read as it is: -1 at the display's rate, 0 uncapped, else a cap.
 /// `uncapped` (`--uncapped`) wins over `framerateCap` (`--framerate-cap`).

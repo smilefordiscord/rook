@@ -12,7 +12,7 @@
 use std::sync::OnceLock;
 
 use rook_platform::endpoints::Endpoints;
-use rook_platform::network::Request;
+use rook_platform::network::{Reach, Request};
 
 use super::config::ApiKey;
 use super::web::{self, failure_kind};
@@ -133,6 +133,7 @@ impl Delivery {
             body: &[],
             max_bytes: MAX_BYTES,
             timeout: None,
+            reach: Reach::Any,
         })?;
         let version = response
             .header("roblox-assetversionnumber")

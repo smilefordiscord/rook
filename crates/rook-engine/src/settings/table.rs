@@ -140,6 +140,14 @@ pub const CORE_SCRIPTS: Setting = Setting {
     flag: Some("core-scripts"),
 };
 
+pub const HTTP_LOCAL_ADDRESSES: Setting = Setting {
+    name: "httpLocalAddresses",
+    tier: Tier::Developer,
+    unset: Unset::Is("off"),
+    var: "ROOK_HTTP_LOCAL_ADDRESSES",
+    flag: None,
+};
+
 /// Every setting, in the docs' order.
 pub const ALL: &[&Setting] = &[
     &FRAME_TIMES,
@@ -159,6 +167,7 @@ pub const ALL: &[&Setting] = &[
     &ASSET_DELIVERY,
     &DATA_FOLDER,
     &CORE_SCRIPTS,
+    &HTTP_LOCAL_ADDRESSES,
 ];
 
 #[cfg(test)]

@@ -37,7 +37,16 @@ the target counts only errors Rook causes, checked against Studio.
        the engine sends it on a thread through `rook_platform::network`,
        and the answer resumes the waiting script at the frame's web
        step. HttpService takes the same path, so a script waits on the
-       network one way only, and headless runs still repeat exactly.
+       network one way only. No host's frame waits for an answer:
+       Unity's and Godot's main loops never block on a request either,
+       and a server's frame loop can't stall on a slow site.
+     - Where a request may go is the network's to decide, as
+       browsers and server-side fetchers guard against SSRF: a
+       resolver that checks every address a name resolves to (and
+       every redirect's host) and hands the connection only those, so
+       DNS rebinding can't slip past a check made on the name
+       (`rook_platform::network::Reach`). A developer setting opens
+       local addresses, a Rook extension off by default.
      - Failures are typed (`rook_platform::network::NetworkError`) by
        the kinds an HTTP client tells apart, which HttpService raises
        as their `Enum.HttpError` items.

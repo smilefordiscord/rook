@@ -3,9 +3,15 @@
 
 use crate::tests::*;
 
-/// A server DataModel whose place enables HTTP.
-fn http_enabled() -> Server {
-    let s = Server::new(&Options::default()).unwrap();
+/// A server DataModel whose place enables HTTP; with `local`, the host
+/// lets its requests reach local addresses, as the servers these tests
+/// stand up are.
+fn http_enabled(local: bool) -> Server {
+    let s = Server::new(&Options {
+        http_local_addresses: Some(local),
+        ..Options::default()
+    })
+    .unwrap();
     let http = service(&s, "HttpService");
     s.runtime()
         .world_mut()
@@ -60,7 +66,7 @@ fn requests_reach_the_host_and_answer() {
     .replace("BASE", &format!("{base:?}"))
     .replace("CLOSED", &format!("{closed_url:?}"))
     .replace("SILENT", &format!("{silent_url:?}"));
-    let mut s = http_enabled();
+    let mut s = http_enabled(true);
     s.run_extra_script(&script).unwrap();
     let out = step_until(&mut s, |out| out.iter().any(|l| l == "done"));
     assert_eq!(
@@ -93,4 +99,149 @@ fn requests_reach_the_host_and_answer() {
         seen[2].header("content-type"),
         Some("application/x-www-form-urlencoded")
     );
+}
+
+/// No host's frame waits for an answer: the script that asked waits, and
+/// the DataModel steps on. A server that holds its answer back must not
+/// hold the frame (rook-server's frame waited out each request).
+#[test]
+fn a_slow_server_holds_up_no_frame() {
+    let (release, released) = std::sync::mpsc::channel::<()>();
+    let (base, _requests) = serve_http(move |_, _| {
+        // The test may be over, with no one left to release it.
+        let _ = released.recv();
+        Reply::ok(b"late".to_vec())
+    });
+    let script = r#"
+        local http = game:GetService("HttpService")
+        task.spawn(function()
+            print(http:GetAsync(BASE .. "/slow"))
+        end)
+        local frames = 0
+        game:GetService("RunService").Heartbeat:Connect(function()
+            frames += 1
+            if frames == 30 then
+                print("stepped")
+            end
+        end)
+    "#
+    .replace("BASE", &format!("{base:?}"));
+    let mut s = http_enabled(true);
+    s.run_extra_script(&script).unwrap();
+    let started = std::time::Instant::now();
+    let out = step_until(&mut s, |out| out.iter().any(|l| l == "stepped"));
+    assert_eq!(out, ["stepped"]);
+    assert!(
+        started.elapsed() < Duration::from_secs(10),
+        "{:?}",
+        started.elapsed()
+    );
+    release.send(()).unwrap();
+    assert_eq!(step_until(&mut s, |out| !out.is_empty()), ["late"]);
+}
+
+/// Loopback, the LAN and the like are off the public internet, which is
+/// all a Roblox game server reaches; the host's setting opens them.
+#[test]
+fn local_addresses_are_refused_unless_the_host_allows_them() {
+    let (base, requests) = serve_http(|_, _| Reply::ok(b"reached".to_vec()));
+    let port = base.rsplit_once(':').unwrap().1;
+    let script = r#"
+        local http = game:GetService("HttpService")
+        for _, url in { BASE, "http://localhost:PORT/", "http://[::ffff:127.0.0.1]:PORT/", "http://169.254.169.254/" } do
+            print(pcall(http.GetAsync, http, url))
+        end
+        print("done")
+    "#
+    .replace("BASE", &format!("{base:?}"))
+    .replace("PORT", port);
+    let mut s = http_enabled(false);
+    s.run_extra_script(&script).unwrap();
+    let out = step_until(&mut s, |out| out.iter().any(|l| l == "done"));
+    assert_eq!(
+        out,
+        [
+            "false HttpError: ConnectFail",
+            "false HttpError: ConnectFail",
+            "false HttpError: ConnectFail",
+            "false HttpError: ConnectFail",
+            "done",
+        ]
+    );
+    assert_eq!(requests.try_iter().count(), 0);
+
+    let mut s = http_enabled(true);
+    s.run_extra_script(&format!(
+        "print(game:GetService('HttpService'):GetAsync({base:?}))"
+    ))
+    .unwrap();
+    assert_eq!(step_until(&mut s, |out| !out.is_empty()), ["reached"]);
+}
+
+/// A redirect is checked as the first URL is, so it can't reach Roblox's
+/// web domains; one that may go is followed.
+#[test]
+fn redirects_are_checked_like_the_first_request() {
+    let (base, requests) = serve_http(|_, request| {
+        let to = match request.path.as_str() {
+            "/to-roblox" => "https://www.roblox.com/home",
+            "/to-here" => "/landed",
+            _ => return Reply::ok(b"landed".to_vec()),
+        };
+        Reply {
+            status: 302,
+            reason: "Found",
+            headers: vec![("Location", to)],
+            body: Vec::new(),
+        }
+    });
+    let script = r#"
+        local http = game:GetService("HttpService")
+        print(pcall(http.GetAsync, http, BASE .. "/to-roblox"))
+        print(pcall(http.GetAsync, http, BASE .. "/to-here"))
+        print("done")
+    "#
+    .replace("BASE", &format!("{base:?}"));
+    let mut s = http_enabled(true);
+    s.run_extra_script(&script).unwrap();
+    let out = step_until(&mut s, |out| out.iter().any(|l| l == "done"));
+    assert_eq!(
+        out,
+        [
+            "false HttpService is not allowed to access ROBLOX resources",
+            "true landed",
+            "done",
+        ]
+    );
+    let paths: Vec<String> = requests.try_iter().map(|r| r.path).collect();
+    assert_eq!(paths, ["/to-roblox", "/to-here", "/landed"]);
+}
+
+/// An answer past the limit raises rather than arriving cut short, and a
+/// header HTTP can't carry is refused without anything sent.
+#[test]
+fn oversized_answers_and_bad_headers_raise() {
+    let (base, requests) = serve_http(|_, _| Reply::ok(vec![b'x'; (16 << 20) + 1]));
+    let script = r#"
+        local http = game:GetService("HttpService")
+        print(pcall(http.GetAsync, http, BASE .. "/big"))
+        print(pcall(http.RequestAsync, http, { Url = BASE, Headers = { ["Bad Name"] = "x" } }))
+        print(pcall(http.RequestAsync, http, { Url = BASE, Headers = { ["X-Value"] = "a" .. string.char(10) .. "b" } }))
+        print("done")
+    "#
+    .replace("BASE", &format!("{base:?}"));
+    let mut s = http_enabled(true);
+    s.run_extra_script(&script).unwrap();
+    let out = step_until(&mut s, |out| out.iter().any(|l| l == "done"));
+    assert_eq!(
+        out,
+        [
+            "false HttpError: OutOfMemory",
+            "false HttpError: Unknown",
+            "false HttpError: Unknown",
+            "done",
+        ]
+    );
+    let paths: Vec<String> = requests.try_iter().map(|r| r.path).collect();
+    assert_eq!(paths, ["/big"]);
 }

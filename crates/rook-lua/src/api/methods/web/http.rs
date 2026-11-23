@@ -1,6 +1,6 @@
 //! HttpService: JSON, GUIDs and URL encoding, and scripts' own requests
 //! (`GetAsync`, `PostAsync`, `RequestAsync`), which a server sends to any
-//! site when its place enables HTTP; the rules are in
+//! site on the public internet when its place enables HTTP; the rules are in
 //! `docs/behavior/scripting/http-requests.md`. CoreScripts' requests to
 //! Roblox's web domains (`HttpService:RequestInternal`,
 //! HttpRbxApiService) go out only where the domain has an endpoint
@@ -12,7 +12,7 @@ use std::time::Duration;
 
 use mlua::{IntoLuaMulti, Lua, MultiValue, Table, Value as LuaValue};
 use rook_dom::InstanceId;
-use rook_platform::network::{NetworkError, Response};
+use rook_platform::network::{NetworkError, Reach, Response};
 
 use super::RawMethod;
 use super::requests::{self as web, WebAnswer, WebRequest};
@@ -343,6 +343,9 @@ fn url_encode(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
     Outcome::ret(lua, out)
 }
 
+/// What a request to Roblox's own web domains raises.
+const ROBLOX_REFUSED: &str = "HttpService is not allowed to access ROBLOX resources";
+
 /// Requests HttpService sends in a minute at most; more fail
 /// (Confirmed, creator-docs HttpService:RequestAsync "Limitations").
 const REQUESTS_PER_MINUTE: usize = 500;
@@ -483,10 +486,11 @@ fn gzip(request: &mut WebRequest) -> ApiResult<()> {
 /// response; the calling thread waits meanwhile. Refused, as Roblox
 /// refuses them: a URL that isn't `http` or `https` (creator-docs
 /// RequestAsync), one on Roblox's own web domains (Inference: the message
-/// players report), and requests past the limit per minute.
+/// players report), and requests past the limit per minute. The network
+/// checks each hop's host and addresses again ([`Reach::Script`]).
 fn send(
     lua: &Lua,
-    request: WebRequest,
+    mut request: WebRequest,
     answer: fn(&Lua, &Response) -> Result<MultiValue, String>,
 ) -> ApiResult<Outcome> {
     let scheme = request.url.split_once("://").map(|(scheme, _)| scheme);
@@ -494,9 +498,7 @@ fn send(
         return Err(ScriptError("HttpError: InvalidUrl".into()));
     }
     if rook_platform::endpoints::roblox_domain(&request.url).is_some() {
-        return Err(ScriptError(
-            "HttpService is not allowed to access ROBLOX resources".into(),
-        ));
+        return Err(ScriptError(ROBLOX_REFUSED.into()));
     }
     with_world(lua, |w| {
         let now = w.scheduler.now();
@@ -510,6 +512,9 @@ fn send(
             return Err(ScriptError("Number of requests exceeded limit".into()));
         }
         sent.push_back(now);
+        request.reach = Reach::Script {
+            local: w.web.local_addresses,
+        };
         Ok(())
     })?;
     web::call(
@@ -520,17 +525,26 @@ fn send(
 }
 
 /// What a request that got no answer raises: `HttpError: ` and the
-/// `Enum.HttpError` item for why (Inference from the enum's items).
+/// `Enum.HttpError` item for why (Inference from the creator docs'
+/// descriptions of the enum's items).
 fn http_error(e: &NetworkError) -> String {
     let kind = match e {
         NetworkError::InvalidUrl(_) => "InvalidUrl",
+        // Not one the docs describe: "does not map to any other value".
+        NetworkError::InvalidRequest(_) => "Unknown",
         NetworkError::DnsResolve(_) => "DnsResolve",
-        NetworkError::ConnectFail(_) => "ConnectFail",
+        // Inference: Roblox's game servers have no route to a local
+        // address, so connecting to one fails.
+        NetworkError::ConnectFail(_) | NetworkError::NotPublic(_) => "ConnectFail",
         NetworkError::TimedOut(_) => "TimedOut",
         NetworkError::TooManyRedirects => "TooManyRedirects",
         NetworkError::InvalidRedirect(_) => "InvalidRedirect",
         NetworkError::Tls(_) => "SslConnectFail",
         NetworkError::ConnectionClosed(_) => "ConnectionClosed",
+        // Running out of memory on the answer.
+        NetworkError::TooLarge(_) => "OutOfMemory",
+        // A redirect there; Inference: refused as the first URL is.
+        NetworkError::RobloxDomain(_) => return ROBLOX_REFUSED.to_owned(),
         NetworkError::Other(_) => "NetFail",
     };
     format!("HttpError: {kind}")
