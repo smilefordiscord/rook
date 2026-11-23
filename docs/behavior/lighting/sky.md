@@ -3,8 +3,8 @@
 Checked against Studio 0.745 on 2026-11-05.
 
 How Studio darkens and tints the sky at dawn and dusk, and how that
-reaches what the sky lights and what reflects it. Measured in
-`version-fee454b8e2094ba9`.
+reaches what the sky lights and what reflects it, measured in
+`version-fee454b8e2094ba9`; and the sun and moon over it.
 
 ## The tint
 
@@ -107,8 +107,54 @@ loaded before showed no hole, which may be Studio's cache. Rook treats it as
 an image that won't load (Inference). Studio's sky while images load isn't
 measured; that it's the default sky follows from the failed case (Inference).
 
+## The sun and moon
+
+Not yet measured in Studio; from the creator docs (Sky, the Skyboxes
+guide) and the install's files, read on 2026-11-23.
+
+- A Sky's `CelestialBodiesShown` off hides the sun, moon and stars;
+  `SunAngularSize` and `MoonAngularSize` (degrees, default 21 and 11) are
+  clamped to 0 to 60, and 0 hides that body alone (Confirmed: creator
+  docs). Their images are `SunTextureId` and `MoonTextureId`, by default
+  the install's `content/sky/sun.jpg` and `moon.jpg` (128 × 128 JPEGs, a
+  white disc with a glow, and the moon, on black).
+- They rise and set with the time of day (creator docs); the sun's disc
+  sits where `Lighting:GetSunDirection()` points ([the sun](sun.md)) and
+  the moon's opposite the sun's daily circle, as their light does
+  (Inference).
+- `SkyboxOrientation` turns the skybox, by Y first, then X, then Z; the
+  sun, moon and stars don't turn with it (Confirmed: creator docs). Which
+  way a positive angle turns is an Inference (as CFrame angles do).
+  Studio's surface shaders turn their reads of the sky's reflection cube
+  by the same turn (`SkyboxRotation` in `shaders_glsl3.pack`).
+- Studio's `AdvSun` shader draws each body as a textured quad at the far
+  plane: the image times a color (mixed between two by the quad's
+  height), squared, times a constant power of two, then the exposure.
+  The quad and the image's black corners are added over the sky. The
+  constant and the colors aren't in the pack.
+
+Rook (`celestial.rs` in `crates/rook-scene/src/lighting/`, `vs_disc` and
+`fs_disc` in `shaders/sky/sky.wgsl`) draws each as a square facing the
+camera that spans its angular size, the image's sRGB color squared times
+its light, added over the sky. Approximations until Studio is measured:
+the sun at 4 light units at its image's white, so its middle is white,
+taking its light's hue (yellow in the last degrees above the horizon,
+gone below it); the moon at 1 unit, faded in over the last degrees above
+the horizon as its light is. Without a Roblox install the images don't
+load, and Rook draws its own soft white disc; an empty image draws
+nothing (Inference). A place without a Sky shows a new Sky's sun and
+moon (Inference). The reflection cube keeps the sky unturned and every
+read of it turns by `SkyboxOrientation`, so turning the sky never builds
+the cube again.
+
+To settle in Studio: the discs' brightness and color at noon, at dusk and
+through the horizon; whether a positive `SkyboxOrientation` angle turns
+as Rook's; whether a place without a Sky shows the sun.
+
 ## Not done
 
 - The night sky: the dark gradient, its purple horizon glow and the stars
   (M13 step 1). Rook draws black there.
+- The sun and moon in reflections (Studio's reflection cube may hold
+  them; unmeasured).
 - 18.0 to 18.3 wasn't sampled between its ends.

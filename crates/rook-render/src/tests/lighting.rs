@@ -524,3 +524,172 @@ fn double_sided_meshes_shadow_from_their_back() {
     let double = ground_at(&mut r, true);
     assert!(single[0] > double[0] + 30, "{single:?} {double:?}");
 }
+
+/// The middle of the lit pixels of a `size` × `size` image, in pixels, and
+/// how many there are.
+fn lit_middle(image: &[u8], size: usize) -> (Vec2, usize) {
+    let mut sum = Vec2::ZERO;
+    let mut count = 0;
+    for y in 0..size {
+        for x in 0..size {
+            if image[(y * size + x) * 4..][..3].iter().any(|&c| c > 40) {
+                sum += Vec2::new(x as f32 + 0.5, y as f32 + 0.5);
+                count += 1;
+            }
+        }
+    }
+    (sum / count.max(1) as f32, count)
+}
+
+/// The sun's disc is drawn over the sky where its direction falls on the
+/// screen, wherever the camera stands, and isn't without one.
+#[test]
+fn the_sun_disc_draws_where_the_sun_is() {
+    let Ok(mut r) = Renderer::headless() else {
+        return;
+    };
+    const SIZE: usize = 64;
+    let sun = Vec3::new(0.3, 0.2, -1.0).normalize();
+    let disc = Disc {
+        direction: sun,
+        size: 8f32.to_radians(),
+        image: DiscImage::Own,
+        light: [4.0; 3],
+    };
+    let mut scene = Scene {
+        lighting: Lighting {
+            sky_tint: [0.0; 3],
+            sun_disc: Some(disc),
+            ..Lighting::default()
+        },
+        ..Scene::default()
+    };
+    let position = Vec3::new(100.0, 50.0, -30.0);
+    let camera = Camera::look_at(position, position + Vec3::NEG_Z);
+    r.set_scene(&scene);
+    let image = r
+        .render_to_image(SIZE as u32, SIZE as u32, &camera)
+        .unwrap();
+    let clip = camera.view_projection(1.0) * sun.extend(0.0);
+    let expected = Vec2::new(clip.x / clip.w + 1.0, 1.0 - clip.y / clip.w) * 0.5 * SIZE as f32;
+    let (middle, count) = lit_middle(&image, SIZE);
+    assert!(count > 4, "{count} pixels lit");
+    assert!(
+        middle.distance(expected) < 1.5,
+        "{middle} against {expected}"
+    );
+    scene.lighting.sun_disc = None;
+    r.set_scene(&scene);
+    let image = r
+        .render_to_image(SIZE as u32, SIZE as u32, &camera)
+        .unwrap();
+    assert_eq!(lit_middle(&image, SIZE).1, 0);
+}
+
+/// A 2 × 2 image of one color.
+fn solid(rgb: [u8; 3]) -> Arc<Image> {
+    let pixels = [[rgb[0], rgb[1], rgb[2], 255]; 4];
+    Arc::new(Image {
+        width: 2,
+        height: 2,
+        format: rook_content::decode::image::ImageFormat::Png,
+        encoding: rook_content::decode::image::Encoding::Rgba8,
+        mips: rook_content::decode::image::mips(pixels.concat(), 2, 2),
+        translucent: false,
+    })
+}
+
+/// A half turn about Y puts the skybox's Back image where its Front was,
+/// and the sun's image draws over it, the same with the image table as
+/// with images bound per draw.
+#[test]
+fn a_turned_skybox_and_the_sun_draw_alike_either_way() {
+    let Ok(mut table) = Renderer::headless() else {
+        return;
+    };
+    let Ok(mut sets) = Renderer::headless_with(|_| wgpu::DeviceDescriptor::default()) else {
+        return;
+    };
+    let [front, back, side, sun] = [1u8, 2, 3, 4].map(|i| ImageHash([i; 32]));
+    let images = vec![
+        (front, solid([255, 0, 0])),
+        (back, solid([0, 0, 255])),
+        (side, solid([0, 255, 0])),
+        (sun, solid([255, 255, 255])),
+    ];
+    let camera = Camera::look_at(Vec3::ZERO, Vec3::NEG_Z);
+    let disc = Disc {
+        direction: Vec3::new(0.3, 0.0, -1.0).normalize(),
+        size: 6f32.to_radians(),
+        image: DiscImage::Image(sun),
+        light: [4.0; 3],
+    };
+    for turn in [Mat3::IDENTITY, Mat3::from_rotation_y(std::f32::consts::PI)] {
+        let scene = Scene {
+            lighting: Lighting {
+                skybox: Some([side, back, front, side, side, side]),
+                skybox_turn: turn,
+                sun_disc: Some(disc),
+                ..Lighting::default()
+            },
+            ..Scene::default()
+        };
+        let mut frames = Vec::new();
+        for r in [&mut table, &mut sets] {
+            r.take_images(images.clone());
+            r.set_scene(&scene);
+            r.finish_uploads();
+            frames.push(r.render_to_image(64, 64, &camera).unwrap());
+        }
+        assert_eq!(frames[0], frames[1]);
+        let middle = &frames[0][(32 * 64 + 20) * 4..][..3];
+        let expected = if turn == Mat3::IDENTITY { 0 } else { 2 };
+        assert!(
+            (0..3).all(|c| c == expected || middle[c] < middle[expected]),
+            "{middle:?} at turn {turn}"
+        );
+        let clip = camera.view_projection(1.0) * disc.direction.extend(0.0);
+        let x = ((clip.x / clip.w + 1.0) * 32.0) as usize;
+        assert!(
+            frames[0][(32 * 64 + x) * 4..][..3].iter().all(|&c| c > 200),
+            "the sun's image: {:?} at {x}",
+            &frames[0][(32 * 64 + x) * 4..][..3]
+        );
+    }
+}
+
+/// `SkyboxOrientation` turns the skybox: a plain sky reflects nothing to
+/// test, so the turn reaches what reads the reflection cube, which a
+/// mirror shows (a half turn about X puts the sky's top below).
+#[test]
+fn a_turned_skybox_turns_its_reflections() {
+    let Ok(mut r) = Renderer::headless() else {
+        return;
+    };
+    let mut mirror = part(PartShape::Block, 0.0, [0.0; 3], 0.0);
+    mirror.size = Vec3::new(20.0, 1.0, 20.0);
+    mirror.reflectance = 1.0;
+    let camera = Camera::look_at(Vec3::new(0.0, 6.0, 20.0), Vec3::new(0.0, 0.0, 0.0));
+    let mut shots = Vec::new();
+    for turn in [Mat3::IDENTITY, Mat3::from_rotation_x(std::f32::consts::PI)] {
+        r.set_scene(&Scene {
+            parts: vec![mirror],
+            lighting: Lighting {
+                ambient: [0.0; 3],
+                outdoor_ambient: [0.0; 3],
+                sun_color: [0.0; 3],
+                environment_specular: 1.0,
+                sky_top: [0.0, 0.0, 1.0],
+                sky_horizon: [1.0, 0.0, 0.0],
+                skybox_turn: turn,
+                ..Lighting::default()
+            },
+            ..Scene::default()
+        });
+        let image = r.render_to_image(32, 32, &camera).unwrap();
+        shots.push(image[(20 * 32 + 16) * 4..][..3].to_vec());
+    }
+    // Upright, the mirror shows some of the blue overhead; turned over,
+    // the sky it reflects is the turned sky's horizon.
+    assert!(shots[0][2] > shots[1][2] + 10, "{shots:?}");
+}

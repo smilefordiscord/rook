@@ -225,12 +225,38 @@ impl Renderer {
                 self.ensure_group(lone_image(Some(hash)));
             }
         }
+        let discs = self.shown_discs();
+        for hash in discs.iter().flatten().filter_map(disc_image) {
+            self.ensure_group(lone_image(Some(hash)));
+        }
         self.update_table();
         let mut sky_images = [[0; 4]; 2];
         for (i, hash) in l.skybox.iter().flatten().enumerate() {
             sky_images[i / 4][i % 4] = self.image_slots(&lone_image(Some(*hash)))[0];
         }
         let rgb = |c: [f32; 3], w: f32| [c[0], c[1], c[2], w];
+        let mut disc_rows = [[0.0; 4]; 4];
+        for (body, disc) in discs.iter().enumerate() {
+            let Some(disc) = disc else {
+                continue;
+            };
+            let image = disc_image(disc);
+            if let Some(hash) = image {
+                sky_images[1][2 + body] = self.image_slots(&lone_image(Some(hash)))[0];
+            }
+            let half = (disc.size * 0.5).min(1.5).tan();
+            disc_rows[body * 2] = rgb(disc.direction.normalize_or_zero().to_array(), half);
+            disc_rows[body * 2 + 1] = rgb(disc.light, if image.is_some() { 1.0 } else { 2.0 });
+        }
+        let turn = l.skybox_turn;
+        let mut sky_faces = [[0.0; 4]; 18];
+        for (i, (dir, right, up)) in SKYBOX_FACES.iter().enumerate() {
+            sky_faces[i * 3] = rgb((turn * *dir).to_array(), 0.0);
+            sky_faces[i * 3 + 1] = rgb((turn * *right).to_array(), 0.0);
+            sky_faces[i * 3 + 2] = rgb((turn * *up).to_array(), 0.0);
+        }
+        let back = turn.transpose();
+        let row = |r: glam::Vec3| rgb(r.to_array(), 0.0);
         let globals = Globals {
             sun_dir: rgb(sun.to_array(), 0.0),
             sun_color: rgb(l.sun_color, 0.0),
@@ -260,6 +286,9 @@ impl Renderer {
             sky_bottom: rgb(l.sky_bottom, 0.0),
             sky_tint: rgb(l.sky_tint, 0.0),
             sky_images,
+            sky_faces,
+            sky_turn: [row(back.row(0)), row(back.row(1)), row(back.row(2))],
+            discs: disc_rows,
             ..self.view_globals(camera, aspect)
         };
         self.queue
@@ -297,6 +326,11 @@ impl Renderer {
                 self.terrain.grass_reach,
             ],
             wind: rgb(self.terrain.wind.to_array(), self.water_phase as f32),
+            sky_turn: [
+                [1.0, 0.0, 0.0, 0.0],
+                [0.0, 1.0, 0.0, 0.0],
+                [0.0, 0.0, 1.0, 0.0],
+            ],
             ..bytemuck::Zeroable::zeroed()
         }
     }
@@ -575,10 +609,44 @@ impl Renderer {
         );
     }
 
+    /// The sky, then the sun and the moon over it.
+    fn record_sky(&self, pass: &mut wgpu::RenderPass<'_>) {
+        self.record_skybox(pass);
+        let discs = self.shown_discs();
+        if discs.iter().all(Option::is_none) {
+            return;
+        }
+        pass.set_pipeline(&self.pipelines.discs);
+        for (body, disc) in discs.iter().enumerate() {
+            let Some(disc) = disc else {
+                continue;
+            };
+            // With a table the image's slot is in the globals; without
+            // one, Rook's own disc binds the defaults and reads none.
+            if let ImageBinding::Sets(groups) = &self.image_binding {
+                let Some(group) = groups.get(&lone_image(disc_image(disc))) else {
+                    continue;
+                };
+                pass.set_bind_group(2, group, &[]);
+            }
+            let body = body as u32;
+            pass.draw(0..6, body..body + 1);
+        }
+    }
+
+    /// The sun and the moon the sky draws this frame: those shown whose
+    /// image the renderer holds.
+    fn shown_discs(&self) -> [Option<Disc>; 2] {
+        let l = &self.lighting;
+        [l.sun_disc, l.moon_disc].map(|disc| {
+            disc.filter(|d| disc_image(d).is_none_or(|hash| self.images.contains(&hash)))
+        })
+    }
+
     /// The skybox, once all six images are up; otherwise the plain sky
     /// color stands for it. With a table, one draw of six faces; else a
     /// draw per face with its image bound.
-    fn record_sky(&self, pass: &mut wgpu::RenderPass<'_>) {
+    fn record_skybox(&self, pass: &mut wgpu::RenderPass<'_>) {
         let faces = self
             .lighting
             .skybox
@@ -605,5 +673,13 @@ impl Renderer {
                 }
             }
         }
+    }
+}
+
+/// A disc's image, or `None` for Rook's own disc.
+fn disc_image(disc: &Disc) -> Option<ImageHash> {
+    match disc.image {
+        DiscImage::Image(hash) => Some(hash),
+        DiscImage::Own => None,
     }
 }

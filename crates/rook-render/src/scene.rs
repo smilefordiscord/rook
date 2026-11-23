@@ -15,6 +15,7 @@ use rook_types::{
 mod emitters;
 mod lighting;
 mod ribbons;
+mod sky;
 mod terrain;
 pub use emitters::{
     Curve, Emitter, EmitterLook, EmitterShape, Flipbook, FlipbookMode, InOut, Orientation,
@@ -22,6 +23,7 @@ pub use emitters::{
 };
 pub use lighting::{LightShape, Lighting, LocalLight, SKYBOX_FACES, Tonemapper};
 pub use ribbons::{Anchor, Beam, FloorWire, RibbonLook, TextureMode, Trail};
+pub use sky::{Disc, DiscImage};
 pub use terrain::{TerrainLook, TerrainVoxels};
 
 /// A mesh file, by the BLAKE3 hash of its bytes: parts that use the same

@@ -4,7 +4,7 @@
 // in Studio's light units, added up before the tone curve as Studio adds
 // them (`tone.wgsl`).
 
-import package::common::{g, sky_cube, brdf_table, image_sampler};
+import package::common::{g, sky_cube, brdf_table, image_sampler, sky_dir};
 
 import package::voxels::lights::VOXEL;
 
@@ -275,7 +275,7 @@ fn remapped(roughness: f32) -> f32 {
 // (0 sharp to 5, Studio's 5 x remapped roughness), as the time of day
 // leaves it (`sky_reflection_tint`).
 fn sky_reflected(d: vec3<f32>, level: f32) -> vec3<f32> {
-    return textureSampleLevel(sky_cube, image_sampler, d, level).rgb * sky_reflection_tint();
+    return textureSampleLevel(sky_cube, image_sampler, sky_dir(d), level).rgb * sky_reflection_tint();
 }
 
 // How much of the sky a surface of reflectance `f0` reflects at remapped

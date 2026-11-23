@@ -1,7 +1,7 @@
 use rustc_hash::FxHashMap;
 use std::sync::Arc;
 
-use glam::Mat3;
+use glam::{Mat3, Vec2};
 use rook_types::{NormalDetail, SurfacePattern};
 
 use super::*;

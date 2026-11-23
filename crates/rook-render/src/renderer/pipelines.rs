@@ -20,6 +20,21 @@ fn shaders(table: bool) -> [&'static str; 3] {
     }
 }
 
+/// Color added to what's drawn, its alpha kept: the sky's sun, moon and
+/// stars, as Studio's `AdvSun` and `AdvStars` add theirs.
+const ADD_COLOR: wgpu::BlendState = wgpu::BlendState {
+    color: wgpu::BlendComponent {
+        src_factor: wgpu::BlendFactor::One,
+        dst_factor: wgpu::BlendFactor::One,
+        operation: wgpu::BlendOperation::Add,
+    },
+    alpha: wgpu::BlendComponent {
+        src_factor: wgpu::BlendFactor::Zero,
+        dst_factor: wgpu::BlendFactor::One,
+        operation: wgpu::BlendOperation::Add,
+    },
+};
+
 /// The bind group layouts the part pipelines use, in group order.
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct BindLayouts<'a> {
@@ -80,6 +95,8 @@ pub(crate) struct Pipelines {
     pub(crate) sky: wgpu::RenderPipeline,
     /// The plain sky color, before (or without) the skybox.
     pub(crate) plain_sky: wgpu::RenderPipeline,
+    /// The sun and the moon, added over the sky.
+    pub(crate) discs: wgpu::RenderPipeline,
     /// Emitters' particles, over everything.
     pub(crate) particles: wgpu::RenderPipeline,
     /// Beams and Trails, before the particles.
@@ -404,14 +421,15 @@ impl Pipelines {
 
         // The skybox: one full-screen triangle per image, each keeping the
         // pixels whose direction its face covers; nothing written to depth,
-        // so everything draws over it.
-        let sky_pipeline = |fragment| {
+        // so everything draws over it. The sun and moon are added over it
+        // (their color added, the frame's alpha kept).
+        let sky_pipeline = |vertex, fragment, blend| {
             device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
                 label: Some("rook sky"),
                 layout: Some(&pipeline_layout),
                 vertex: wgpu::VertexState {
                     module: &sky_shader,
-                    entry_point: Some("vs_sky"),
+                    entry_point: Some(vertex),
                     compilation_options: Default::default(),
                     buffers: &[],
                 },
@@ -430,7 +448,7 @@ impl Pipelines {
                     compilation_options: Default::default(),
                     targets: &[Some(wgpu::ColorTargetState {
                         format: frame_format,
-                        blend: None,
+                        blend,
                         write_mask: wgpu::ColorWrites::ALL,
                     })],
                 }),
@@ -467,8 +485,9 @@ impl Pipelines {
             layer: layer_pipeline,
             over,
             on_top,
-            sky: sky_pipeline("fs_sky"),
-            plain_sky: sky_pipeline("fs_plain_sky"),
+            sky: sky_pipeline("vs_sky", "fs_sky", None),
+            plain_sky: sky_pipeline("vs_sky", "fs_plain_sky", None),
+            discs: sky_pipeline("vs_disc", "fs_disc", Some(ADD_COLOR)),
         }
     }
 }
