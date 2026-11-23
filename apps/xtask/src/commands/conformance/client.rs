@@ -5,7 +5,8 @@
 //! Steps: `x,y` moves the mouse there (GUI coordinates, below the top
 //! bar, as the MCP takes them); `down`, `up`, `down2` and `up2` press and
 //! release button 1 or 2; `wheelup` and `wheeldown` turn the wheel a
-//! notch; `key:Return` presses and releases a key; `text:abc` types text
+//! notch, and `wheeldown*3` three notches at once (a flick of the wheel:
+//! one frame in Rook, back to back in Studio); `key:Return` presses and releases a key; `text:abc` types text
 //! (no spaces); `wait` does nothing for a step.
 
 use rook_engine::InputEvent;
@@ -18,8 +19,8 @@ pub(super) enum Step {
         button: u8,
         down: bool,
     },
-    /// Notches; positive is forward (up).
-    Wheel(f32),
+    /// Notches, turned at once; positive is forward (up).
+    Wheel(i32),
     Key(String),
     Text(String),
     Wait,
@@ -47,11 +48,23 @@ pub(super) fn steps(source: &str) -> anyhow::Result<Option<Vec<Step>>> {
                     button: 2,
                     down: token == "down2",
                 },
-                "wheelup" => Step::Wheel(1.0),
-                "wheeldown" => Step::Wheel(-1.0),
+                "wheelup" => Step::Wheel(1),
+                "wheeldown" => Step::Wheel(-1),
                 "wait" => Step::Wait,
                 _ => {
-                    if let Some(key) = token.strip_prefix("key:") {
+                    let flick = |name: &str| -> anyhow::Result<Option<i32>> {
+                        let Some(count) = token.strip_prefix(name) else {
+                            return Ok(None);
+                        };
+                        let count: i32 = count.parse()?;
+                        anyhow::ensure!(count > 0, "bad input step {token:?}");
+                        Ok(Some(count))
+                    };
+                    if let Some(n) = flick("wheelup*")? {
+                        Step::Wheel(n)
+                    } else if let Some(n) = flick("wheeldown*")? {
+                        Step::Wheel(-n)
+                    } else if let Some(key) = token.strip_prefix("key:") {
                         Step::Key(key.to_owned())
                     } else if let Some(text) = token.strip_prefix("text:") {
                         Step::Text(text.to_owned())
@@ -80,7 +93,12 @@ pub(super) fn events(step: &Step) -> Vec<InputEvent> {
             button: *button,
             down: *down,
         }],
-        Step::Wheel(delta) => vec![InputEvent::Wheel { delta: *delta }],
+        Step::Wheel(notches) => {
+            let delta = notches.signum() as f32;
+            (0..notches.abs())
+                .map(|_| InputEvent::Wheel { delta })
+                .collect()
+        }
         Step::Key(code) => [true, false]
             .map(|down| InputEvent::Key {
                 code: code.clone(),
@@ -121,8 +139,8 @@ pub(super) fn studio_calls(steps: &[Step]) -> Vec<(&'static str, Vec<Value>)> {
                 }
                 ("user_mouse_input", vec![press])
             }
-            Step::Wheel(delta) => {
-                let action = if *delta > 0.0 {
+            Step::Wheel(notches) => {
+                let action = if *notches > 0 {
                     "scrollUp"
                 } else {
                     "scrollDown"
@@ -132,7 +150,8 @@ pub(super) fn studio_calls(steps: &[Step]) -> Vec<(&'static str, Vec<Value>)> {
                     turn["x"] = json!(x);
                     turn["y"] = json!(y);
                 }
-                ("user_mouse_input", vec![turn])
+                let turns = (0..notches.abs()).map(|_| turn.clone()).collect();
+                ("user_mouse_input", turns)
             }
             Step::Key(code) => (
                 "user_keyboard_input",
