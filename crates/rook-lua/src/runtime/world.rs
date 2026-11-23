@@ -244,6 +244,7 @@ pub struct World {
     /// GUI layout. Scripts read it (`AbsoluteSize` and the like), which
     /// lays out again first when GUI changed, so it lives here too.
     pub gui: rook_gui::Gui,
+    pub(crate) text_bounds_waiting: crate::api::methods::gui::text::BoundsWaiting,
     /// Threads waiting for an invoke's reply, by call id.
     pub(crate) pending_calls: FxHashMap<u64, Thread>,
     pub(crate) next_call: u64,
@@ -363,6 +364,7 @@ impl World {
             filter_results: FxHashMap::default(),
             physics: rook_physics::Physics::new(),
             gui: rook_gui::Gui::default(),
+            text_bounds_waiting: Vec::new(),
             pending_calls: FxHashMap::default(),
             next_call: 0,
             log: Vec::new(),

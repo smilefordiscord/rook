@@ -12,6 +12,7 @@ mod images;
 mod input;
 mod layouts;
 mod scrolling;
+mod text;
 mod world;
 
 fn set(dom: &mut Dom, id: InstanceId, name: &str, value: Value) {

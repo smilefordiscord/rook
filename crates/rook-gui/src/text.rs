@@ -59,6 +59,20 @@ pub(crate) enum Carets {
     Placeholder,
 }
 
+/// Text `TextService:GetTextBoundsAsync` measures: a GetTextBoundsParams'
+/// properties (creator-docs GetTextBoundsParams).
+#[derive(Debug, Clone, PartialEq)]
+pub struct TextQuery {
+    pub text: String,
+    pub font: Font,
+    /// The line height in pixels, as `TextSize`.
+    pub size: f32,
+    /// Where lines wrap, in pixels; `None` lays the text out on the lines
+    /// its newlines make.
+    pub width: Option<f32>,
+    pub rich: bool,
+}
+
 pub(crate) fn is_text(dom: &Dom, id: InstanceId) -> bool {
     matches!(dom.class_name(id), "TextLabel" | "TextButton" | "TextBox")
 }

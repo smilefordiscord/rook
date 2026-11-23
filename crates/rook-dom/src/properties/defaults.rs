@@ -72,7 +72,7 @@ fn convert_default(db: &Database, class: ClassId, property: PropertyId) -> Optio
 }
 
 /// What a property reads when nothing gives it a default: false, 0, empty,
-/// or the enum's first item. `cargo xtask studio-defaults` keeps only the
+/// the enum's first item, or Source Sans Pro. `cargo xtask studio-defaults` keeps only the
 /// Studio values that differ from it.
 pub fn zero_value(db: &Database, ty: PropertyType) -> Option<Value> {
     use rbx_types::VariantType as T;
@@ -97,6 +97,9 @@ pub fn zero_value(db: &Database, ty: PropertyType) -> Option<Value> {
             T::Ref => Value::Ref(None),
             T::BrickColor => Value::BrickColor(rbx_types::BrickColor::from_number(194)?),
             T::NumberRange => Value::NumberRange(rbx_types::NumberRange::new(0.0, 0.0)),
+            // Inference: Source Sans, regular and upright, as `Enum.Font`'s
+            // default; the sweep doesn't read Fonts yet.
+            T::Font => Value::Font(rbx_types::Font::default()),
             _ => return None,
         },
     })

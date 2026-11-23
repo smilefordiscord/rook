@@ -154,6 +154,31 @@ a 1-pixel black outline; a Hint's has none. They overlap by when they
 were made, the newest on top, and every ScreenGui draws over them, the
 top bar's buttons and a ScreenGui at DisplayOrder -1000 alike.
 
+## Measuring text
+
+TextService measures text as a TextLabel lays it out, its `TextBounds`
+for the same text, font and size (Inference: creator-docs give only the
+members' signatures).
+
+- **`GetTextSize(text, size, font, frameSize)`** takes an `Enum.Font` and
+  wraps at the frame's width. It answers at once, in whatever fonts have
+  loaded.
+- **`GetTextBoundsAsync(params)`** takes a GetTextBoundsParams: `Text` in
+  `Font` (a `FontFace`) at `Size` pixels, wrapped at `Width`, read as rich
+  text when `RichText` is on (creator-docs TextService,
+  GetTextBoundsParams). It yields (creator-docs) and returns once the
+  fonts its text needs have loaded, which may be at once; a font that
+  fails to load measures in Source Sans, as text objects draw it. The
+  params are read when it's called.
+- A new GetTextBoundsParams is named `Instance` with `Size` 20 (measured,
+  [property defaults](../property-defaults.md)); its `Font` reads Source
+  Sans Pro, regular and upright (Inference).
+- Inference, to check in Studio (conformance case `gui/text_bounds`, not
+  yet recorded): a `Width` of 0 or less doesn't wrap; nil, a missing
+  argument and an instance of another class all raise `Argument 1
+  missing or nil`, and a value that isn't an instance `Unable to cast
+  value to Object`; a font that fails to load doesn't raise.
+
 ## Not yet
 
 `TextTruncate`, `TextDirection`, `OpenTypeFeatures`, localization, and

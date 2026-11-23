@@ -7,7 +7,8 @@ own short list of corrections (`DEFAULTS` in
 `crates/rook-dom/src/properties/defaults.rs`), the class default from the
 reflection database, the value measured in Studio
 (`crates/rook-dom/src/properties/studio_defaults.rs`), and the zero value
-of the property's type (false, 0, empty, the enum's first item).
+of the property's type (false, 0, empty, the enum's first item, Source
+Sans Pro regular and upright for a Font).
 
 ## Why the database leaves some out
 
@@ -62,7 +63,8 @@ Edit and the client differ in `StarterGui.ProcessUserInput` (true in
 Edit, false on the client; the client's false is the zero value, so the
 table has no entry for it) and `TestService.Enabled` (false in Edit, true
 on the client). `BubbleChatMessageProperties.FontFace` and
-`GetTextBoundsParams.Font` are skipped: the sweep doesn't store Fonts yet.
+`GetTextBoundsParams.Font` are skipped: the sweep doesn't store Fonts yet,
+so they read the zero value (Inference).
 
 The database is wrong, not silent, about `SoundService.RespectFilteringEnabled`
 (it says false; creator-docs and Studio 0.742 say true), so that one stays

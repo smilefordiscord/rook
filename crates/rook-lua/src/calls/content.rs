@@ -1,5 +1,5 @@
-//! What scripts wait on from outside: ContentProvider requests, assets, and
-//! web requests.
+//! What scripts wait on from outside: ContentProvider requests, assets,
+//! fonts, and web requests.
 
 use crate::{AssetModel, Runtime, WebAnswer, WebRequest};
 
@@ -41,6 +41,20 @@ impl Runtime {
     pub fn deliver_asset(&self, request: u64, model: AssetModel) {
         self.guarded(|| {
             crate::api::methods::content::assets::deliver(&self.lua, request, model);
+            crate::runtime::threads::drain_deferred(&self.lua);
+        });
+    }
+
+    /// Deliver a font file the GUI asked for (`rook_gui::Gui::take_font_requests`;
+    /// `None`: it can't be had): text waiting for it lays out again, and
+    /// `GetTextBoundsAsync` calls waiting for it return.
+    pub fn deliver_font(&self, url: &str, bytes: Option<std::sync::Arc<[u8]>>) {
+        self.world_mut().gui.font_arrived(url, bytes);
+        if self.world().text_bounds_waiting.is_empty() {
+            return;
+        }
+        self.guarded(|| {
+            crate::api::methods::gui::text::deliver(&self.lua);
             crate::runtime::threads::drain_deferred(&self.lua);
         });
     }

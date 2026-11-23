@@ -28,6 +28,7 @@ pub use images::GuiImage;
 pub use input::hits::WorldHit;
 pub use input::scrolling::BarDrag;
 pub use layout::GUI_INSET;
+pub use text::TextQuery;
 
 use changes::Watch;
 use layout::{Layout, Turning};
@@ -242,6 +243,19 @@ impl Gui {
     ) -> Vec2 {
         let source = text::Source::plain(text, font, size);
         text::lay_out(&mut self.fonts, &source, frame, Some(Some(frame.x))).bounds
+    }
+
+    /// How big `query`'s text is: `TextService:GetTextBoundsAsync`
+    /// (creator-docs), measured as a TextLabel would lay it out. `None`
+    /// while a font it needs is on its way ([`Gui::take_font_requests`]):
+    /// ask again once one arrives.
+    pub fn text_bounds(&mut self, query: &TextQuery) -> Option<Vec2> {
+        let mut source = text::Source::plain(&query.text, query.font.clone(), query.size);
+        source.rich = query.rich;
+        let area = Vec2::new(query.width.unwrap_or(f32::MAX), f32::MAX);
+        self.fonts.take_waited();
+        let block = text::lay_out(&mut self.fonts, &source, area, Some(query.width));
+        (!self.fonts.take_waited()).then_some(block.bounds)
     }
 
     /// Fonts by asset id (`rbxassetid://...`) text is waiting for, each
