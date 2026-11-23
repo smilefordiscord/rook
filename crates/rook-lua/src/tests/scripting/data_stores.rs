@@ -2,6 +2,23 @@
 
 use crate::tests::*;
 
+/// [`expect`] with the Unix clock starting `before` seconds before a UTC
+/// hour begins, as versions are made once per hour.
+fn expect_before_hour(before: f64, source: &str, frames: u32, lines: &[&str]) {
+    // 2026-01-01T00:00:00Z.
+    const HOUR_START: f64 = 1_767_225_600.0;
+    let rt = Runtime::new(Dom::new(), Clock::Fixed { step: 1.0 / 60.0 }).unwrap();
+    rt.world_mut().scheduler.set_epoch(HOUR_START - before);
+    rt.run_source("Workspace.Script", source, None).unwrap();
+    assert_eq!(
+        finish(&rt, frames),
+        lines,
+        "
+source:
+{source}"
+    );
+}
+
 #[test]
 fn reads_return_the_value_and_its_key_info() {
     expect(
@@ -77,8 +94,37 @@ fn update_async_passes_key_info_and_replaces_ids_and_metadata() {
 }
 
 #[test]
+fn writes_keep_one_version_an_hour() {
+    expect_before_hour(
+        2.5,
+        r#"
+        local dss = game:GetService("DataStoreService")
+        dss:SetRateLimitForRequestType(Enum.DataStoreRequestType.StandardList, 10000, 0)
+        local ds = dss:GetDataStore("Stats")
+        local function count()
+            return #ds:ListVersionsAsync("k"):GetCurrentPage()
+        end
+        local first = ds:SetAsync("k", 1)
+        task.wait(1)
+        local second = ds:SetAsync("k", 2)
+        print(count(), ds:GetVersionAsync("k", first))
+        print(ds:GetVersionAsync("k", second), second ~= first)
+        task.wait(2)
+        local third = ds:SetAsync("k", 3)
+        task.wait(0.5)
+        ds:SetAsync("k", 4)
+        print(count(), (ds:GetVersionAsync("k", second)), (ds:GetVersionAsync("k", third)))
+        "#,
+        270,
+        &["1 nil nil", "2 true", "2 2 nil"],
+    );
+}
+
+#[test]
 fn removing_leaves_a_deleted_version() {
-    expect(
+    // "one" is the last write of an hour, "two" the first of the next.
+    expect_before_hour(
+        0.5,
         r#"
         local dss = game:GetService("DataStoreService")
         -- More listing than a server's 5 a minute.

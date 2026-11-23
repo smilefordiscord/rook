@@ -8,7 +8,7 @@ use mlua::{Lua, Table};
 use rook_dom::InstanceId;
 use rook_types::Value;
 
-use super::RawMethod;
+use super::{RawMethod, clock};
 use crate::api::instance::push_instance;
 use crate::data_stores::{Item, Listing, PageState, StoreError};
 use crate::runtime::ctx::args::Args;
@@ -32,7 +32,7 @@ pub(super) fn page_size(a: &Args, i: usize, default: usize) -> ApiResult<usize> 
 pub(super) fn open(lua: &Lua, class: &str, mut listing: Listing) -> ApiResult<Outcome> {
     let id: ApiResult<InstanceId> = with_world(lua, |w| {
         let id = w.dom.create_by_name(class)?;
-        let page = listing.next_page(&w.data_stores);
+        let page = listing.next_page(&w.data_stores, clock(w).1);
         show(w, id, &listing, page.finished)?;
         (w.data_stores.objects.pages).insert(id, PageState { listing, page });
         Ok(id)
@@ -74,7 +74,7 @@ pub(super) fn advance(lua: &Lua, this: InstanceId, _: &Args) -> ApiResult<Outcom
             w.data_stores.objects.pages.insert(this, state);
             return Err(StoreError::NoMorePages.into());
         }
-        state.page = state.listing.next_page(&w.data_stores);
+        state.page = state.listing.next_page(&w.data_stores, clock(w).1);
         let shown = show(w, this, &state.listing, state.page.finished);
         w.data_stores.objects.pages.insert(this, state);
         shown

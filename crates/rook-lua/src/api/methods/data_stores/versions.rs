@@ -41,7 +41,8 @@ pub(super) fn get_version(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Ou
     let (name, _, full) = standard_key(lua, this, a)?;
     let version = a.string(1)?;
     let hit = with_world(lua, |w| {
-        (w.data_stores.standard.get(&name)).and_then(|s| s.version(&full, &version))
+        let now = clock(w).1;
+        (w.data_stores.standard.get(&name)).and_then(|s| s.version(&full, &version, now))
     });
     found(lua, hit)
 }
@@ -62,7 +63,8 @@ pub(super) fn get_version_at_time(lua: &Lua, this: InstanceId, a: &Args) -> ApiR
     let (name, _, full) = standard_key(lua, this, a)?;
     let time = timestamp(lua, a)?;
     let hit = with_world(lua, |w| {
-        (w.data_stores.standard.get(&name)).and_then(|s| s.version_at(&full, time))
+        let now = clock(w).1;
+        (w.data_stores.standard.get(&name)).and_then(|s| s.version_at(&full, time, now))
     });
     found(lua, hit)
 }
@@ -73,7 +75,11 @@ pub(super) fn remove_version(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult
     let (name, _, full) = standard_key(lua, this, a)?;
     let version = a.string(1)?;
     with_world(lua, |w| {
-        w.data_stores.standard.get_mut(&name).purge(&full, &version);
+        let now = clock(w).1;
+        w.data_stores
+            .standard
+            .get_mut(&name)
+            .purge(&full, &version, now);
     });
     Outcome::ret(lua, ())
 }

@@ -62,8 +62,9 @@ DataStore").
 
 ## Key info and versions
 
-Each write to a standard key appends a version, and each key keeps all of
-its versions. Ordered stores have no versions, metadata or user IDs: their
+A standard key's first write in each UTC hour makes a version, and later
+writes in that hour overwrite it for good. A version expires 30 days after
+a newer one replaces it; the latest never expires. Ordered stores have no versions, metadata or user IDs: their
 reads return only the value, and `RemoveAsync` deletes the key for good.
 
 - `GetAsync` returns the latest value and a `DataStoreKeyInfo`, or nil and
@@ -79,9 +80,16 @@ reads return only the value, and `RemoveAsync` deletes the key for good.
   IDs (an array of whole numbers, at most 4: Inference from older docs) and the
   metadata of a `DataStoreSetOptions` or `DataStoreIncrementOptions`
   (`SetMetadata`); a write without them leaves the new version with none.
+- An overwritten hour's version takes a new version string with the same
+  number in the key, so the string the earlier write returned finds
+  nothing (Inference). Hours follow the game's Unix clock.
+- Expired versions are gone from reads and listings; `CreatedTime` still
+  gives the key's first write (Inference).
 - `RemoveAsync` returns the latest value and its key info and appends a
-  deleted version (a tombstone). A key already deleted returns nil and nil
-  and gets no new version (Inference).
+  deleted version (a tombstone), keeping the version before it, in the
+  same hour too. A key already deleted returns nil and nil and gets no new
+  version (Inference). A write after a tombstone makes a version of its
+  own (Inference).
 - `GetVersionAsync(key, version)` reads a version by its string, and
   `GetVersionAtTimeAsync(key, time)` the version current at a Unix time in
   milliseconds; both give nil for a deleted version. The time must be
@@ -225,8 +233,6 @@ and the prefix is Inference. Beyond those above:
 - Per-key throughput (25 MB read and 4 MB written per key a minute) and
   the experience-wide limits, which take many servers to reach.
 - `GlobalDataStore:OnUpdate` (deprecated) is not implemented.
-- Versions are kept for the run; Roblox deletes deleted versions after 30
-  days.
 
 ## What needs a Studio check
 
@@ -244,6 +250,9 @@ in a place made for it:
 - `UpdateAsync`'s results when its transform returns nil; `RemoveAsync`
   on a deleted key; `RemoveVersionAsync` with an unknown version.
 - Key info times after a key is removed and written again.
+- Whether a write overwriting its hour's version returns a new version
+  string, and whether a write after a tombstone in the same hour
+  overwrites it.
 - The budgets a fresh server reports, how far they build up, the startup
   burst, how fast they refill, and the legacy request types' answers.
 - Whether a cached read spends budget.

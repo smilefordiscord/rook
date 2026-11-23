@@ -125,6 +125,13 @@ impl<T> Scheduler<T> {
         self.epoch + self.now
     }
 
+    /// Start the Unix clock at `unix` seconds, for tests that need to know
+    /// where it falls (an hour's start).
+    #[cfg(test)]
+    pub(crate) fn set_epoch(&mut self, unix: f64) {
+        self.epoch = unix;
+    }
+
     pub fn delta(&self) -> f64 {
         self.delta
     }

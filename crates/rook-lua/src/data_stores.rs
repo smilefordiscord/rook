@@ -3,9 +3,10 @@
 //! objects scripts hold stand for. Methods are in `api::methods::data_stores`;
 //! findings are in docs/behavior/scripting/data-stores.md.
 //!
-//! Each standard key is an append-only log of versions: a write appends, a
-//! remove appends a tombstone, and an old version is found by number or by
-//! time without a scan. Ordered stores keep a value index beside their keys,
+//! Each standard key is a log of versions, one per UTC hour it was written
+//! in, kept for 30 days once replaced: a write appends or overwrites its
+//! hour's version, a remove appends a tombstone, and an old version is
+//! found by number or by time without a scan. Ordered stores keep a value index beside their keys,
 //! and every listing is a cursor (an exclusive start) read again from the
 //! live data, so a request costs what it touches. Values are kept as the
 //! JSON they serialize to, as Roblox stores and measures them, in plain Rust

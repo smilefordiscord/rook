@@ -37,7 +37,7 @@ pub(crate) enum Listing {
         after: Option<String>,
     },
     /// `DataStore:ListVersionsAsync`; `after` is a version's place in its
-    /// key's log, which only grows.
+    /// key's log (`Key::places`).
     Versions {
         store: StoreName,
         key: String,
@@ -92,8 +92,8 @@ impl Listing {
         }
     }
 
-    /// Read the next page and move the cursor past it.
-    pub(crate) fn next_page(&mut self, stores: &DataStores) -> Page {
+    /// Read the next page at `now` and move the cursor past it.
+    pub(crate) fn next_page(&mut self, stores: &DataStores, now: Millis) -> Page {
         match self {
             Self::Sorted {
                 name,
@@ -137,17 +137,14 @@ impl Listing {
                 size,
                 after,
             } => {
-                let versions = stores
-                    .standard
-                    .get(store)
-                    .and_then(|s| s.keys.get(key.as_str()))
-                    .map_or(&[][..], |k| &k.versions[..]);
-                // Times never decrease along the log, so the dates bound a
-                // range found by halving.
-                let low = min.map_or(0, |m| versions.partition_point(|v| v.created < m));
-                let high = max.map_or(versions.len(), |m| {
-                    versions.partition_point(|v| v.created <= m)
-                });
+                let Some(k) = (stores.standard.get(store)).and_then(|s| s.keys.get(key.as_str()))
+                else {
+                    return Page::last(Vec::new());
+                };
+                let std::ops::Range {
+                    start: low,
+                    end: high,
+                } = k.places(*min, *max, now);
                 let (low, high) = match (*after, *descending) {
                     (Some(a), false) => (low.max(a + 1), high),
                     (Some(a), true) => (low, high.min(a)),
@@ -160,7 +157,7 @@ impl Listing {
                 };
                 let mut items = Vec::new();
                 for i in places.by_ref() {
-                    let v = &versions[i];
+                    let v = k.at(i);
                     if matches!(v.content, super::standard::Content::Purged) {
                         continue;
                     }
@@ -174,8 +171,8 @@ impl Listing {
                         break;
                     }
                 }
-                let more = places
-                    .any(|i| !matches!(versions[i].content, super::standard::Content::Purged));
+                let more =
+                    places.any(|i| !matches!(k.at(i).content, super::standard::Content::Purged));
                 Page {
                     items,
                     finished: !more,
@@ -323,7 +320,7 @@ mod tests {
         };
         let mut pages = Vec::new();
         loop {
-            let page = listing.next_page(store);
+            let page = listing.next_page(store, 0);
             pages.push(page.items);
             if page.finished {
                 return pages;
