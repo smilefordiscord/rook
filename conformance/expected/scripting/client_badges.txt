@@ -1,0 +1,4 @@
+-- studio 0.748.0.7481526
+-- signals: deferred
+AwardBadgeAsync ok false
+AwardBadgeAsync word badge error Unable to cast string to int64

@@ -1,0 +1,78 @@
+-- studio 0.748.0.7481526
+-- signals: deferred
+AwardBadgeAsync no args error Argument 2 missing or nil
+AwardBadgeAsync nil user error Argument 1 missing or nil
+AwardBadgeAsync word user error Unable to cast string to User
+AwardBadgeAsync table user error Unable to cast Array to User
+AwardBadgeAsync Workspace user error Unable to cast Instance to User
+AwardBadgeAsync nil badge error Argument 2 missing or nil
+AwardBadgeAsync word badge error Unable to cast string to int64
+AwardBadgeAsync table badge error Unable to cast Array to int64
+AwardBadge no args error Argument 2 missing or nil
+AwardBadge nil user error Argument 1 missing or nil
+AwardBadge word user error Unable to cast string to User
+AwardBadge table user error Unable to cast Array to User
+AwardBadge Workspace user error Unable to cast Instance to User
+AwardBadge nil badge error Argument 2 missing or nil
+AwardBadge word badge error Unable to cast string to int64
+AwardBadge table badge error Unable to cast Array to int64
+UserHasBadgeAsync no args error Argument 2 missing or nil
+UserHasBadgeAsync nil user error Argument 1 missing or nil
+UserHasBadgeAsync word user error Unable to cast string to User
+UserHasBadgeAsync table user error Unable to cast Array to User
+UserHasBadgeAsync Workspace user error Unable to cast Instance to User
+UserHasBadgeAsync nil badge error Argument 2 missing or nil
+UserHasBadgeAsync word badge error Unable to cast string to int64
+UserHasBadgeAsync table badge error Unable to cast Array to int64
+UserHasBadge no args error Argument 2 missing or nil
+UserHasBadge nil user error Argument 1 missing or nil
+UserHasBadge word user error Unable to cast string to User
+UserHasBadge table user error Unable to cast Array to User
+UserHasBadge Workspace user error Unable to cast Instance to User
+UserHasBadge nil badge error Argument 2 missing or nil
+UserHasBadge word badge error Unable to cast string to int64
+UserHasBadge table badge error Unable to cast Array to int64
+AwardBadgeAsync Player as user, word badge error Unable to cast string to int64
+CheckUserBadgesAsync no list error Argument 2 missing or nil
+CheckUserBadgesAsync string list error Unable to cast string to Array
+CheckUserBadgesAsync number list error Unable to cast double to Array
+CheckUserBadgesAsync word in list error CheckUserBadgesAsync: badgeIds must be numeric.
+CheckUserBadgesAsync table in list error CheckUserBadgesAsync: badgeIds must be numeric.
+CheckUserBadgesAsync dictionary error Unable to cast Dictionary to Array
+CheckUserBadgesAsync nil user error Argument 1 missing or nil
+CheckUserBadgesAsync word user error Unable to cast string to User
+CheckUserBadgesAsync empty ok table #0
+CheckUserBadgesAsync 11 error CheckUserBadgesAsync: Cannot query more than 10 badges.
+GetBadgeInfoAsync word error Unable to cast string to int64
+GetBadgeInfoAsync nil error Argument 1 missing or nil
+GetGroupInfoAsync no args error Argument 1 missing or nil
+GetGroupInfoAsync word error Unable to cast string to int64
+GetGroupInfoAsync table error Unable to cast Array to int64
+GetGroupsAsync no args error Argument 1 missing or nil
+GetGroupsAsync word error Unable to cast string to User
+GetGroupsAsync Workspace error Unable to cast Instance to User
+GetRolesInGroupAsync nil user error Argument 1 missing or nil
+GetRolesInGroupAsync word group error Unable to cast string to int64
+GetAlliesAsync word error Unable to cast string to int64
+GetEnemiesAsync word error Unable to cast string to int64
+PromptJoinAsync word error Unable to cast string to int64
+PromptJoinAsync nil error Argument 1 missing or nil
+GetRankInGroup no args error Argument 1 missing or nil
+GetRankInGroup word error Unable to cast string to int64
+GetRankInGroup table error Unable to cast Array to int64
+GetRankInGroupAsync no args error Argument 1 missing or nil
+GetRankInGroupAsync word error Unable to cast string to int64
+GetRankInGroupAsync table error Unable to cast Array to int64
+GetRoleInGroup no args error Argument 1 missing or nil
+GetRoleInGroup word error Unable to cast string to int64
+GetRoleInGroup table error Unable to cast Array to int64
+GetRoleInGroupAsync no args error Argument 1 missing or nil
+GetRoleInGroupAsync word error Unable to cast string to int64
+GetRoleInGroupAsync table error Unable to cast Array to int64
+IsInGroup no args error Argument 1 missing or nil
+IsInGroup word error Unable to cast string to int64
+IsInGroup table error Unable to cast Array to int64
+IsInGroupAsync no args error Argument 1 missing or nil
+IsInGroupAsync word error Unable to cast string to int64
+IsInGroupAsync table error Unable to cast Array to int64
+GetRankInGroup on Workspace error Expected ':' not '.' calling member function GetRankInGroup

@@ -4,9 +4,16 @@
 //! (`Argument 1 missing or nil`, `invalid argument #1 to 'new' (number
 //! expected, got string)`). They are Inference until the conformance suite
 //! pins them.
+//!
+//! A reflected method casts its arguments from the last to the first, so
+//! its native casts them in that order. Measured on MarketplaceService:
+//! `PromptPurchase()` is `Argument 2 missing or nil`, and
+//! `PromptPurchase(player, "abc", true, "Nope")` is `Unable to cast string
+//! to CurrencyType`.
 
 use mlua::{AnyUserData, Function, Lua, MultiValue, UserData, Value as LuaValue};
 use rook_dom::InstanceId;
+use rook_reflection::members::{Param, TypeKind};
 
 use crate::api::instance::LuaInstance;
 use crate::runtime::ctx::{ApiResult, ScriptError};
@@ -216,6 +223,40 @@ impl Args {
             .ok_or_else(|| self.cast_error(i, enum_name))
     }
 
+    /// An `int64` parameter (an asset, badge or group id): a number, or a
+    /// string that reads as one. Measured on MarketplaceService, BadgeService
+    /// and GroupService: `Unable to cast string to int64`, `Unable to cast
+    /// Array to int64`.
+    pub(crate) fn int64(&self, i: usize) -> ApiResult<i64> {
+        self.whole(i, "int64")
+    }
+
+    /// A `User` parameter, a user id, cast as an `int64` is (measured:
+    /// `Unable to cast string to User`, `Unable to cast Instance to User`).
+    pub(crate) fn user(&self, i: usize) -> ApiResult<i64> {
+        self.whole(i, "User")
+    }
+
+    fn whole(&self, i: usize, target: &str) -> ApiResult<i64> {
+        match self.get(i) {
+            LuaValue::Nil => Err(self.missing(i)),
+            v => number_of(v)
+                .map(|n| n as i64)
+                .ok_or_else(|| cast_error(v, target)),
+        }
+    }
+
+    /// An optional `bool` parameter: nil is its default; anything but a
+    /// boolean doesn't cast (measured: a table is `Unable to cast Array to
+    /// bool`; Inference for numbers and strings).
+    pub(crate) fn opt_bool(&self, i: usize) -> ApiResult<Option<bool>> {
+        match self.get(i) {
+            LuaValue::Nil => Ok(None),
+            LuaValue::Boolean(b) => Ok(Some(*b)),
+            v => Err(cast_error(v, "bool")),
+        }
+    }
+
     pub(crate) fn string(&self, i: usize) -> ApiResult<String> {
         self.opt_string(i)?.ok_or_else(|| self.missing(i))
     }
@@ -278,6 +319,61 @@ impl Args {
             },
             _ => Err(cast_to_object()),
         }
+    }
+
+    /// An `Array` parameter. Measured on `CheckUserBadgesAsync`: `Unable to
+    /// cast string to Array`, `Unable to cast Dictionary to Array` for a
+    /// table with keys but no first item; an empty table is an Array.
+    pub(crate) fn array(&self, i: usize) -> ApiResult<mlua::Table> {
+        match self.get(i) {
+            LuaValue::Nil => Err(self.missing(i)),
+            v @ LuaValue::Table(t) => match cast_name(v).as_str() {
+                "Array" => Ok(t.clone()),
+                _ => Err(cast_error(v, "Array")),
+            },
+            v => Err(cast_error(v, "Array")),
+        }
+    }
+
+    /// Cast the arguments as the API dump's `params` take them, the last
+    /// first, raising Roblox's error for one that's missing or doesn't
+    /// cast: for a member Rook has no native for, these come before
+    /// anything the member does. Only the casts measured are checked
+    /// (`int64`, `User`, `bool`, `Array`, enums, instances, and a missing
+    /// `string`); other types are taken as they come.
+    pub(crate) fn cast(&self, lua: &Lua, params: &[Param]) -> ApiResult<()> {
+        for (i, p) in params.iter().enumerate().rev() {
+            let optional = p.ty.nullable || p.default.is_some();
+            match (p.ty.kind, p.ty.name.as_str()) {
+                (TypeKind::Class, _) if optional => {
+                    self.opt_instance(i)?;
+                }
+                (TypeKind::Class, _) => {
+                    self.object(i)?;
+                }
+                _ if optional && self.get(i).is_nil() => {}
+                (TypeKind::Primitive, "int64") => {
+                    self.int64(i)?;
+                }
+                (TypeKind::DataType, "User") => {
+                    self.user(i)?;
+                }
+                (TypeKind::Primitive, "bool") => {
+                    self.opt_bool(i)?;
+                }
+                (TypeKind::Group, "Array") => {
+                    self.array(i)?;
+                }
+                (TypeKind::Enum, name) => {
+                    self.enum_value(lua, i, name)?;
+                }
+                (TypeKind::Primitive, "string") if self.get(i).is_nil() => {
+                    return Err(self.missing(i));
+                }
+                _ => {}
+            }
+        }
+        Ok(())
     }
 
     /// An array of instances (`Instances` in the API dump).

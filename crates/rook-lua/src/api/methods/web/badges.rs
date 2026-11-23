@@ -8,11 +8,13 @@ use rook_dom::InstanceId;
 
 use super::RawMethod;
 use super::requests::{self as web, WebRequest};
-use super::users::{data, id, session_users, values};
+use super::users::{data, session_users, values};
 use crate::runtime::ctx::args::Args;
 use crate::runtime::ctx::{ApiResult, Outcome, ScriptError, with_world};
 
-/// The most badges one `CheckUserBadgesAsync` checks (creator-docs).
+/// The most badges one `CheckUserBadgesAsync` checks (creator-docs;
+/// measured: more raise `CheckUserBadgesAsync: Cannot query more than 10
+/// badges.`).
 const MAX_CHECKED: usize = 10;
 
 pub(super) fn native(owner: &str, name: &str) -> Option<RawMethod> {
@@ -59,24 +61,38 @@ fn owned(
     )
 }
 
+/// The user and badge of the members that take `(user, badge)`, cast
+/// last to first (measured: `Unable to cast string to User`, `Unable to
+/// cast string to int64`).
+fn user_and_badge(a: &Args) -> ApiResult<(i64, i64)> {
+    let badge = a.int64(1)?;
+    Ok((a.user(0)?, badge))
+}
+
 fn user_has_badge(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
-    let (user, badge) = (id(a, 0)?, id(a, 1)?);
+    let (user, badge) = user_and_badge(a)?;
     owned(lua, user, &[badge], |lua, had| values(lua, !had.is_empty()))
 }
 
 /// `CheckUserBadgesAsync(user, badgeIds)`: the ones the user has, up to
-/// ten asked (creator-docs; the error past ten is worded by Rook).
+/// ten asked (creator-docs). Measured: an id in the list that isn't a
+/// number raises `CheckUserBadgesAsync: badgeIds must be numeric.`
+/// (Inference: a string that reads as one is refused too).
 fn check_user_badges(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
-    let user = id(a, 0)?;
-    let mlua::Value::Table(ids) = a.get(1) else {
-        return Err(a.wrong(1, "Array"));
-    };
-    let badges: Vec<i64> = (ids.clone().sequence_values::<f64>())
-        .map(|n| n.map(|n| n as i64))
-        .collect::<mlua::Result<_>>()?;
+    let ids = a.array(1)?;
+    let user = a.user(0)?;
+    let badges: Vec<i64> = (ids.sequence_values::<mlua::Value>())
+        .map(|v| match v? {
+            mlua::Value::Integer(n) => Ok(n),
+            mlua::Value::Number(n) => Ok(n as i64),
+            _ => Err(ScriptError(
+                "CheckUserBadgesAsync: badgeIds must be numeric.".into(),
+            )),
+        })
+        .collect::<ApiResult<_>>()?;
     if badges.len() > MAX_CHECKED {
         return Err(ScriptError(
-            "BadgeService:CheckUserBadgesAsync() checks at most 10 badges".into(),
+            "CheckUserBadgesAsync: Cannot query more than 10 badges.".into(),
         ));
     }
     owned(lua, user, &badges, |lua, had| {
@@ -87,17 +103,16 @@ fn check_user_badges(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
 
 /// `AwardBadgeAsync(user, badge)`: whether the badge was awarded. Only a
 /// server awards, only to a player in it, and not a badge they have
-/// (creator-docs). Offline every badge exists and is enabled
+/// (creator-docs); a client's call returns false once its arguments
+/// cast (measured). Offline every badge exists and is enabled
 /// (Inference); with an endpoint the request is
 /// `POST badges/v1/users/{user}/badges/{badge}/award`, answering
 /// `{"awarded": true}`, Rook's own: Roblox awards from its game servers
 /// with no public API.
 fn award_badge(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
-    let (user, badge) = (id(a, 0)?, id(a, 1)?);
+    let (user, badge) = user_and_badge(a)?;
     if with_world(lua, |w| w.is_client) {
-        return Err(ScriptError(
-            "BadgeService:AwardBadgeAsync() can only be called from the server".into(),
-        ));
+        return Outcome::ret(lua, false);
     }
     if !session_users(lua).iter().any(|(id, ..)| *id == user) {
         return Outcome::ret(lua, false);

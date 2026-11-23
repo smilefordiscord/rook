@@ -106,3 +106,30 @@ fn badges_and_groups_ask_the_configured_host() {
         ]
     );
 }
+
+/// Measured: a client's `AwardBadgeAsync` returns false rather than
+/// raising, once its arguments cast; `CheckUserBadgesAsync` refuses ids
+/// that aren't numbers and more than 10.
+#[test]
+fn awarding_on_a_client_and_checking_bad_lists() {
+    let rt = Runtime::new(Dom::new(), Clock::Fixed { step: 1.0 / 60.0 }).unwrap();
+    rt.world_mut().is_client = true;
+    let source = r#"
+        local Badges = game:GetService("BadgeService")
+        print(Badges:AwardBadgeAsync(5, 100))
+        print(pcall(Badges.AwardBadgeAsync, Badges, 5, "abc"))
+        print(pcall(Badges.CheckUserBadgesAsync, Badges, 5, { "abc" }))
+        print(pcall(Badges.CheckUserBadgesAsync, Badges, 5, { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11 }))
+    "#;
+    rt.run_source("Workspace.Script", source, None).unwrap();
+    let out = finish(&rt, 0);
+    assert_eq!(
+        out,
+        [
+            "false",
+            "false Unable to cast string to int64",
+            "false CheckUserBadgesAsync: badgeIds must be numeric.",
+            "false CheckUserBadgesAsync: Cannot query more than 10 badges.",
+        ]
+    );
+}

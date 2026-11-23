@@ -9,7 +9,7 @@ use serde_json::Value as Json;
 
 use super::RawMethod;
 use super::requests::{self as web, WebRequest};
-use super::users::{ask, data, id, player_id, values};
+use super::users::{ask, data, player_id, values};
 use crate::runtime::ctx::args::Args;
 use crate::runtime::ctx::{ApiResult, Outcome, ScriptError};
 
@@ -48,7 +48,7 @@ fn in_group<T: mlua::IntoLuaMulti + 'static>(
 
 /// The rank, 0 outside the group (creator-docs Player:GetRankInGroup).
 fn rank_in_group(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> {
-    in_group(lua, player_id(lua, this), id(a, 0)?, 0, |r| {
+    in_group(lua, player_id(lua, this), a.int64(0)?, 0, |r| {
         r.and_then(|r| r["rank"].as_i64()).unwrap_or(0)
     })
 }
@@ -59,7 +59,7 @@ fn role_in_group(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> {
     in_group(
         lua,
         player_id(lua, this),
-        id(a, 0)?,
+        a.int64(0)?,
         "Guest".to_owned(),
         |r| {
             r.and_then(|r| r["name"].as_str())
@@ -70,14 +70,17 @@ fn role_in_group(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> {
 }
 
 fn is_in_group(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> {
-    in_group(lua, player_id(lua, this), id(a, 0)?, false, |r| r.is_some())
+    in_group(lua, player_id(lua, this), a.int64(0)?, false, |r| {
+        r.is_some()
+    })
 }
 
 /// `GetRolesInGroupAsync(user, group)`: `{IsMember, Roles}`, each role
 /// `{Id, Name, Rank}` (creator-docs GroupService). Roblox's web API gives
 /// a member's one role.
 fn roles_in_group(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
-    let (user, group) = (id(a, 0)?, id(a, 1)?);
+    let group = a.int64(1)?;
+    let user = a.user(0)?;
     let make = |lua: &Lua, role: Option<&Json>| -> mlua::Result<Table> {
         let t = lua.create_table()?;
         t.set("IsMember", role.is_some())?;
@@ -113,7 +116,7 @@ fn roles_in_group(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
 /// emblem needs the thumbnails service, so `EmblemUrl` is empty and
 /// `EmblemId` 0 (Approximation).
 fn groups(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
-    let user = id(a, 0)?;
+    let user = a.user(0)?;
     let Some(url) = web::url(lua, "groups", &format!("/v1/users/{user}/groups/roles")) else {
         return Outcome::ret(lua, lua.create_table()?);
     };
@@ -155,7 +158,7 @@ fn group_list(lua: &Lua, entries: &[Json]) -> mlua::Result<Table> {
 /// (Approximation, as in `GetGroupsAsync`). With no endpoint no group
 /// exists, and asking raises (Inference: the wording is Rook's).
 fn group_info(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
-    let group = id(a, 0)?;
+    let group = a.int64(0)?;
     let failed = move || format!("GroupService:GetGroupInfoAsync() failed: Unknown group {group}");
     let (Some(info_url), Some(roles_url)) = (
         web::url(lua, "groups", &format!("/v1/groups/{group}")),
