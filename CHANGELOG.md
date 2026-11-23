@@ -5,6 +5,7 @@ Every release, newest first. How versions are numbered is in
 
 ## [Unreleased]
 
+- A BloomEffect under Lighting or the current Camera makes bright light glow into what's around it, as in Roblox, several adding together. Rook drew no glow. See [post-processing](docs/behavior/lighting/post-processing.md#bloomeffect).
 - A BlurEffect under Lighting or the current Camera blurs the 3D view, as in Roblox, the largest one winning when there are several. Rook drew the view sharp. See [post-processing](docs/behavior/lighting/post-processing.md#blureffect).
 - ColorCorrectionEffects under Lighting or the current Camera change the picture as in Roblox, several at once applying in turn, and a ColorGradingEffect under the Camera picks the tone curve too. Rook ignored every ColorCorrectionEffect, and read ColorGradingEffects only under Lighting. See [post-processing](docs/behavior/lighting/post-processing.md).
 - Light, shadows and the sky's light follow the camera to where it moves on a busy or slow machine. Rook could keep lighting only where the camera had been, for as long as the machine stayed busy. See [local lights](docs/behavior/lighting/local-lights.md).

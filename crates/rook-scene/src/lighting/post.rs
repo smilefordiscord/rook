@@ -4,7 +4,7 @@
 //! (`RenderChanges::post_effects`), so a read costs those children.
 
 use super::*;
-use rook_render::{ColorCorrection, PostEffects, Tonemapper};
+use rook_render::{Bloom, ColorCorrection, PostEffects, Tonemapper};
 
 /// The enabled PostEffects directly under Lighting, then under the current
 /// Camera, in child order (Confirmed: creator-docs PostEffect, effects
@@ -27,6 +27,13 @@ pub(crate) fn post_effects(dom: &Dom) -> PostEffects {
                 contrast: dom.float_property(id, "Contrast").unwrap_or(0.0),
                 saturation: dom.float_property(id, "Saturation").unwrap_or(0.0),
                 tint: (dom.color3_property(id, "TintColor")).map_or([1.0; 3], Color3::to_array),
+            }),
+            // Each adds its own (Confirmed: creator-docs BloomEffect, they
+            // compose).
+            "BloomEffect" => post.bloom.push(Bloom {
+                intensity: dom.float_property(id, "Intensity").unwrap_or(0.4),
+                size: dom.float_property(id, "Size").unwrap_or(24.0),
+                threshold: dom.float_property(id, "Threshold").unwrap_or(0.95),
             }),
             // The greatest Size wins (Confirmed: creator-docs BlurEffect).
             "BlurEffect" => {
@@ -151,6 +158,28 @@ mod tests {
             "workspace.CurrentCamera.Blur.Enabled = false",
         );
         assert_eq!(post.unwrap().blur, 4.0);
+    }
+
+    /// Every Bloom counts, with its own settings, and the defaults are
+    /// Studio's.
+    #[test]
+    fn every_bloom_adds() {
+        let (mut dm, mut cache) = place();
+        let post = run(
+            &mut dm,
+            &mut cache,
+            "Instance.new('BloomEffect').Parent = game.Lighting
+             local b = Instance.new('BloomEffect')
+             b.Size = 0
+             b.Parent = workspace.CurrentCamera",
+        )
+        .unwrap();
+        let sizes: Vec<f32> = post.bloom.iter().map(|b| b.size).collect();
+        assert_eq!(sizes, [24.0, 0.0]);
+        assert_eq!(
+            (post.bloom[0].intensity, post.bloom[0].threshold),
+            (0.4, 0.95)
+        );
     }
 
     /// A ColorGradingEffect's curve applies from the Camera too, and the

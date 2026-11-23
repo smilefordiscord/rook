@@ -76,6 +76,63 @@ pass reads at most 8 pairs; the tone pass reads the result filtered,
 replacing the frame wholly (the factor is 1 while `Size` is above 0,
 Inference).
 
+## BloomEffect
+
+Bright colors glow: light over `Threshold` (1 only pure white, 0 every
+color) blends additively with itself by `Intensity`, spread `Size`
+pixels, and `Size` 0 keeps the brightening without the bleed. Several
+compose (Confirmed: creator-docs). Studio's defaults: Intensity 0.4, Size
+24, Threshold 0.95 (the reflection database).
+
+Studio's bloom shaders (Inference):
+
+- **The first copy** (`DownSampleGjoelFS`) averages nine filtered taps of
+  the frame, decoded into light units, and keeps the average times
+  max(*m* − *T*, 0) / (*m* + 0.001) × *K*, *m* its brightest channel:
+  light fades in above the threshold rather than switching on, and a
+  spot smaller than the copy's texels averages down before the threshold
+  applies.
+- **Smaller copies** (`DownSampleGjoelMipFS`) are the same nine-tap
+  average, without the threshold.
+- **Back up**, each copy is read through a 3 × 3 tent (weights 1, 2, 1
+  each way, `UpSampleTentFS`) scaled by a factor and added to the next
+  larger.
+- **The last pass** adds the result to the frame's light before the tone
+  curve (`ImageProcessBloomFS`), so a Bloom brightens before the curve
+  rolls it off.
+
+Rook (`renderer/passes/post/bloom.rs`, `shaders/post/bloom.wgsl`) runs
+that chain from half the frame's size down, the copies' light summed
+from the smallest up, each copy's light weighted 1 / *n* (*n* copies;
+Approximation). What the properties become is Inference:
+
+- *K* is `Intensity`.
+- *T* is the light the frame holds where its encoded value (the light's
+  square root, over the frame's 4 units) equals `Threshold`: 4 ×
+  Threshold² units, so 1 blooms only the brightest the frame holds and 0
+  everything. Studio's in-place glow (`ImageProcessLQNeonBloomFS`)
+  thresholds the encoded value too.
+- *n* is the number of copies whose reach (2 to the power of *n* + 1
+  pixels) first covers `Size`: 4 at the default 24.
+- `Size` 0 adds each pixel's own light over the threshold in the tone
+  pass, with no chain.
+- Each Bloom runs its own chain into one sum the tone pass adds; the
+  first four with `Size` 0 add in place.
+
+## Neon's glow
+
+Neon glows at high quality levels with no BloomEffect anywhere
+([antialiasing](../rendering/antialiasing.md) notes it blurs edges
+there). Studio's shaders put that glow through Bloom's machinery: its
+tone pass has `LQNeon` forms that add a glow from the frame's brightest
+channel over a threshold, and a temporal glow downsample
+(`DownSampleGlowTemporal8x8FS`) thresholds the frame as the bloom chain's
+first copy does (Inference). So it belongs with Bloom, run with the
+engine's own threshold and intensity at the levels that turn it on. Rook
+doesn't draw it: those settings and levels need Studio captures (Neon
+squares on black with no Bloom, at Automatic and Level21), and Rook has
+no quality levels yet (M13 step 4).
+
 ## ColorGradingEffect
 
 Its `TonemapperPreset` picks the tone curve ([tone
@@ -108,4 +165,10 @@ texel when they're off.
   several Sizes), whether it follows the window's size (the same at two
   window sizes), the mix factor at small Sizes, and whether Bloom and
   SunRays show through a Blur.
+- Bloom: what `Threshold` means in light (Neon squares of several
+  grays on black at several Thresholds), how far the glow reaches for a
+  `Size` and how it falls off (one Neon square at several Sizes), how
+  `Intensity` scales it, and whether two Blooms add or one wins.
+- Neon's glow with no Bloom, at Automatic and Level21: whether it shows,
+  its reach and strength.
 - Which of several ColorGradingEffects picks the curve.

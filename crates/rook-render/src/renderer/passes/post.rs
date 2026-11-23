@@ -7,6 +7,7 @@
 //! Textures are made the first frame an effect needs them and again when
 //! the target's size changes.
 
+pub(crate) mod bloom;
 pub(crate) mod blur;
 
 use wesl_core::include_wesl;
@@ -295,7 +296,22 @@ impl Shared {
 pub(crate) struct ToneInputs {
     /// How much of the blurred frame replaces the frame, 0 to 1.
     pub(crate) blur: f32,
+    /// 1 when the bloom texture holds light to add.
+    pub(crate) bloom: f32,
+    /// The Blooms without bleed (`Size` 0), added in place: each one's
+    /// threshold in light units, and its intensity (0 for none).
+    pub(crate) in_place: [[f32; 4]; 2],
 }
+
+/// The textures the tone pass reads, `None` where it reads black.
+#[derive(Debug, Clone, Default, PartialEq)]
+struct ToneReads {
+    blurred: Option<wgpu::TextureView>,
+    bloom: Option<wgpu::TextureView>,
+}
+
+/// How many textures the tone pass's group 1 holds after its sampler.
+const TONE_TEXTURES: u32 = 2;
 
 /// The post effects' pipelines and textures.
 #[derive(Debug)]
@@ -306,46 +322,57 @@ pub(crate) struct Post {
     tone_layout: wgpu::BindGroupLayout,
     /// The tone pass's group 1, and the textures it was made from.
     tone_group: wgpu::BindGroup,
-    tone_reads: Option<wgpu::TextureView>,
+    tone_reads: ToneReads,
     blur: blur::Blur,
+    bloom: bloom::BloomPasses,
 }
 
 impl Post {
     pub(crate) fn new(device: &wgpu::Device, queue: &wgpu::Queue) -> Self {
         let shared = Shared::new(device, queue);
+        let mut entries = vec![wgpu::BindGroupLayoutEntry {
+            binding: 0,
+            visibility: wgpu::ShaderStages::FRAGMENT,
+            ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+            count: None,
+        }];
+        entries.extend(
+            (1..=TONE_TEXTURES).map(|binding| wgpu::BindGroupLayoutEntry {
+                binding,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Texture {
+                    sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                    view_dimension: wgpu::TextureViewDimension::D2,
+                    multisampled: false,
+                },
+                count: None,
+            }),
+        );
         let tone_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("rook tone post"),
-            entries: &[
-                wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
-                    count: None,
-                },
-                wgpu::BindGroupLayoutEntry {
-                    binding: 1,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Texture {
-                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                        view_dimension: wgpu::TextureViewDimension::D2,
-                        multisampled: false,
-                    },
-                    count: None,
-                },
-            ],
+            entries: &entries,
         });
-        let module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("rook blur"),
-            source: wgpu::ShaderSource::Wgsl(include_wesl!("blur").into()),
-        });
-        let blur = blur::Blur::new(device, &shared, &module);
-        let tone_group = Self::make_tone_group(device, &shared, &tone_layout, None);
+        let module = |label, source: &str| {
+            device.create_shader_module(wgpu::ShaderModuleDescriptor {
+                label: Some(label),
+                source: wgpu::ShaderSource::Wgsl(source.into()),
+            })
+        };
+        let blur = blur::Blur::new(device, &shared, &module("rook blur", include_wesl!("blur")));
+        let bloom = bloom::BloomPasses::new(
+            device,
+            &shared,
+            &module("rook bloom", include_wesl!("bloom")),
+        );
+        let tone_reads = ToneReads::default();
+        let tone_group = Self::make_tone_group(device, &shared, &tone_layout, &tone_reads);
         Self {
             shared,
             tone_layout,
             tone_group,
-            tone_reads: None,
+            tone_reads,
             blur,
+            bloom,
         }
     }
 
@@ -361,8 +388,18 @@ impl Post {
         device: &wgpu::Device,
         shared: &Shared,
         layout: &wgpu::BindGroupLayout,
-        blurred: Option<&wgpu::TextureView>,
+        reads: &ToneReads,
     ) -> wgpu::BindGroup {
+        fn texture<'a>(
+            binding: u32,
+            view: Option<&'a wgpu::TextureView>,
+            black: &'a wgpu::TextureView,
+        ) -> wgpu::BindGroupEntry<'a> {
+            wgpu::BindGroupEntry {
+                binding,
+                resource: wgpu::BindingResource::TextureView(view.unwrap_or(black)),
+            }
+        }
         device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("rook tone post"),
             layout,
@@ -371,10 +408,8 @@ impl Post {
                     binding: 0,
                     resource: wgpu::BindingResource::Sampler(&shared.sampler),
                 },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::TextureView(blurred.unwrap_or(&shared.black)),
-                },
+                texture(1, reads.blurred.as_ref(), &shared.black),
+                texture(2, reads.bloom.as_ref(), &shared.black),
             ],
         })
     }
@@ -391,16 +426,24 @@ impl Post {
         size: (u32, u32),
         effects: &PostEffects,
     ) -> ToneInputs {
-        let blurred =
-            (self.blur).record(device, &mut self.shared, encoder, frame, size, effects.blur);
-        self.shared.slots.upload(queue);
-        if blurred.as_ref() != self.tone_reads.as_ref() {
+        let shared = &mut self.shared;
+        let bloom = (self.bloom).record(device, shared, encoder, (frame, size), &effects.bloom);
+        let blurred = (self.blur).record(device, shared, encoder, frame, size, effects.blur);
+        shared.slots.upload(queue);
+        let reads = ToneReads {
+            blurred,
+            bloom: bloom.texture,
+        };
+        let inputs = ToneInputs {
+            blur: if reads.blurred.is_some() { 1.0 } else { 0.0 },
+            bloom: if reads.bloom.is_some() { 1.0 } else { 0.0 },
+            in_place: bloom.in_place,
+        };
+        if reads != self.tone_reads {
             self.tone_group =
-                Self::make_tone_group(device, &self.shared, &self.tone_layout, blurred.as_ref());
-            self.tone_reads = blurred.clone();
+                Self::make_tone_group(device, &self.shared, &self.tone_layout, &reads);
+            self.tone_reads = reads;
         }
-        ToneInputs {
-            blur: if blurred.is_some() { 1.0 } else { 0.0 },
-        }
+        inputs
     }
 }

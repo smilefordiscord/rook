@@ -12,7 +12,7 @@ use wesl::{CompileOptions, CompileResult, Compiler};
 
 /// The entry modules, by path under src/shaders: one shader module each,
 /// named by its file.
-const ENTRIES: [&str; 11] = [
+const ENTRIES: [&str; 12] = [
     "parts",
     "scatter",
     "sky/sky",
@@ -22,6 +22,7 @@ const ENTRIES: [&str; 11] = [
     "particles",
     "tonemap",
     "post/blur",
+    "post/bloom",
     "gui/gui",
     "gui/world_gui",
 ];

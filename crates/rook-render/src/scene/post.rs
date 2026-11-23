@@ -12,6 +12,20 @@ pub struct PostEffects {
     /// The greatest enabled BlurEffect's `Size`, in pixels at the screen's
     /// resolution; 0 blurs nothing.
     pub blur: f32,
+    /// The BloomEffects, each adding its own glow.
+    pub bloom: Vec<Bloom>,
+}
+
+/// A BloomEffect's properties.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Bloom {
+    /// How much of the light over the threshold is added back.
+    pub intensity: f32,
+    /// How far the glow spreads, in pixels; 0 adds it in place.
+    pub size: f32,
+    /// How bright light must be to bloom: 1 only the frame's brightest,
+    /// 0 all of it.
+    pub threshold: f32,
 }
 
 /// `ColorGradingEffect.TonemapperPreset`: how light becomes the screen's

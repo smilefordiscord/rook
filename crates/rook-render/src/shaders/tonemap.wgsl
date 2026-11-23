@@ -13,8 +13,12 @@ struct Tone {
     // The ColorCorrections' matrix: each row times the sRGB pixel, plus
     // its w.
     color: array<vec4<f32>, 3>,
-    // x: how much of the blurred frame replaces the frame.
+    // x: how much of the blurred frame replaces the frame; y: 1 to add
+    // the bloom texture's light.
     effects: vec4<f32>,
+    // The Blooms added in place (`Size` 0): thresholds in light units,
+    // then intensities.
+    in_place: array<vec4<f32>, 2>,
     // Each Highlight's fill and outline (sRGB, and their opacity), by its
     // number - 1 (`renderer/passes/highlights.rs`).
     looks: array<vec4<f32>, 62>,
@@ -30,6 +34,8 @@ struct Tone {
 @group(1) @binding(0) var post_sampler: sampler;
 // The blurred frame, in the frame's encoding, maybe smaller than it.
 @group(1) @binding(1) var blurred: texture_2d<f32>;
+// The chained Blooms' light, in light units, half the frame's size.
+@group(1) @binding(2) var bloom: texture_2d<f32>;
 
 @vertex
 fn vs_tonemap(@builtin(vertex_index) i: u32) -> @builtin(position) vec4<f32> {
@@ -43,7 +49,20 @@ fn fs_tonemap(@builtin(position) at: vec4<f32>) -> @location(0) vec4<f32> {
     let v = textureLoad(frame_texture, p, 0).rgb;
     var units = v * v * FRAME_LIGHT;
     let uv = at.xy / vec2<f32>(textureDimensions(frame_texture));
-    // Mixed in before the curve, as Studio's last pass mixes it.
+    // Bloom's light adds before the curve (Studio's
+    // `ImageProcessBloomFS`), and a Bloom without bleed adds each texel's
+    // own light over its threshold, as its chain's first copy keeps it.
+    let own = units;
+    let brightest = max(own.r, max(own.g, own.b));
+    for (var i = 0; i < 4; i++) {
+        let over = max(brightest - tone.in_place[0][i], 0.0) / (brightest + 0.001);
+        units += own * over * tone.in_place[1][i];
+    }
+    if tone.effects.y > 0.0 {
+        units += textureSampleLevel(bloom, post_sampler, uv, 0.0).rgb;
+    }
+    // The blurred frame is mixed in before the curve, as Studio's last
+    // pass mixes it.
     if tone.effects.x > 0.0 {
         let b = textureSampleLevel(blurred, post_sampler, uv, 0.0).rgb;
         units = mix(units, b * b * FRAME_LIGHT, tone.effects.x);

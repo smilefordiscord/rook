@@ -130,3 +130,43 @@ fn blur_spreads_a_point() {
     let wide = reds(&mut r, &scene, &camera);
     assert!(at(&wide, 28, 16) > 0 && at(&wide, 16, 16) > 0);
 }
+
+/// A Bloom brightens the dark around a light over its threshold, and
+/// adds nothing around one under it; with Size 0 it brightens the light
+/// itself and nothing around it.
+#[test]
+fn bloom_brightens_around_a_bright_light() {
+    let Ok(mut r) = Renderer::headless() else {
+        return;
+    };
+    let (mut scene, camera) = glow();
+    // A few pixels across: a lone pixel averages away below any threshold
+    // in the chain's first copy, as in Studio's.
+    scene.parts[0].size = Vec3::splat(1.5);
+    let plain = reds(&mut r, &scene, &camera);
+    let at = |image: &[u8], x: usize, y: usize| image[y * 32 + x];
+    let bloom = Bloom {
+        intensity: 1.0,
+        size: 8.0,
+        threshold: 0.5,
+    };
+    scene.post.bloom = vec![bloom];
+    let bloomed = reds(&mut r, &scene, &camera);
+    assert_eq!(at(&plain, 21, 16), 0);
+    assert!(at(&bloomed, 21, 16) > 0, "{}", at(&bloomed, 21, 16));
+    assert_eq!(at(&bloomed, 1, 1), 0);
+    // Gray Neon under the threshold blooms nowhere.
+    scene.parts[0].color = [0.2; 3];
+    let dim = reds(&mut r, &scene, &camera);
+    assert_eq!(at(&dim, 21, 16), 0);
+    // Without bleed, a mid-bright wall gets brighter, its edges no wider.
+    let (mut wall, wall_camera) = wall();
+    let before = middle(&mut r, &wall, &wall_camera);
+    wall.post.bloom = vec![Bloom {
+        size: 0.0,
+        threshold: 0.0,
+        ..bloom
+    }];
+    let after = middle(&mut r, &wall, &wall_camera);
+    assert!(after[0] > before[0], "{after:?} {before:?}");
+}
