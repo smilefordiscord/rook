@@ -10,10 +10,14 @@ impl GuiPass {
     }
 
     /// Draw the groups into their textures, inner ones first, before
-    /// anything that shows them.
+    /// anything that shows them. A group holding nothing is cleared all
+    /// the same, or it shows what it last held (an overlay moved out of
+    /// the CanvasGroup that faded it in).
     pub(crate) fn record_groups(&self, queue: &wgpu::Queue, encoder: &mut wgpu::CommandEncoder) {
         for (target, view, size) in self.groups.drawn() {
-            self.draw(queue, encoder, target, view, size, true);
+            if !self.draw(queue, encoder, target, view, size, true) {
+                clear(encoder, view);
+            }
         }
     }
 
@@ -80,4 +84,24 @@ impl GuiPass {
         }
         true
     }
+}
+
+/// Clear `view` to nothing.
+fn clear(encoder: &mut wgpu::CommandEncoder, view: &wgpu::TextureView) {
+    encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+        label: Some("rook gui clear"),
+        color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+            view,
+            depth_slice: None,
+            resolve_target: None,
+            ops: wgpu::Operations {
+                load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
+                store: wgpu::StoreOp::Store,
+            },
+        })],
+        depth_stencil_attachment: None,
+        timestamp_writes: None,
+        occlusion_query_set: None,
+        multiview_mask: None,
+    });
 }

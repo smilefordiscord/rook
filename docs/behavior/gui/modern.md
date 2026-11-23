@@ -176,6 +176,12 @@ UIListLayout's `HorizontalFlex` and `VerticalFlex` (whichever is along
   over the texture. What it holds is clipped to it. This follows the
   creator docs and Studio's flags (`FFlagCanvasGroupRenderStrokeOnTop`);
   the look is Inference.
+- A group that holds nothing that draws (an empty CanvasGroup with no
+  background, or one whose children all moved out) draws nothing, as in
+  Studio: DB2's chest opening fades its overlay in inside a CanvasGroup,
+  then moves the overlay out of it. Rook used to keep showing the
+  group's last texture, so the dropping chest stayed frozen on screen
+  behind the reel (`an_emptied_group_draws_nothing` in `rook-render`).
 - Studio 0.744 on this machine drew every CanvasGroup piece by piece
   instead, in edit mode and in a playtest alike: children unclipped,
   `GroupTransparency`, `GroupColor3` and the UICorner and UIGradient

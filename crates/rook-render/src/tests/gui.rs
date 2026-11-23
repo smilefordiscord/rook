@@ -497,3 +497,43 @@ fn gui_pieces_redraw_as_given() {
         assert_eq!(draw(&mut kept, &list), draw(&mut fresh, &list));
     }
 }
+
+/// A group left holding nothing draws nothing: its texture doesn't keep
+/// what it last held (an overlay moved out of the CanvasGroup that faded
+/// it in stayed on screen as it was then).
+#[test]
+fn an_emptied_group_draws_nothing() {
+    let (Ok(mut kept), Ok(mut fresh)) = (Renderer::headless(), Renderer::headless()) else {
+        return;
+    };
+    let group = |quads: Vec<GuiQuad>| GuiQuad {
+        center: Vec2::splat(8.0),
+        size: Vec2::splat(16.0),
+        rotation: 0.0,
+        color: [1.0; 4],
+        clip: GuiQuad::NO_CLIP,
+        paint: rook_types::Paint::Group(Arc::new(rook_types::GuiGroup {
+            key: 1,
+            size: [16, 16],
+            quads,
+        })),
+        shape: None,
+        gradient: None,
+    };
+    let red = GuiQuad {
+        paint: rook_types::Paint::Solid,
+        color: [1.0, 0.0, 0.0, 1.0],
+        ..group(Vec::new())
+    };
+    let camera = Camera::look_at(Vec3::new(0.0, 0.0, 10.0), Vec3::ZERO);
+    let draw = |r: &mut Renderer, quad: GuiQuad| {
+        r.set_scene(&Scene::default());
+        let piece: Arc<[GuiQuad]> = Arc::from([quad]);
+        r.set_gui(Some(&Arc::from([piece])), None);
+        r.render_to_image(16, 16, &camera).unwrap()
+    };
+    let held = draw(&mut kept, group(vec![red]));
+    let emptied = draw(&mut kept, group(Vec::new()));
+    assert_ne!(held, emptied);
+    assert_eq!(emptied, draw(&mut fresh, group(Vec::new())));
+}
