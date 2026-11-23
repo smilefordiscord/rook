@@ -222,29 +222,40 @@ end
 
 local open = false
 
--- Client: ask the local player, then finish the prompt.
+-- Client: ask the local player, then finish the prompt. The prompt
+-- finishes and closes even when asking raises (an item whose web answer
+-- isn't the shape the prompt shows), so one bad item can't keep every
+-- later prompt from opening.
 local function run(kind, id)
 	local player = players.LocalPlayer
 	local purchased = false
-	local ok, info = pcall(describe, kind, id)
-	local name = ok and typeof(info) == "table" and info.Name or ""
-	local heading = if name ~= "" then name elseif id ~= nil then TITLES[kind] .. " " .. tostring(id) else TITLES[kind]
-	if not ok then
-		prompt.ask(heading, "This item isn't available: " .. tostring(info), { "OK" })
-	elseif info.IsForSale == false then
-		prompt.ask(heading, "This item isn't for sale.", { "OK" })
-	elseif has(kind, player, id) then
-		prompt.ask(heading, "You already have this.", { "OK" })
-	elseif prompt.ask(heading, offer(kind, info), { "Buy", "Cancel" }) == "Buy" then
-		purchased = true
-		own(kind, player.UserId, id)
-		send(market, "server", "bought", kind, id)
-		prompt.ask(heading, "Your purchase succeeded.", { "OK" })
-	end
+	local asked, problem = pcall(function()
+		local ok, info = pcall(describe, kind, id)
+		local name = ok and typeof(info) == "table" and info.Name or ""
+		local heading = if typeof(name) == "string" and name ~= ""
+			then name
+			elseif id ~= nil then TITLES[kind] .. " " .. tostring(id)
+			else TITLES[kind]
+		if not ok then
+			prompt.ask(heading, "This item isn't available: " .. tostring(info), { "OK" })
+		elseif info.IsForSale == false then
+			prompt.ask(heading, "This item isn't for sale.", { "OK" })
+		elseif has(kind, player, id) then
+			prompt.ask(heading, "You already have this.", { "OK" })
+		elseif prompt.ask(heading, offer(kind, info), { "Buy", "Cancel" }) == "Buy" then
+			purchased = true
+			own(kind, player.UserId, id)
+			send(market, "server", "bought", kind, id)
+			prompt.ask(heading, "Your purchase succeeded.", { "OK" })
+		end
+	end)
 	prompt.close()
 	open = false
 	finished(player, kind, id, purchased)
 	send(market, "server", "finished", kind, id, purchased)
+	if not asked then
+		error(problem, 0)
+	end
 end
 
 -- A client shows one prompt at a time; others asked for meanwhile are

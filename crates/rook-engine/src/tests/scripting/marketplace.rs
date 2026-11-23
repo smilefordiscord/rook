@@ -269,3 +269,32 @@ fn a_client_cannot_forge_a_purchase() {
     session.run_for(0.1);
     assert_eq!(lines(session.server()), ["false"]);
 }
+
+/// A prompt whose buttons a LocalScript took out of CoreGui is built
+/// again, so the player can still answer it and later prompts open.
+#[test]
+fn a_prompt_whose_buttons_were_removed_still_asks() {
+    let (mut session, index) = session_with(
+        "",
+        r#"
+        local market = game:GetService("MarketplaceService")
+        local me = game.Players.LocalPlayer
+        market.PromptGamePassPurchaseFinished:Connect(function(_, pass, bought)
+            print("finished", pass, bought)
+        end)
+        market:PromptGamePassPurchase(me, 1)
+        market.PromptGamePassPurchaseFinished:Wait()
+        game:GetService("CoreGui").PurchasePrompt.Panel.Buttons:Destroy()
+        market:PromptGamePassPurchase(me, 2)
+        market.PromptGamePassPurchaseFinished:Wait()
+        market:PromptGamePassPurchase(me, 3)
+        "#,
+    );
+    for _ in 0..3 {
+        click(&mut session, index, "Cancel");
+    }
+    assert_eq!(
+        client_lines(&session, index),
+        ["finished 1 false", "finished 2 false", "finished 3 false"]
+    );
+}

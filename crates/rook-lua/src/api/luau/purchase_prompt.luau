@@ -85,7 +85,12 @@ end
 -- Show `heading` and `message` with a button for each of `choices`, the
 -- first one highlighted; returns the choice clicked.
 function api.ask(heading, message, choices)
-	if not screen then
+	-- Game scripts can reach CoreGui: a prompt whose buttons were taken
+	-- out is built again, or the player could never answer it.
+	if not screen or not screen:IsDescendantOf(game) or not row:IsDescendantOf(screen) then
+		if screen then
+			screen:Destroy()
+		end
 		build()
 	end
 	title.Text = heading
