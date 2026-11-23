@@ -5,7 +5,7 @@ Every release, newest first. How versions are numbered is in
 
 ## [Unreleased]
 
-- A DepthOfFieldEffect under Lighting or the current Camera blurs what lies outside its focus, near and far, as in Roblox. Rook drew everything sharp. See [post-processing](docs/behavior/lighting/post-processing.md#depthoffieldeffect).
+- A DepthOfFieldEffect under Lighting or the current Camera blurs what lies outside its focus, near and far, as in Roblox, and keeps the intensities and distances scripts set within Roblox's ranges (intensities 0 to 1, distances at most 500). Rook drew everything sharp. See [post-processing](docs/behavior/lighting/post-processing.md#depthoffieldeffect).
 - A SunRaysEffect under Lighting or the current Camera draws rays of light around the sun, blocked by what stands in front of it, as in Roblox. Rook drew none. See [post-processing](docs/behavior/lighting/post-processing.md#sunrayseffect).
 - A BloomEffect under Lighting or the current Camera makes bright light glow into what's around it, as in Roblox, several adding together. Rook drew no glow. See [post-processing](docs/behavior/lighting/post-processing.md#bloomeffect).
 - A BlurEffect under Lighting or the current Camera blurs the 3D view, as in Roblox, the largest one winning when there are several. Rook drew the view sharp. See [post-processing](docs/behavior/lighting/post-processing.md#blureffect).

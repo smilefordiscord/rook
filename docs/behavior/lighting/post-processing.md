@@ -1,7 +1,8 @@
 # Post-processing
 
-Checked against Studio 0.748 on 2026-11-23, by its shaders and the
-creator docs only: nothing on this page is measured in Studio.
+Checked against Studio 0.748 on 2026-11-23. Only the
+[properties](#their-properties) as scripts see them are measured in
+Studio; the rest is from its shaders and the creator docs.
 
 The PostEffects (ColorCorrectionEffect, BlurEffect, BloomEffect,
 SunRaysEffect, DepthOfFieldEffect and ColorGradingEffect) change the
@@ -12,6 +13,27 @@ under the Camera, to its player alone (Confirmed: the post-processing
 guide). Some draw differently or not at all at low quality levels
 (Confirmed: creator-docs PostEffect, unmeasured); Rook has no quality
 setting and draws every level the same.
+
+## Their properties
+
+Measured in Studio 0.748 on 2026-11-23 (conformance case
+`lighting/post_effects_clamps`):
+
+- Every effect is a `PostEffect` and starts `Enabled`. The defaults:
+  ColorCorrectionEffect Brightness, Contrast and Saturation 0, TintColor
+  white; BlurEffect Size 24; BloomEffect Intensity 0.4, Size 24, Threshold
+  0.95; SunRaysEffect Intensity 0.25, Spread 1; DepthOfFieldEffect
+  FarIntensity 0.75, FocusDistance 0.05, InFocusRadius 10, NearIntensity
+  0.75; ColorGradingEffect TonemapperPreset `Default`.
+- ColorCorrection's, Blur's, Bloom's and SunRays' numbers read back as
+  set, whatever they are: -1, 1e9, ±inf and NaN alike. TintColor keeps a
+  color out of 0 to 1, as (2, -1, 0.5).
+- DepthOfField's FarIntensity and NearIntensity are kept within 0 to 1
+  and FocusDistance within 0 to 500; InFocusRadius is kept at most 500
+  (-1 reads -1). A value outside reads back at the nearer end, and NaN
+  stays NaN.
+
+Rook keeps the same ranges (`crates/rook-lua/src/api/properties/ranges.rs`).
 
 ## Where each effect sits
 
@@ -128,7 +150,8 @@ Approximation). What the properties become is Inference:
 
 A halo of light with rays around the sun, shaped and blocked by what's
 between the camera and the sun; `Intensity` its opacity, `Spread` how
-wide it spreads, meant to stay within 0 to 1 (Confirmed: creator-docs).
+wide it spreads, meant to stay within 0 to 1 (Confirmed: creator-docs),
+though a script's value outside isn't [kept within it](#their-properties).
 It moves with `ClockTime` (Confirmed: the post-processing guide). Studio's
 defaults: Intensity 0.25, Spread 1.
 
@@ -273,6 +296,6 @@ texel when they're off.
   comes from the moon at night, and what two effects do together.
 - DepthOfField: the blur's radius against distance for each property
   (a row of checkered boards receding from the camera at several
-  settings), whether the sky blurs, how its intensities scale (and
-  whether they stop at 1), and which of two effects draws.
+  settings), whether the sky blurs, how its intensities scale, and which
+  of two effects draws.
 - Which of several ColorGradingEffects picks the curve.

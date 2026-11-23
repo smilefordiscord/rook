@@ -1,0 +1,23 @@
+-- studio 0.748.0.7481526
+-- signals: deferred
+ColorCorrectionEffect Enabled=true Brightness=0 Contrast=0 Saturation=0 TintColor=1,1,1
+ColorCorrectionEffect Brightness 0 -1=-1 0.5=0.5 2=2 70=70 1e+09=1e+09 -1e+09=-1e+09 nan=nan inf=inf -inf=-inf
+ColorCorrectionEffect Contrast 0 -1=-1 0.5=0.5 2=2 70=70 1e+09=1e+09 -1e+09=-1e+09 nan=nan inf=inf -inf=-inf
+ColorCorrectionEffect Saturation 0 -1=-1 0.5=0.5 2=2 70=70 1e+09=1e+09 -1e+09=-1e+09 nan=nan inf=inf -inf=-inf
+TintColor out of range 2,-1,0.5
+IsA PostEffect true
+BlurEffect Enabled=true Size=24
+BlurEffect Size 24 -1=-1 0.5=0.5 56=56 100=100 1e+09=1e+09 nan=nan inf=inf
+BloomEffect Enabled=true Intensity=0.4 Size=24 Threshold=0.95
+BloomEffect Intensity 0.4 -1=-1 0.5=0.5 2=2 70=70 1e+09=1e+09 -1e+09=-1e+09 nan=nan inf=inf -inf=-inf
+BloomEffect Threshold 0.95 -1=-1 0.5=0.5 2=2 70=70 1e+09=1e+09 -1e+09=-1e+09 nan=nan inf=inf -inf=-inf
+BloomEffect Size 24 -1=-1 0.5=0.5 56=56 100=100 1e+09=1e+09 nan=nan inf=inf
+SunRaysEffect Enabled=true Intensity=0.25 Spread=1
+SunRaysEffect Intensity 0.25 -1=-1 0.5=0.5 2=2 70=70 1e+09=1e+09 -1e+09=-1e+09 nan=nan inf=inf -inf=-inf
+SunRaysEffect Spread 1 -1=-1 0.5=0.5 2=2 70=70 1e+09=1e+09 -1e+09=-1e+09 nan=nan inf=inf -inf=-inf
+DepthOfFieldEffect Enabled=true FarIntensity=0.75 FocusDistance=0.05 InFocusRadius=10 NearIntensity=0.75
+DepthOfFieldEffect FarIntensity 0.75 -1=0 0.5=0.5 2=1 70=1 1e+09=1 -1e+09=0 nan=nan inf=1 -inf=0
+DepthOfFieldEffect NearIntensity 0.75 -1=0 0.5=0.5 2=1 70=1 1e+09=1 -1e+09=0 nan=nan inf=1 -inf=0
+DepthOfFieldEffect FocusDistance 0.05 -1=0 0.5=0.5 200=200 1000=500 1e+09=500 nan=nan inf=500
+DepthOfFieldEffect InFocusRadius 10 -1=-1 0.5=0.5 200=200 1000=500 1e+09=500 nan=nan inf=500
+ColorGradingEffect Enabled=true TonemapperPreset=Enum.TonemapperPreset.Default
