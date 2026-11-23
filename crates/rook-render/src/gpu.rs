@@ -66,6 +66,12 @@ pub(crate) struct Globals {
     pub(crate) night_horizon: [f32; 4],
     /// `Lighting::stars`: the count, turn and light.
     pub(crate) stars: [f32; 4],
+    /// `Lighting::atmosphere`: its falloff, blur, haze and glare; its color
+    /// (w 1 with an Atmosphere, 0 for Lighting's fog); its glare's
+    /// falloff.
+    pub(crate) atmosphere: [f32; 4],
+    pub(crate) atmosphere_color: [f32; 4],
+    pub(crate) atmosphere_glare: [f32; 4],
 }
 
 impl Upload for Mesh {

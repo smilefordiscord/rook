@@ -59,6 +59,12 @@ struct Globals {
     // The stars: x = how many, y = how far the sky has turned about Z
     // (radians), z = the brightest one's light units.
     stars: vec4<f32>,
+    // Lighting's Atmosphere (`Lighting::atmosphere`): x = falloff, y = blur,
+    // z = haze, w = glare; its color in light units (w: 1 with an
+    // Atmosphere, which replaces Lighting's fog); xyz = its glare's falloff.
+    atmosphere: vec4<f32>,
+    atmosphere_color: vec4<f32>,
+    atmosphere_glare: vec4<f32>,
 };
 
 // A world direction in the skybox's own axes, as the reflection cube holds

@@ -53,6 +53,8 @@ pub struct Lighting {
     /// The stars; a count of 0 draws none.
     pub stars: Stars,
     pub night_sky: NightSky,
+    /// Lighting's Atmosphere; with one, Lighting's fog isn't drawn.
+    pub atmosphere: Option<Atmosphere>,
     /// `Lighting.GlobalShadows`: false draws no shadows at all.
     pub global_shadows: bool,
     /// `Lighting.PrioritizeLightingQuality`: on, the sun casts sharp
@@ -121,6 +123,7 @@ impl Default for Lighting {
                 horizon: [0.0; 3],
                 shown: 0.0,
             },
+            atmosphere: None,
             global_shadows: true,
             prioritize_quality: false,
             environment_specular: 0.0,

@@ -1,3 +1,4 @@
+mod atmosphere;
 mod celestial;
 mod local;
 mod sky;
@@ -73,6 +74,7 @@ pub(super) fn lighting(dom: &Dom) -> Lighting {
     l.tonemapper = tonemapper(dom, id);
     l.sky_tint = sky_tint(hours);
     l.night_sky = night_sky(l.sky_tint);
+    l.atmosphere = atmosphere::atmosphere(dom, id);
     l.sky_bottom = l.sky_horizon;
     l
 }

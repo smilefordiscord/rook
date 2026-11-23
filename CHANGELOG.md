@@ -5,6 +5,7 @@ Every release, newest first. How versions are numbered is in
 
 ## [Unreleased]
 
+- Lighting's Atmosphere hazes the sky and adds glare around the sun, and fades parts, terrain and effects into the sky behind them with distance, in place of Lighting's fog. Rook ignored it and drew Lighting's fog. See [Atmosphere](docs/behavior/lighting/atmosphere.md).
 - The night sky shows a dark gradient with a glow along the horizon, and a Sky's `StarCount` stars, which turn with the time of day. Rook drew the night sky black. See [the sky](docs/behavior/lighting/sky.md#the-night-sky).
 - The sun and moon are drawn in the sky, rising and setting with the time of day, with a Sky's images, sizes and `CelestialBodiesShown`, and `SkyboxOrientation` turns the skybox. Rook drew neither and ignored the orientation. See [the sky](docs/behavior/lighting/sky.md#the-sun-and-moon).
 - Light, shadows and the sky's light follow the camera to where it moves on a busy or slow machine. Rook could keep lighting only where the camera had been, for as long as the machine stayed busy. See [local lights](docs/behavior/lighting/local-lights.md).

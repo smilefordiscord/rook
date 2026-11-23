@@ -760,3 +760,57 @@ fn the_night_sky_glows_at_the_horizon() {
     );
     assert!(low[2] > low[1], "purple: {low:?}");
 }
+
+/// An Atmosphere fades a distant part towards its haze (the sky's light
+/// times its Color, low over the horizon) and leaves a near one as it is,
+/// in place of Lighting's fog.
+#[test]
+fn an_atmosphere_fades_distant_parts_towards_its_color() {
+    let Ok(mut r) = Renderer::headless() else {
+        return;
+    };
+    let mut near = part(PartShape::Block, -3.0, [0.5; 3], 0.0);
+    near.position.z = -10.0;
+    near.size = Vec3::splat(2.0);
+    let mut far = part(PartShape::Block, 0.0, [0.5; 3], 0.0);
+    far.position.z = -2000.0;
+    far.size = Vec3::new(400.0, 400.0, 1.0);
+    let camera = Camera::look_at(Vec3::ZERO, Vec3::NEG_Z);
+    let red = Atmosphere {
+        falloff: 1.0 / 40.0,
+        blur: 0.0,
+        haze: -0.3,
+        color: [1.0, 0.0, 0.0],
+        glare: 0.0,
+        glare_falloff: [4.0; 3],
+    };
+    let mut shots = Vec::new();
+    for atmosphere in [None, Some(red)] {
+        r.set_scene(&Scene {
+            parts: vec![near, far],
+            lighting: Lighting {
+                ambient: [0.5; 3],
+                outdoor_ambient: [0.0; 3],
+                sun_color: [0.0; 3],
+                sky_top: [0.5; 3],
+                sky_horizon: [0.5; 3],
+                atmosphere,
+                ..Lighting::default()
+            },
+            ..Scene::default()
+        });
+        shots.push(r.render_to_image(64, 64, &camera).unwrap());
+    }
+    let at = |image: &[u8], x: usize| image[(32 * 64 + x) * 4..][..3].to_vec();
+    let (plain, hazed) = (at(&shots[0], 32), at(&shots[1], 32));
+    assert!(plain[0].abs_diff(plain[1]) < 4, "gray without: {plain:?}");
+    assert!(
+        hazed[0] > hazed[1] + 20 && hazed[1] < 10,
+        "red with: {hazed:?}"
+    );
+    let (near_plain, near_hazed) = (at(&shots[0], 18), at(&shots[1], 18));
+    assert!(
+        near_hazed[1] + 10 > near_plain[1] && near_hazed[0] - near_hazed[1] < hazed[0] - hazed[1],
+        "{near_plain:?} against {near_hazed:?}"
+    );
+}

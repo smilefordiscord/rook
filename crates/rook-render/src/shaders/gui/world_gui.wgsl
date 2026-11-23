@@ -136,7 +136,7 @@ fn fs_world_gui(in: QuadOut) -> @location(0) vec4<f32> {
     let lit_share = canvas.look.x;
     if lit_share > 0.0 {
         let n = select(-normal, normal, dot(normal, toward) > 0.0);
-        let lit = mix(diffuse_light(albedo, in.world, n, sun_light(in.world, n)), fog_light(), f);
+        let lit = mix(diffuse_light(albedo, in.world, n, sun_light(in.world, n)), fog_light(in.world), f);
         units = mix(units, lit, lit_share);
     }
     let opacity = alpha * mix(1.0 - f, 1.0, lit_share);

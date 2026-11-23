@@ -14,10 +14,10 @@ mod surfaces;
 mod window_surface;
 
 pub use scene::{
-    AdornShape, Anchor, Beam, Camera, Curve, Detile, Disc, DiscImage, DrawShape, EffectSlots,
-    Emitter, EmitterLook, EmitterShape, Fidelity, Flipbook, FlipbookMode, FloorWire, Grow,
-    Highlight, ImageHash, ImagePlacement, InOut, Layer, Light, LightShape, Lighting, LocalLight,
-    MapAlpha, MaterialMaps, MeshHash, NightSky, Orientation, PartInstance, RibbonLook,
+    AdornShape, Anchor, Atmosphere, Beam, Camera, Curve, Detile, Disc, DiscImage, DrawShape,
+    EffectSlots, Emitter, EmitterLook, EmitterShape, Fidelity, Flipbook, FlipbookMode, FloorWire,
+    Grow, Highlight, ImageHash, ImagePlacement, InOut, Layer, Light, LightShape, Lighting,
+    LocalLight, MapAlpha, MaterialMaps, MeshHash, NightSky, Orientation, PartInstance, RibbonLook,
     SKYBOX_FACES, Scene, Sequence, Space, Spawn, Stars, TerrainColor, TerrainLook, TerrainVoxels,
     TextureMode, Tonemapper, Trail, Viewport,
 };

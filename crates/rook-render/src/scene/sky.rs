@@ -1,5 +1,5 @@
 //! What the sky draws besides its skybox: the sun and moon, the stars and
-//! the night's gradient (docs/behavior/lighting/sky.md).
+//! the night's gradient (docs/behavior/lighting/sky.md), and the atmosphere.
 
 use super::*;
 
@@ -52,4 +52,28 @@ pub struct NightSky {
     pub horizon: [f32; 3],
     /// 0 by day to 1 at night.
     pub shown: f32,
+}
+
+/// Lighting's Atmosphere, as the parameters of Studio's atmosphere shaders
+/// (`AdvSky` and the surface shaders' fog in `shaders_glsl3.pack`;
+/// docs/behavior/lighting/atmosphere.md). With one, it takes the place of
+/// Lighting's fog.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Atmosphere {
+    /// Surfaces keep `exp2(-falloff × distance)` of themselves (studs).
+    pub falloff: f32,
+    /// The least blur the sky behind a fogged surface is read at, 0 (sharp)
+    /// to 1 (the reflection cube's blurriest level).
+    pub blur: f32,
+    /// The sky keeps `exp2(haze / (0.001 + y))` of itself towards a
+    /// direction `y` up (`haze` ≤ 0), the rest becoming the haze.
+    pub haze: f32,
+    /// The haze's color, in light units: what the sky's own light is
+    /// multiplied by.
+    pub color: [f32; 3],
+    /// How much of the sun's light the glare around it adds.
+    pub glare: f32,
+    /// The glare's falloff away from the sun, per channel: the power its
+    /// lobe is raised to.
+    pub glare_falloff: [f32; 3],
 }

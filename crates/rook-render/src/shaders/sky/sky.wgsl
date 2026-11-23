@@ -5,6 +5,7 @@ import package::common::{g, sky_dir};
 import package::tone::{albedo_units, frame, light_units3, srgb_to_linear};
 import package::images::{sample_sky, sky_uv};
 import package::sky::night::night_sky;
+import package::sky::atmosphere::{haze_kept, hazed};
 
 struct SkyOut {
     @builtin(position) clip: vec4<f32>,
@@ -30,8 +31,9 @@ fn sky_direction(ndc: vec2<f32>) -> vec3<f32> {
 
 // One skybox image: the pixels whose direction is closest to its face's,
 // mapped straight onto the cube face (unlit and unfogged), tinted for the
-// time of day (`g.sky_tint`) over the night's gradient, and scaled by the
-// exposure in light units, as Studio's shaders scale everything.
+// time of day (`g.sky_tint`) over the night's gradient, through the
+// Atmosphere's haze, and scaled by the exposure in light units, as Studio's
+// shaders scale everything.
 @fragment
 fn fs_sky(in: SkyOut) -> @location(0) vec4<f32> {
     let d = sky_direction(in.ndc);
@@ -42,7 +44,7 @@ fn fs_sky(in: SkyOut) -> @location(0) vec4<f32> {
     if along < max(a.x, max(a.y, a.z)) - 1e-6 {
         discard;
     }
-    let units = light_units3(texel.rgb) * g.sky_tint.rgb + night_sky(d);
+    let units = hazed(d, light_units3(texel.rgb) * g.sky_tint.rgb + night_sky(d));
     return vec4(frame(units * g.fog_range.z), 1.0);
 }
 
@@ -50,7 +52,8 @@ fn fs_sky(in: SkyOut) -> @location(0) vec4<f32> {
 // color at the horizon over the whole screen, with the night's gradient.
 @fragment
 fn fs_plain_sky(in: SkyOut) -> @location(0) vec4<f32> {
-    let units = light_units3(srgb_to_linear(g.sky_horizon.rgb)) * g.sky_tint.rgb + night_sky(sky_direction(in.ndc));
+    let d = sky_direction(in.ndc);
+    let units = hazed(d, light_units3(srgb_to_linear(g.sky_horizon.rgb)) * g.sky_tint.rgb + night_sky(d));
     return vec4(frame(units * g.fog_range.z), 1.0);
 }
 
@@ -58,6 +61,8 @@ struct DiscOut {
     @builtin(position) clip: vec4<f32>,
     @location(0) uv: vec2<f32>,
     @location(1) @interpolate(flat) body: u32,
+    // The share the Atmosphere's haze leaves of it.
+    @location(2) @interpolate(flat) kept: f32,
 };
 
 // The sun (instance 0) or the moon (1): a square facing the camera at
@@ -71,6 +76,7 @@ fn vs_disc(@builtin(vertex_index) i: u32, @builtin(instance_index) body: u32) ->
     out.clip = facing(at.xyz, at.w, corner);
     out.uv = vec2(0.5 + 0.5 * corner.x, 0.5 - 0.5 * corner.y);
     out.body = body;
+    out.kept = haze_kept(at.xyz);
     return out;
 }
 
@@ -89,7 +95,7 @@ fn fs_disc(in: DiscOut) -> @location(0) vec4<f32> {
     // Sampled first: a texture read must be in uniform control flow.
     let image = albedo_units(sample_sky(6u + in.body, in.uv).rgb);
     let shade = select(image, vec3(own_disc(in.uv)), look.w > 1.5);
-    return vec4(frame(shade * look.rgb * g.fog_range.z), 0.0);
+    return vec4(frame(shade * look.rgb * in.kept * g.fog_range.z), 0.0);
 }
 
 // Corner `i` of a square, two triangles.
@@ -143,7 +149,7 @@ fn vs_star(@builtin(vertex_index) i: u32, @builtin(instance_index) star: u32) ->
     var out: StarOut;
     // A pixel spans `fog_range.w` studs one stud away.
     out.clip = facing(d, g.fog_range.w, quad_corner(i));
-    out.light = g.stars.z * mix(0.1, 1.0, unit(pcg(b)));
+    out.light = g.stars.z * mix(0.1, 1.0, unit(pcg(b))) * haze_kept(d);
     return out;
 }
 

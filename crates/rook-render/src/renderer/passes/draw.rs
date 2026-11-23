@@ -292,6 +292,11 @@ impl Renderer {
             night_top: rgb(l.night_sky.top, l.night_sky.shown),
             night_horizon: rgb(l.night_sky.horizon, 0.0),
             stars: [l.stars.count as f32, l.stars.turn, l.stars.light, 0.0],
+            atmosphere: l
+                .atmosphere
+                .map_or([0.0; 4], |a| [a.falloff, a.blur, a.haze, a.glare]),
+            atmosphere_color: l.atmosphere.map_or([0.0; 4], |a| rgb(a.color, 1.0)),
+            atmosphere_glare: l.atmosphere.map_or([0.0; 4], |a| rgb(a.glare_falloff, 0.0)),
             ..self.view_globals(camera, aspect)
         };
         self.queue
