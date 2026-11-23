@@ -221,6 +221,9 @@ fn overlap_include_and_exclude_lists() {
             "A",
             "false Invalid value type; expected a table",
         ],
+    );
+}
+
 /// A script that poses a rig's joints and moves its root in one go (as a
 /// viewmodel each frame) keeps the move when physics next syncs: the joints
 /// are placed around the root's new CFrame, not the one physics held before.
