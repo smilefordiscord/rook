@@ -52,10 +52,11 @@ pub(super) fn moon_direction(sun: Vec3) -> Vec3 {
     Vec3::new(-sun.x, -sun.y, sun.z)
 }
 
-/// How much of the moon shows at its height `y` (the sine of its
-/// elevation), 0 to 1: faded in over the last few degrees above the
-/// horizon, as the sun's light is (Approximation).
-pub(super) fn moon_fade(y: f32) -> f32 {
+/// How much of the moon's light, or of the sun's or moon's disc, shows at
+/// its height `y` (the sine of its elevation), 0 to 1: faded in over the
+/// last few degrees above the horizon, as the sun's light is
+/// (Approximation).
+pub(super) fn horizon_fade(y: f32) -> f32 {
     (1.0 - (-y / 0.04).exp()).max(0.0)
 }
 
@@ -66,7 +67,7 @@ pub(super) fn sun_and_moon(sun: Vec3, brightness: f32) -> (Vec3, [f32; 3]) {
         return (sun, sun_color(sun.y).map(|c| c * brightness));
     }
     let moon = moon_direction(sun);
-    (moon, [MOON_LIGHT * moon_fade(moon.y) * brightness; 3])
+    (moon, [MOON_LIGHT * horizon_fade(moon.y) * brightness; 3])
 }
 
 #[cfg(test)]

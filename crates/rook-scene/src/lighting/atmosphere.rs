@@ -9,15 +9,17 @@ use rook_render::Atmosphere;
 use super::*;
 
 /// How fast surfaces fade at Density 1: they keep half of themselves per
-/// this many studs, at Density `d` per this over `d`³ (Approximation:
-/// Density 1 fogs a part out within a few hundred studs, the default 0.395
-/// halves one at about 650).
-const HALF_STUDS: f32 = 40.0;
+/// this many studs, at Density `d` per this over `d`³ (Approximation: in
+/// a Studio 0.748 screenshot at Density 0.45, parts 150 to 900 studs off
+/// take only a slight haze and near ones none; the default 0.395 halves
+/// one at about 4,000).
+const HALF_STUDS: f32 = 250.0;
 
-/// The haze's numerator per unit of `Haze`: at Haze 1 the sky keeps 93% of
-/// itself overhead, half 10% of the way up and almost none at the horizon
-/// (Approximation).
-const HAZE_PER_UNIT: f32 = -0.1;
+/// The haze's numerator per unit of `Haze`: at Haze 2 the sky keeps 69%
+/// of itself a degree up and half of itself half a degree up, so only a thin pale
+/// band shows at the horizon (Approximation: a Studio 0.748 screenshot at
+/// Haze 2, Glare 2 shows no colored band or glare there).
+const HAZE_PER_UNIT: f32 = -0.005;
 
 /// The glare's falloff per channel is this over that channel of `Decay`:
 /// channels Decay keeps fall off slowly away from the sun, the others fast
@@ -84,7 +86,7 @@ mod tests {
         cache.apply(&dom, &changes);
         let a = cache.scene.lighting.atmosphere.expect("an Atmosphere");
         assert!((a.falloff - 1.0 / HALF_STUDS).abs() < 1e-6);
-        assert!((a.haze + 0.2).abs() < 1e-6);
+        assert!((a.haze - 2.0 * HAZE_PER_UNIT).abs() < 1e-6);
         dom.set_property_by_name(air, "Density", Value::Float32(0.5))
             .unwrap();
         cache.apply(&dom, &changes);

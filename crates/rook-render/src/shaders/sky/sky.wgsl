@@ -134,10 +134,11 @@ struct StarOut {
 };
 
 // Star `star`: a direction spread evenly over the sphere, turned about Z
-// with the time of day as the sun turns, as a square two pixels across
-// (Studio's `AdvStars` draws two-pixel points), and a brightness from a
-// tenth of the brightest up (Approximation: Studio's stars' colors are
-// vertex data the pack doesn't hold).
+// with the time of day as the sun turns, as a square one pixel across,
+// and a brightness from a twentieth of the brightest up, most of them
+// faint (Approximation: Studio's stars' colors are vertex data the pack
+// doesn't hold; a Studio 0.748 screenshot at midnight shows faint single
+// pixels, few of them bright).
 @vertex
 fn vs_star(@builtin(vertex_index) i: u32, @builtin(instance_index) star: u32) -> StarOut {
     let a = pcg(star);
@@ -147,9 +148,11 @@ fn vs_star(@builtin(vertex_index) i: u32, @builtin(instance_index) star: u32) ->
     let ring = sqrt(max(1.0 - z * z, 0.0));
     let d = vec3(ring * cos(around), ring * sin(around), z);
     var out: StarOut;
-    // A pixel spans `fog_range.w` studs one stud away.
-    out.clip = facing(d, g.fog_range.w, quad_corner(i));
-    out.light = g.stars.z * mix(0.1, 1.0, unit(pcg(b))) * haze_kept(d);
+    // A pixel spans `fog_range.w` studs one stud away, so the square
+    // covers one pixel wherever it lands.
+    out.clip = facing(d, 0.5 * g.fog_range.w, quad_corner(i));
+    let bright = unit(pcg(b));
+    out.light = g.stars.z * mix(0.05, 1.0, bright * bright) * haze_kept(d);
     return out;
 }
 

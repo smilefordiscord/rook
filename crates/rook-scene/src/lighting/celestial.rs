@@ -4,7 +4,7 @@
 use rook_render::{Disc, DiscImage, Stars};
 
 use super::sky::SkyImage;
-use super::sun::{day_turn, moon_direction, moon_fade, sun_color};
+use super::sun::{day_turn, horizon_fade, moon_direction};
 use super::*;
 
 /// What a Sky's celestial bodies are without a Sky, or before its
@@ -26,8 +26,10 @@ const SUN_LIGHT: f32 = 4.0;
 const MOON_LIGHT: f32 = 1.0;
 
 /// The brightest star's light units at night (Approximation: Studio's
-/// `AdvStars` scales its points' colors by values the pack doesn't hold).
-const STAR_LIGHT: f32 = 1.0;
+/// `AdvStars` scales its points' colors by values the pack doesn't hold;
+/// set against a Studio 0.748 screenshot at midnight, where most stars
+/// are faint).
+const STAR_LIGHT: f32 = 0.15;
 
 /// The most stars a Sky draws: Studio keeps a script's `StarCount` within
 /// 0 to 5,000 (Confirmed: conformance case `lighting/sky_clamps`); a
@@ -60,9 +62,11 @@ impl SceneCache {
             turn: day_turn(hours),
             light: STAR_LIGHT * l.night_sky.shown,
         };
-        // The sun takes its light's hue: white by day, yellow in the last
-        // degrees above the horizon, gone below it (Inference).
-        let hue = sun_color(sun.y).map(|c| c * 2.0 * SUN_LIGHT);
+        // The disc stays white down to the horizon, where its light turns
+        // yellow (Studio 0.748 screenshot at ClockTime 17.8: a white disc
+        // with a pale cyan-white halo), faded in as the moon is
+        // (Approximation).
+        let light = [SUN_LIGHT * horizon_fade(sun.y); 3];
         if sun.y > 0.0 {
             l.sun_disc = self.disc(
                 dom,
@@ -70,12 +74,12 @@ impl SceneCache {
                 ("SunTextureContent", "SunTextureId", SUN_TEXTURE),
                 ("SunAngularSize", SUN_SIZE),
                 sun,
-                hue,
+                light,
             );
         }
         let moon = moon_direction(sun);
         if moon.y > 0.0 {
-            let light = [MOON_LIGHT * moon_fade(moon.y); 3];
+            let light = [MOON_LIGHT * horizon_fade(moon.y); 3];
             l.moon_disc = self.disc(
                 dom,
                 sky,

@@ -1,8 +1,9 @@
 # Atmosphere
 
 Checked against Studio 0.748 on 2026-11-23. Only the
-[properties](#its-properties) as scripts see them are measured in Studio;
-the rest comes from the creator docs (Atmosphere, the "Atmospheric
+[properties](#its-properties) as scripts see them are measured in Studio,
+and its look compared with one Studio screenshot
+([below](#how-rook-does-it)); the rest comes from the creator docs (Atmosphere, the "Atmospheric
 effects" guide) and the form of the shaders in the install's
 `shaders_glsl3.pack` (`version-8d7a1009c17e4ff8`), read for facts as the
 [clean-implementation policy](../../design/policies.md#clean-implementation)
@@ -72,9 +73,9 @@ The mapping, all Approximations to settle against Studio:
 
 | Property | Rook's parameter |
 |---|---|
-| Density `d` (0 to 1) | `z = −d³ / 40` per stud: a surface keeps half of itself every `40 / d³` studs (about 650 at the default 0.395), `x = 0` |
+| Density `d` (0 to 1) | `z = −d³ / 250` per stud: a surface keeps half of itself every `250 / d³` studs (about 4,000 at the default 0.395), `x = 0` |
 | Offset (0 to 1) | the least blur `y` |
-| Haze `h` (0 to 10) | `a = −0.1 h`, `b = 1`: at Haze 1 the sky keeps 93% overhead, half at 10% of the way up |
+| Haze `h` (0 to 10) | `a = −0.005 h`, `b = 1`: at Haze 2 the sky keeps 69% a degree up and half at half a degree, a thin band at the horizon |
 | Color | the haze's color, its sRGB value squared |
 | Glare (0 to 10) | the glare's strength, times the sun's (or moon's) light |
 | Decay | the glare's power per channel, `4 / Decay` (a channel Decay keeps falls off slowly) |
@@ -84,6 +85,14 @@ the horizon, tinted for the time of day, with the night's gradient
 ([sky](sky.md#the-night-sky)): the haze takes Color's hue, not the sky's,
 as the docs' captures show it (a blue sky times a yellow Color would be
 green).
+
+Compared with a Studio 0.748 screenshot on 2026-11-23 (Density 0.45,
+Offset 0.25, Haze 2, Glare 2, Color (199, 170, 107), Decay (92, 60, 13),
+ClockTime 16.5): Studio puts only a slight pale haze on parts 150 to 900
+studs away, none on near ones, and no colored band or glare at the
+horizon. Rook's constants were far stronger (a yellow band, fogged near
+parts); they're set to that look now. Rook still shows a line of Color a
+few pixels high where the sky meets the ground.
 
 To settle in Studio, on the Baseplate at noon and at dusk:
 

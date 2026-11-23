@@ -161,9 +161,10 @@ Rook (`celestial.rs` in `crates/rook-scene/src/lighting/`, `vs_disc` and
 camera that spans its angular size, the image's sRGB color squared times
 its light, added over the sky. Approximations until Studio is measured:
 the sun at 4 light units at its image's white, so its middle is white,
-taking its light's hue (yellow in the last degrees above the horizon,
-gone below it); the moon at 1 unit, faded in over the last degrees above
-the horizon as its light is. A Sky's own image that won't load gives the
+and white down to the horizon though its light turns yellow there (a
+Studio 0.748 screenshot at ClockTime 17.8, 2026-11-23, shows a white
+disc with a pale cyan-white halo); the sun and the moon (at 1 unit) are
+faded in over the last degrees above the horizon as the moon's light is. A Sky's own image that won't load gives the
 default one, as a skybox image does (Inference); without a Roblox install
 the defaults don't load either, and Rook draws its own soft white disc;
 an empty image draws nothing (Inference). A place without a Sky shows a new Sky's sun and
@@ -171,8 +172,8 @@ moon (Inference). The reflection cube keeps the sky unturned and every
 read of it turns by `SkyboxOrientation`, so turning the sky never builds
 the cube again.
 
-To settle in Studio: the discs' brightness and color at noon, at dusk and
-through the horizon; whether a positive `SkyboxOrientation` angle turns
+To settle in Studio: the discs' brightness at noon, at dusk and through
+the horizon; whether a positive `SkyboxOrientation` angle turns
 as Rook's; whether a place without a Sky shows the sun.
 
 ## The night sky
@@ -200,19 +201,22 @@ Rook (`night_sky` in `crates/rook-scene/src/lighting/sky.rs`,
   to 1/e by 0.15 of the way up (the sine of the elevation). Approximation:
   a look to match the description until a capture of the default sky at
   midnight sets the colors and the glow's height.
-- `StarCount` stars, each a square two pixels across at a direction spread
-  evenly over the sky and a brightness from a tenth of the brightest up,
-  both made from its index, so they stay put from frame to frame. The
+- `StarCount` stars, each one pixel at a direction spread evenly over the
+  sky and a brightness from a twentieth of the brightest up, most of them
+  faint (the square of an even spread), both made from its index, so they
+  stay put from frame to frame. The
   field turns with the time of day about the axis the sun turns about
   (Inference), and doesn't turn with `SkyboxOrientation` (Confirmed:
-  creator docs). The brightest is 1 light unit at night, faded in with the
-  gradient (Approximation). A file's `StarCount` over 5,000 draws 5,000
+  creator docs). The brightest is 0.15 light units at night, faded in
+  with the gradient (Approximation, set against a Studio 0.748 screenshot
+  of the default sky at midnight, 2026-11-23: stars a pixel across, most
+  of them faint; Rook's now land within about 10 levels of Studio's
+  middle and brightest stars, at about the same number on screen). A file's `StarCount` over 5,000 draws 5,000
   (Inference: a script's reads back as 5,000).
 
 To settle in Studio: the gradient's colors at midnight overhead, 10° up and
 at the horizon; when it shows against the tint between 18.0 and 18.3; the
-stars' count on screen, their brightness and whether they turn with the
-clock.
+stars' colors and whether they turn with the clock.
 
 ## Not done
 
