@@ -12,6 +12,7 @@ pub(crate) fn native(owner: &str, name: &str) -> Option<RawMethod> {
     Some(match (owner, name) {
         ("TextService", "GetTextSize") => get_text_size,
         ("TextService", "GetTextSizeOffsetAsync") => get_text_size_offset,
+        ("TextService", "GetTextBoundsAsync") => get_text_bounds,
         _ => return None,
     })
 }
@@ -34,4 +35,27 @@ fn get_text_size(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
 /// place text at the line's start.
 fn get_text_size_offset(lua: &Lua, _: InstanceId, _: &Args) -> ApiResult<Outcome> {
     Outcome::ret(lua, 0.0)
+}
+
+/// `GetTextBoundsAsync(params)`: the bounds of a GetTextBoundsParams'
+/// `Text` in its `Font` at `Size`, wrapped to `Width` when that's above
+/// zero (creator-docs TextService:GetTextBoundsAsync,
+/// GetTextBoundsParams). Rook's fonts are local, so it answers at once.
+/// Approximation: rich text is measured as written.
+fn get_text_bounds(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
+    let params = a.instance(0)?;
+    let bounds = with_world(lua, |w| {
+        let dom = &w.dom;
+        let text = dom.string_property(params, "Text").unwrap_or_default();
+        let size = dom.float_property(params, "Size").unwrap_or(20.0);
+        let width = dom.float_property(params, "Width").unwrap_or(0.0);
+        let font = dom
+            .font_property(params, "Font")
+            .or_else(|| rook_types::font_from_enum("SourceSans"))
+            .unwrap_or_default();
+        let wrap = if width > 0.0 { width } else { 1.0e7 };
+        w.gui
+            .text_size(&text, font, size, glam::Vec2::new(wrap, 1.0e7))
+    });
+    Outcome::ret(lua, LVector2(Vector2::new(bounds.x, bounds.y)))
 }

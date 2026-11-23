@@ -1,4 +1,4 @@
-//! Path2D's control points.
+//! Path2D's control points, and TextService:GetTextBoundsAsync.
 
 use crate::tests::*;
 
@@ -34,5 +34,22 @@ fn path2d_control_points() {
             "false Path2D:SetControlPoints() only supports 100 control points.",
             "100",
         ],
+    );
+}
+
+#[test]
+fn text_bounds_match_text_size() {
+    expect(
+        r#"
+        local ts = game:GetService("TextService")
+        local params = Instance.new("GetTextBoundsParams")
+        params.Text = "hello world"
+        params.Size = 18
+        params.Font = Font.fromEnum(Enum.Font.Gotham)
+        local b = ts:GetTextBoundsAsync(params)
+        print(typeof(b), b == ts:GetTextSize("hello world", 18, Enum.Font.Gotham, Vector2.new(1e7, 1e7)))
+        "#,
+        0,
+        &["Vector2 true"],
     );
 }
