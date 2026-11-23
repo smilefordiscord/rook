@@ -3,6 +3,7 @@
 // the screen, with Highlights and then the GUI over it
 // (docs/behavior/lighting/post-processing.md).
 
+import package::post::focus::{distance_of, far_circle};
 import package::tone::{FRAME_LIGHT, linear_to_srgb, srgb_to_linear, studio_light3};
 
 struct Tone {
@@ -14,11 +15,14 @@ struct Tone {
     // its w.
     color: array<vec4<f32>, 3>,
     // x: how much of the blurred frame replaces the frame; y: 1 to add
-    // the bloom texture's light; z: 1 to add the sun rays'.
+    // the bloom texture's light; z: 1 to add the sun rays'; w: 1 to mix
+    // in the depth of field's fields.
     effects: vec4<f32>,
     // The Blooms added in place (`Size` 0): thresholds in light units,
     // then intensities.
     in_place: array<vec4<f32>, 2>,
+    // The depth of field's focus: x its distance, y its radius, in studs.
+    focus: vec4<f32>,
     // Each Highlight's fill and outline (sRGB, and their opacity), by its
     // number - 1 (`renderer/passes/highlights.rs`).
     looks: array<vec4<f32>, 62>,
@@ -38,6 +42,13 @@ struct Tone {
 @group(1) @binding(2) var bloom: texture_2d<f32>;
 // The sun rays' light, in light units, half the frame's size.
 @group(1) @binding(3) var rays: texture_2d<f32>;
+// The depth of field's far field (times its circle, in alpha) and near
+// field (how much it covers in alpha), in light units, half the frame's
+// size.
+@group(1) @binding(4) var far_field: texture_2d<f32>;
+@group(1) @binding(5) var near_field: texture_2d<f32>;
+// The main pass's depth, while the depth of field reads it.
+@group(1) @binding(6) var depth: texture_depth_2d;
 
 @vertex
 fn vs_tonemap(@builtin(vertex_index) i: u32) -> @builtin(position) vec4<f32> {
@@ -51,14 +62,29 @@ fn fs_tonemap(@builtin(position) at: vec4<f32>) -> @location(0) vec4<f32> {
     let v = textureLoad(frame_texture, p, 0).rgb;
     var units = v * v * FRAME_LIGHT;
     let uv = at.xy / vec2<f32>(textureDimensions(frame_texture));
+    // The depth of field's fields replace the frame where they blur it,
+    // before anything adds to it (Studio resolves them into the frame).
+    if tone.effects.w > 0.0 {
+        // How blurred this pixel's own surface is, at full resolution, so
+        // sharp things keep their edges against a blurred background.
+        let far = textureSampleLevel(far_field, post_sampler, uv, 0.0);
+        let z = distance_of(textureLoad(depth, p, 0));
+        if far.a > 1e-4 {
+            units = mix(units, far.rgb / far.a, far_circle(z, tone.focus.xy));
+        }
+        let near = textureSampleLevel(near_field, post_sampler, uv, 0.0);
+        units = mix(units, near.rgb, near.a);
+    }
     // Bloom's light adds before the curve (Studio's
     // `ImageProcessBloomFS`), and a Bloom without bleed adds each texel's
     // own light over its threshold, as its chain's first copy keeps it.
-    let own = units;
-    let brightest = max(own.r, max(own.g, own.b));
-    for (var i = 0; i < 4; i++) {
-        let over = max(brightest - tone.in_place[0][i], 0.0) / (brightest + 0.001);
-        units += own * over * tone.in_place[1][i];
+    if any(tone.in_place[1] != vec4(0.0)) {
+        let own = units;
+        let brightest = max(own.r, max(own.g, own.b));
+        for (var i = 0; i < 4; i++) {
+            let over = max(brightest - tone.in_place[0][i], 0.0) / (brightest + 0.001);
+            units += own * over * tone.in_place[1][i];
+        }
     }
     if tone.effects.y > 0.0 {
         units += textureSampleLevel(bloom, post_sampler, uv, 0.0).rgb;

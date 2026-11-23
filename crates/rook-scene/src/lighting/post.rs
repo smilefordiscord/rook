@@ -4,7 +4,7 @@
 //! (`RenderChanges::post_effects`), so a read costs those children.
 
 use super::*;
-use rook_render::{Bloom, ColorCorrection, PostEffects, SunRays, Tonemapper};
+use rook_render::{Bloom, ColorCorrection, DepthOfField, PostEffects, SunRays, Tonemapper};
 
 /// The enabled PostEffects directly under Lighting, then under the current
 /// Camera, in child order (Confirmed: creator-docs PostEffect, effects
@@ -45,6 +45,16 @@ pub(crate) fn post_effects(dom: &Dom) -> PostEffects {
                 if post.sun_rays.is_none_or(|r| rays.intensity > r.intensity) {
                     post.sun_rays = Some(rays);
                 }
+            }
+            // The first one draws (Inference: Studio's shaders take one set
+            // of settings).
+            "DepthOfFieldEffect" if post.depth_of_field.is_none() => {
+                post.depth_of_field = Some(DepthOfField {
+                    far_intensity: dom.float_property(id, "FarIntensity").unwrap_or(0.75),
+                    focus_distance: dom.float_property(id, "FocusDistance").unwrap_or(0.05),
+                    in_focus_radius: dom.float_property(id, "InFocusRadius").unwrap_or(10.0),
+                    near_intensity: dom.float_property(id, "NearIntensity").unwrap_or(0.75),
+                });
             }
             // The greatest Size wins (Confirmed: creator-docs BlurEffect).
             "BlurEffect" => {
@@ -210,6 +220,31 @@ mod tests {
         .unwrap();
         let rays = post.sun_rays.unwrap();
         assert_eq!((rays.intensity, rays.spread), (0.5, 0.3));
+    }
+
+    /// Of several DepthOfFields the first enabled one draws, with Studio's
+    /// defaults.
+    #[test]
+    fn the_first_depth_of_field_wins() {
+        let (mut dm, mut cache) = place();
+        let post = run(
+            &mut dm,
+            &mut cache,
+            "Instance.new('DepthOfFieldEffect').Parent = game.Lighting
+             local b = Instance.new('DepthOfFieldEffect')
+             b.FocusDistance = 30
+             b.Parent = game.Lighting",
+        )
+        .unwrap();
+        let dof = post.depth_of_field.unwrap();
+        assert_eq!((dof.focus_distance, dof.in_focus_radius), (0.05, 10.0));
+        assert_eq!((dof.far_intensity, dof.near_intensity), (0.75, 0.75));
+        let post = run(
+            &mut dm,
+            &mut cache,
+            "game.Lighting:FindFirstChildOfClass('DepthOfFieldEffect').Enabled = false",
+        );
+        assert_eq!(post.unwrap().depth_of_field.unwrap().focus_distance, 30.0);
     }
 
     /// A ColorGradingEffect's curve applies from the Camera too, and the

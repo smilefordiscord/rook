@@ -9,6 +9,7 @@
 
 pub(crate) mod bloom;
 pub(crate) mod blur;
+pub(crate) mod depth_of_field;
 pub(crate) mod sun_rays;
 
 use wesl_core::include_wesl;
@@ -79,6 +80,8 @@ pub(crate) struct Shared {
     slots: Slots,
     /// One black texel, for a texture a pass or the tone pass doesn't use.
     black: wgpu::TextureView,
+    /// One texel of depth, for the tone pass while nothing reads depth.
+    no_depth: wgpu::TextureView,
 }
 
 /// A texture a post pass draws into and others read.
@@ -175,6 +178,22 @@ impl Shared {
             sampler,
             slots: Slots::new(device),
             black: black.create_view(&Default::default()),
+            no_depth: device
+                .create_texture(&wgpu::TextureDescriptor {
+                    label: Some("rook post no depth"),
+                    size: wgpu::Extent3d {
+                        width: 1,
+                        height: 1,
+                        depth_or_array_layers: 1,
+                    },
+                    mip_level_count: 1,
+                    sample_count: 1,
+                    dimension: wgpu::TextureDimension::D2,
+                    format: DEPTH_FORMAT,
+                    usage: wgpu::TextureUsages::TEXTURE_BINDING,
+                    view_formats: &[],
+                })
+                .create_view(&Default::default()),
         }
     }
 
@@ -373,6 +392,11 @@ pub(crate) struct ToneInputs {
     pub(crate) bloom: f32,
     /// 1 when the sun rays texture holds light to add.
     pub(crate) rays: f32,
+    /// 1 when the depth of field's fields are drawn.
+    pub(crate) depth_of_field: f32,
+    /// The depth of field's focus: x its distance, y its radius, in
+    /// studs.
+    pub(crate) focus: [f32; 4],
     /// The Blooms without bleed (`Size` 0), added in place: each one's
     /// threshold in light units, and its intensity (0 for none).
     pub(crate) in_place: [[f32; 4]; 2],
@@ -384,10 +408,14 @@ struct ToneReads {
     blurred: Option<wgpu::TextureView>,
     bloom: Option<wgpu::TextureView>,
     rays: Option<wgpu::TextureView>,
+    far: Option<wgpu::TextureView>,
+    near: Option<wgpu::TextureView>,
+    /// The depth buffer's depth, while the depth of field reads it.
+    depth: Option<wgpu::TextureView>,
 }
 
 /// How many textures the tone pass's group 1 holds after its sampler.
-const TONE_TEXTURES: u32 = 3;
+const TONE_TEXTURES: u32 = 5;
 
 /// The post effects' pipelines and textures.
 #[derive(Debug)]
@@ -402,6 +430,7 @@ pub(crate) struct Post {
     blur: blur::Blur,
     bloom: bloom::BloomPasses,
     sun_rays: sun_rays::SunRaysPasses,
+    depth_of_field: depth_of_field::DepthOfFieldPasses,
 }
 
 impl Post {
@@ -425,6 +454,16 @@ impl Post {
                 count: None,
             }),
         );
+        entries.push(wgpu::BindGroupLayoutEntry {
+            binding: TONE_TEXTURES + 1,
+            visibility: wgpu::ShaderStages::FRAGMENT,
+            ty: wgpu::BindingType::Texture {
+                sample_type: wgpu::TextureSampleType::Depth,
+                view_dimension: wgpu::TextureViewDimension::D2,
+                multisampled: false,
+            },
+            count: None,
+        });
         let tone_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("rook tone post"),
             entries: &entries,
@@ -446,6 +485,11 @@ impl Post {
             &shared,
             &module("rook sun rays", include_wesl!("sun_rays")),
         );
+        let depth_of_field = depth_of_field::DepthOfFieldPasses::new(
+            device,
+            &shared,
+            &module("rook depth of field", include_wesl!("depth_of_field")),
+        );
         let tone_reads = ToneReads::default();
         let tone_group = Self::make_tone_group(device, &shared, &tone_layout, &tone_reads);
         Self {
@@ -456,6 +500,7 @@ impl Post {
             blur,
             bloom,
             sun_rays,
+            depth_of_field,
         }
     }
 
@@ -494,6 +539,9 @@ impl Post {
                 texture(1, reads.blurred.as_ref(), &shared.black),
                 texture(2, reads.bloom.as_ref(), &shared.black),
                 texture(3, reads.rays.as_ref(), &shared.black),
+                texture(4, reads.far.as_ref(), &shared.black),
+                texture(5, reads.near.as_ref(), &shared.black),
+                texture(6, reads.depth.as_ref(), &shared.no_depth),
             ],
         })
     }
@@ -511,6 +559,10 @@ impl Post {
         let (frame, size) = (view.frame, view.size);
         let shared = &mut self.shared;
         let rays = (self.sun_rays).record(device, shared, encoder, view, effects.sun_rays);
+        let dof =
+            (self.depth_of_field).record(device, shared, encoder, view, effects.depth_of_field);
+        let (far, near) = dof.map(|f| (f.far, f.near)).unzip();
+        let depth = far.is_some().then(|| view.depth.clone());
         let bloom = (self.bloom).record(device, shared, encoder, (frame, size), &effects.bloom);
         let blurred = (self.blur).record(device, shared, encoder, frame, size, effects.blur);
         shared.slots.upload(queue);
@@ -518,11 +570,23 @@ impl Post {
             blurred,
             bloom: bloom.texture,
             rays,
+            far,
+            near,
+            depth,
         };
         let inputs = ToneInputs {
             blur: if reads.blurred.is_some() { 1.0 } else { 0.0 },
             bloom: if reads.bloom.is_some() { 1.0 } else { 0.0 },
             rays: if reads.rays.is_some() { 1.0 } else { 0.0 },
+            depth_of_field: if reads.far.is_some() { 1.0 } else { 0.0 },
+            focus: effects.depth_of_field.map_or([0.0; 4], |d| {
+                [
+                    d.focus_distance.max(0.0),
+                    d.in_focus_radius.max(0.0),
+                    0.0,
+                    0.0,
+                ]
+            }),
             in_place: bloom.in_place,
         };
         if reads != self.tone_reads {

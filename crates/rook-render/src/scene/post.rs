@@ -16,6 +16,21 @@ pub struct PostEffects {
     pub bloom: Vec<Bloom>,
     /// The enabled SunRaysEffect with the greatest `Intensity`.
     pub sun_rays: Option<SunRays>,
+    /// The first enabled DepthOfFieldEffect.
+    pub depth_of_field: Option<DepthOfField>,
+}
+
+/// A DepthOfFieldEffect's properties.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct DepthOfField {
+    /// How blurred what's beyond the focus gets.
+    pub far_intensity: f32,
+    /// Where the focus is, in studs from the camera.
+    pub focus_distance: f32,
+    /// How far either side of `focus_distance` stays sharp, in studs.
+    pub in_focus_radius: f32,
+    /// How blurred what's before the focus gets.
+    pub near_intensity: f32,
 }
 
 /// A SunRaysEffect's properties.

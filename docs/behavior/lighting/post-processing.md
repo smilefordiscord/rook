@@ -1,6 +1,7 @@
 # Post-processing
 
-Checked against Studio 0.748 on 2026-11-23, by its shaders and the creator docs only: nothing on this page is measured in Studio yet.
+Checked against Studio 0.748 on 2026-11-23, by its shaders and the
+creator docs only: nothing on this page is measured in Studio yet.
 
 The PostEffects (ColorCorrectionEffect, BlurEffect, BloomEffect,
 SunRaysEffect, DepthOfFieldEffect and ColorGradingEffect) change the
@@ -156,6 +157,60 @@ own choices:
 - Of several SunRaysEffects the one with the greatest `Intensity` draws
   (Inference: the shader takes one set of settings).
 
+## DepthOfFieldEffect
+
+Blurs what isn't in focus, as a camera lens does: nothing within
+`InFocusRadius` studs either side of `FocusDistance` studs from the
+camera, the far field beyond by `FarIntensity`, the near field before by
+`NearIntensity` (Confirmed: creator-docs and its diagram). Studio's
+defaults: FarIntensity 0.75, FocusDistance 0.05, InFocusRadius 10,
+NearIntensity 0.75.
+
+Studio's DOF shaders (`DOF*`, `BokehFarCoCFS`, `BokehNearCoCFS`;
+Inference) split the frame into a far and a near field at reduced size:
+
+- Each pixel gathers 45 taps (27 in a cheaper form) over a disk whose
+  radius is its circle of confusion squared times a setting, × 0.014 of
+  the screen's height.
+- A far tap counts only where its own circle reaches back to the pixel,
+  weighted by its circle; near taps count by their own circles, so the
+  near field's blur spreads over what's behind it.
+- The fields are resolved back into the frame before the bloom and the
+  last pass read it.
+
+The `shaders_glsl3.pack` forms that compute the circles from depth are
+stubs (they return 1), so how a distance becomes a circle isn't in them.
+
+Rook (`renderer/passes/post/depth_of_field.rs`,
+`shaders/post/depth_of_field.wgsl`, `shaders/post/focus.wgsl`), at half
+the frame's size:
+
+- A first pass keeps one frame texel of each two by two, in light units,
+  with its far circle.
+- The far gather takes 24 taps over the pixel's own circle, each counting
+  by Studio's rule.
+- The near gather takes 24 taps over the widest near circle, each
+  counting where its own circle reaches the pixel; how many count is how
+  much the near field covers the pixel.
+- The tone pass mixes the far field in by each pixel's own circle,
+  worked out from the full-size depth buffer so sharp things keep sharp
+  edges against a blurred background, then the near field over it.
+
+Its own choices:
+
+- The circles are a thin lens's (Approximation): beyond the focus 1 −
+  (FocusDistance + InFocusRadius) / distance, 0 at the focus's far edge
+  and 1 at infinity (the sky blurs fully); before it (FocusDistance −
+  InFocusRadius) / distance − 1, 0 at the near edge and 1 at half that
+  distance.
+- A circle of 1 blurs across a radius of the intensity times 0.02 of the
+  screen's height (Approximation).
+- It's mixed in by the tone pass, before Bloom and SunRays add their
+  light, where Studio resolves it into the frame before its bloom chain
+  and its blur read it, so a Bloom's glow and a Blur come from the sharp
+  frame (Approximation).
+- Of several DepthOfFieldEffects the first enabled draws (Inference).
+
 ## Neon's glow
 
 Neon glows at high quality levels with no BloomEffect anywhere
@@ -212,4 +267,8 @@ texel when they're off.
   `Intensity` (the open sky around the sun at several settings), how it
   falls off with the sun off screen or behind the camera, whether it
   comes from the moon at night, and what two effects do together.
+- DepthOfField: the blur's radius against distance for each property
+  (a row of checkered boards receding from the camera at several
+  settings), whether the sky blurs, how its intensities scale (and
+  whether they stop at 1), and which of two effects draws.
 - Which of several ColorGradingEffects picks the curve.

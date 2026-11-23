@@ -207,3 +207,34 @@ fn sun_rays_stream_from_the_sky_around_the_sun() {
         with(&mut r, &mut scene, &toward, false)
     );
 }
+
+/// DepthOfField leaves what's in focus sharp, and blurs a light beyond
+/// the focus or before it over its neighbors.
+#[test]
+fn depth_of_field_blurs_outside_the_focus() {
+    let Ok(mut r) = Renderer::headless() else {
+        return;
+    };
+    let (mut scene, camera) = glow();
+    scene.parts[0].size = Vec3::splat(1.5);
+    let at = |image: &[u8], x: usize, y: usize| image[y * 32 + x];
+    let sharp = reds(&mut r, &scene, &camera);
+    assert_eq!(at(&sharp, 21, 16), 0);
+    // Intensity 1 blurs across a fiftieth of the screen's height, under a
+    // pixel here: 10 spreads it over several.
+    let focus = |focus_distance, in_focus_radius| DepthOfField {
+        far_intensity: 10.0,
+        focus_distance,
+        in_focus_radius,
+        near_intensity: 10.0,
+    };
+    // The block is 10 studs away.
+    scene.post.depth_of_field = Some(focus(10.0, 5.0));
+    assert_eq!(reds(&mut r, &scene, &camera), sharp);
+    scene.post.depth_of_field = Some(focus(1.0, 0.5));
+    let far = reds(&mut r, &scene, &camera);
+    assert!(at(&far, 21, 16) > 0, "{}", at(&far, 21, 16));
+    scene.post.depth_of_field = Some(focus(40.0, 5.0));
+    let near = reds(&mut r, &scene, &camera);
+    assert!(at(&near, 21, 16) > 0, "{}", at(&near, 21, 16));
+}
