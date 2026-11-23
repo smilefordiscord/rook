@@ -57,9 +57,9 @@ impl Gui {
 
     /// Whether a shown on-screen GuiButton has `Modal` on, which frees
     /// the mouse while the camera would lock it (creator-docs
-    /// GuiButton.Modal), as of the last layout.
+    /// GuiButton.Modal), as of the last layout, or the prompt shows.
     pub fn modal_shown(&self, dom: &Dom) -> bool {
-        self.modals.shown(dom, &self.layout)
+        self.prompt_shown() || self.modals.shown(dom, &self.layout)
     }
 
     /// The nearest `Active` world GUI the ray from `origin` along `dir`

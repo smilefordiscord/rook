@@ -721,3 +721,34 @@ fn caret_blinks_mid_gray() {
     gui.sync(&mut dom);
     assert_eq!(caret(&mut gui, &dom), shown, "focus shows it again");
 }
+
+/// The disconnect prompt draws over every ScreenGui, a 400-pixel panel
+/// centered on the window, and its button is where input finds it
+/// (docs/behavior/characters/leaving.md#the-disconnect-prompt).
+#[test]
+fn the_prompt_draws_over_everything() {
+    let (mut dom, player_gui) = client();
+    let screen = child(&mut dom, "ScreenGui", player_gui, &[]);
+    set(&mut dom, screen, "DisplayOrder", Value::Int32(1000));
+    square(&mut dom, screen, 1, 0.1);
+    let mut gui = laid_out(&mut dom);
+    assert!(!gui.prompt_shown() && !gui.modal_shown(&dom));
+    gui.show_prompt(Prompt {
+        title: "Disconnected".into(),
+        message: "Gone".into(),
+        button: "Leave".into(),
+    });
+    assert!(gui.modal_shown(&dom));
+    let quads = drawn(&mut gui, &dom);
+    let panel = quads.iter().position(|q| q.size.x == 400.0).unwrap();
+    let square_at = quads.iter().position(|q| q.color[0] == 0.1).unwrap();
+    assert!(panel > square_at, "over the ScreenGui");
+    // On whole pixels.
+    assert!((quads[panel].center.x - 1561.0 / 2.0).abs() <= 0.5);
+    let button = quads[panel + 1..]
+        .iter()
+        .find(|q| q.color == [1.0; 4] && q.size.y == 36.0)
+        .unwrap();
+    assert!(gui.prompt_button_at(button.center));
+    assert!(!gui.prompt_button_at(quads[panel].center - Vec2::new(0.0, 60.0)));
+}

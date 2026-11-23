@@ -21,6 +21,10 @@ character it owns. This milestone puts all of them on the wire.
      M8's error prompt; joining by address from `rook-player`, one
      machine hosting while playing. Clients fetch content themselves, as
      they do now.
+   - *So far*: in one process, a client's connection ends in one place
+     (the session host's `leave`), and `Kick` ends it with its message
+     shown in Rook's own disconnect prompt
+     ([leaving and kicks](../behavior/characters/leaving.md)).
    - *Evidence first*: pick the transport. The
      [architecture](../design/architecture/replication.md#run-modes-and-replication-rook-net)
      names BrikNet (the earlier experiment), quinn and renet. Compare

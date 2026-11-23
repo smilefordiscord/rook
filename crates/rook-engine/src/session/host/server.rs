@@ -1,5 +1,6 @@
 //! The server end: the server DataModel, a link per joined client, and
-//! what each client is sent and delivers.
+//! what each client is sent and delivers. A client keeps its index for the
+//! whole session; once it has gone, its slot stays empty.
 
 use super::*;
 
@@ -9,13 +10,18 @@ pub(super) struct Link {
     pub(super) player: InstanceId,
     /// What the client was last told it owns.
     pub(super) owned: rook_lua::OwnedHere,
+    /// The server's `InvokeClient` calls sent to the client and not yet
+    /// answered, by the server's number: each fails if the client leaves
+    /// first, and only these replies are taken from it.
+    pub(super) invoked: std::collections::BTreeSet<u64>,
 }
 
 /// The server end: its DataModel and what each client should see.
 #[derive(Debug)]
 pub struct ServerHost {
     pub(super) server: DataModel,
-    pub(super) clients: Vec<Link>,
+    /// By client index; `None` once that client has gone.
+    pub(super) clients: Vec<Option<Link>>,
     /// Invokes from clients delivered here, by our number: the client and
     /// its own number for the call.
     pub(super) calls: FxHashMap<u64, (usize, u64)>,
@@ -52,7 +58,55 @@ impl ServerHost {
     }
 
     pub fn player(&self, client: usize) -> Option<InstanceId> {
-        self.clients.get(client).map(|c| c.player)
+        self.link(client).map(|c| c.player)
+    }
+
+    fn link(&self, client: usize) -> Option<&Link> {
+        self.clients.get(client).and_then(Option::as_ref)
+    }
+
+    /// The clients still connected, with their indices.
+    fn links(&self) -> impl Iterator<Item = (usize, &Link)> {
+        (self.clients.iter().enumerate()).filter_map(|(i, c)| Some((i, c.as_ref()?)))
+    }
+
+    /// Client `index` has gone, for `reason`: its player leaves the game
+    /// (`Players.PlayerRemoving`, its character removed) and the client
+    /// hears nothing more. The one place a client's connection ends.
+    /// `InvokeClient` calls it hadn't answered raise an error (Confirmed:
+    /// creator-docs RemoteFunction:InvokeClient), once the player is gone
+    /// (Inference), and its own invokes' replies have nowhere to go.
+    pub fn leave(&mut self, index: usize, reason: rook_lua::ExitReason) {
+        let Some(link) = self.clients.get_mut(index).and_then(Option::take) else {
+            return;
+        };
+        self.spawning.retain(|&p| p != link.player);
+        self.dead.retain(|_, (p, _)| *p != link.player);
+        self.calls.retain(|_, (client, _)| *client != index);
+        let rt = self.server.runtime();
+        rt.remove_player(link.player, reason);
+        for call in link.invoked {
+            rt.deliver_reply(call, false, &[not_connected()]);
+        }
+    }
+
+    /// Carry out the kicks the server's scripts asked for since the last
+    /// call: each kicked client is told why, then its player leaves.
+    /// Leaving runs scripts (`PlayerRemoving`), which may kick again.
+    fn kick(&mut self, out: &mut Vec<(usize, ToClient)>) {
+        loop {
+            let kicks = self.server.runtime().take_kicks();
+            if kicks.is_empty() {
+                return;
+            }
+            for (player, message) in kicks {
+                let Some((index, _)) = self.links().find(|(_, c)| c.player == player) else {
+                    continue;
+                };
+                out.push((index, ToClient::Kicked { message }));
+                self.leave(index, rook_lua::ExitReason::CreatorKick);
+            }
+        }
     }
 
     /// A player joins: the server gets a Player (with an empty Backpack and
@@ -120,11 +174,12 @@ impl ServerHost {
             let w = self.server.runtime().world();
             (source.snapshot(&w.dom), w.signal_behavior)
         };
-        self.clients.push(Link {
+        self.clients.push(Some(Link {
             source,
             player,
             owned: rook_lua::OwnedHere::default(),
-        });
+            invoked: std::collections::BTreeSet::new(),
+        }));
         Ok((
             self.clients.len() - 1,
             Joined {
@@ -186,9 +241,8 @@ impl ServerHost {
                 .unwrap_or(5.0);
             let auto_loads =
                 players.is_none_or(|p| dom.bool_property(p, "CharacterAutoLoads") != Some(false));
-            self.clients
-                .iter()
-                .filter_map(|c| {
+            self.links()
+                .filter_map(|(_, c)| {
                     let character = dom.ref_property(c.player, "Character")?;
                     let humanoid = dom.find_first_child_of_class(character, "Humanoid")?;
                     let health = dom.number_property(humanoid, "Health_XML")?;
@@ -204,17 +258,17 @@ impl ServerHost {
         }
     }
 
-    /// The replicated changes since the last call, for each client in turn.
-    /// Afterwards the server's journal is trimmed.
-    pub fn updates(&mut self) -> Vec<ToClient> {
+    /// The replicated changes since the last call, for each connected
+    /// client in turn, by index. Afterwards the server's journal is
+    /// trimmed.
+    pub fn updates(&mut self) -> Vec<(usize, ToClient)> {
         let updates = {
             let w = self.server.runtime().world();
             let time = w.scheduler.now();
-            self.clients
-                .iter_mut()
-                .map(|c| ToClient::Updates {
-                    time,
-                    updates: c.source.updates(&w.dom),
+            (self.clients.iter_mut().enumerate())
+                .filter_map(|(i, c)| {
+                    let updates = c.as_mut()?.source.updates(&w.dom);
+                    Some((i, ToClient::Updates { time, updates }))
                 })
                 .collect()
         };
@@ -224,11 +278,14 @@ impl ServerHost {
 
     /// Remote calls the server's scripts made since the last call, by the
     /// client each goes to. An invoke to a player with no client fails at
-    /// once.
+    /// once. Kicked clients hear so first, and nothing after.
     pub fn outgoing(&mut self) -> Vec<(usize, ToClient)> {
         let mut out = Vec::new();
+        self.kick(&mut out);
         // Each client hears what it owns when that changes.
-        for (i, link) in self.clients.iter_mut().enumerate() {
+        for (i, link) in
+            (self.clients.iter_mut().enumerate()).filter_map(|(i, c)| Some((i, c.as_mut()?)))
+        {
             let owned = rook_lua::owned_by(&mut self.server.runtime().world_mut(), link.player);
             if owned != link.owned {
                 link.owned = owned.clone();
@@ -241,10 +298,12 @@ impl ServerHost {
         if !self.clients.is_empty() {
             let mut calls = std::mem::take(&mut self.server.render_changes.effect_calls);
             calls.append(&mut self.server.runtime().world_mut().effect_calls);
-            if !calls.is_empty() {
+            let connected: Vec<usize> = self.links().map(|(i, _)| i).collect();
+            if let Some((&last, rest)) = connected.split_last()
+                && !calls.is_empty()
+            {
                 // Copied for each client but the last, which takes them.
-                let last = self.clients.len() - 1;
-                for i in 0..last {
+                for &i in rest {
                     out.push((i, ToClient::Effects(calls.clone())));
                 }
                 out.push((last, ToClient::Effects(calls)));
@@ -255,10 +314,10 @@ impl ServerHost {
         for activation in self.server.runtime().take_tool_activations() {
             let w = self.server.runtime().world();
             let holder = w.dom.parent(activation.tool);
-            let client = self.clients.iter().position(|c| {
+            let client = self.links().find(|(_, c)| {
                 holder.is_some() && w.dom.ref_property(c.player, "Character") == holder
             });
-            if let Some(i) = client {
+            if let Some((i, _)) = client {
                 out.push((i, ToClient::ActivateTool(activation)));
             }
         }
@@ -268,28 +327,29 @@ impl ServerHost {
             let mut send = |index: usize, kind: RemoteKind| sends.push((index, kind));
             match kind {
                 RemoteKind::FireClient { player } => {
-                    for (i, _) in self
-                        .clients
-                        .iter()
-                        .enumerate()
-                        .filter(|(_, c)| c.player == player)
-                    {
+                    for (i, _) in self.links().filter(|(_, c)| c.player == player) {
                         send(i, RemoteKind::FireClient { player });
                     }
                 }
                 RemoteKind::FireAllClients => {
-                    for i in 0..self.clients.len() {
+                    for (i, _) in self.links() {
                         send(i, RemoteKind::FireAllClients);
                     }
                 }
                 RemoteKind::InvokeClient { player, call } => {
-                    match self.clients.iter().position(|c| c.player == player) {
-                        Some(i) => send(i, RemoteKind::InvokeClient { player, call }),
-                        None => self.server.runtime().deliver_reply(
-                            call,
-                            false,
-                            &[NetValue::String(b"Player is not connected".to_vec())],
-                        ),
+                    let client = self.links().find(|(_, c)| c.player == player);
+                    match client.map(|(i, _)| i) {
+                        Some(i) => {
+                            if let Some(Some(link)) = self.clients.get_mut(i) {
+                                link.invoked.insert(call);
+                            }
+                            send(i, RemoteKind::InvokeClient { player, call });
+                        }
+                        None => {
+                            self.server
+                                .runtime()
+                                .deliver_reply(call, false, &[not_connected()])
+                        }
                     }
                 }
                 RemoteKind::Reply { call, ok } => {
@@ -348,7 +408,10 @@ impl ServerHost {
         if let Err(e) = moved {
             tracing::warn!("a client's character move failed: {e}");
         }
-        let source = &mut self.clients[index].source;
+        let Some(Some(link)) = self.clients.get_mut(index) else {
+            return;
+        };
+        let source = &mut link.source;
         for change in w.dom.journal().since(start) {
             if let rook_dom::Change::Property { id, property } = change
                 && let Some(value) = w.dom.property(*id, *property)
@@ -373,14 +436,19 @@ impl ServerHost {
             ToServer::MoveTool { tool, parent, grip } => {
                 let made = rt.repeat_tool_move(player, tool, parent);
                 rt.drain_deferred();
-                if let (Some(server), Some(client)) = (made, grip) {
-                    self.clients[index].source.adopt(server, client);
+                if let (Some(server), Some(client), Some(Some(link))) =
+                    (made, grip, self.clients.get_mut(index))
+                {
+                    link.source.adopt(server, client);
                 }
             }
             ToServer::ActivateTool(activation) => {
                 rt.deliver_tool_activation(Some(player), activation);
             }
             ToServer::Prompt(action) => rt.deliver_prompt_action(player, action),
+            // Inference: a client going away is an Unknown exit, though
+            // its own script kicked it.
+            ToServer::Leave => self.leave(index, rook_lua::ExitReason::Unknown),
             ToServer::Pose {
                 part,
                 cframe,
@@ -405,13 +473,24 @@ impl ServerHost {
                         );
                     }
                 }
-                RemoteKind::Reply { call, ok } => rt.deliver_reply(call, ok, &args),
+                RemoteKind::Reply { call, ok } => {
+                    let link = self.clients.get_mut(index).and_then(Option::as_mut);
+                    if link.is_some_and(|link| link.invoked.remove(&call)) {
+                        rt.deliver_reply(call, ok, &args);
+                    }
+                }
                 RemoteKind::FireClient { .. }
                 | RemoteKind::FireAllClients
                 | RemoteKind::InvokeClient { .. } => {}
             },
         }
     }
+}
+
+/// What an `InvokeClient` whose player isn't connected, or leaves before
+/// answering, raises (Inference: the words).
+fn not_connected() -> NetValue {
+    NetValue::String(b"Player is not connected".to_vec())
 }
 
 /// StarterPlayer's properties a joining Player copies, as (StarterPlayer

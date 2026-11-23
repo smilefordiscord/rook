@@ -434,6 +434,12 @@ impl Game {
         }
     }
 
+    /// Whether the player picked Leave on the prompt shown when the
+    /// server ended the connection (a kick): the window closes.
+    pub(crate) fn left(&self) -> bool {
+        self.view().left()
+    }
+
     pub(crate) fn has_client(&self) -> bool {
         matches!(self.mode, Mode::Play { .. })
     }

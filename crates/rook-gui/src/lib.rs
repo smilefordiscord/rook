@@ -24,6 +24,7 @@ use rook_dom::{Dom, DomError, InstanceId};
 use rook_types::{Value, Vector2, WorldCanvas, WorldCanvases};
 use rustc_hash::{FxHashMap, FxHashSet};
 
+pub use draw::overlays::prompt::Prompt;
 pub use images::GuiImage;
 pub use input::hits::WorldHit;
 pub use input::scrolling::BarDrag;
@@ -184,6 +185,8 @@ pub struct Gui {
     /// Each Path2D's control points, which scripts set with its methods
     /// (they're no property Roblox exposes).
     paths: FxHashMap<InstanceId, Vec<PathPoint>>,
+    /// The prompt shown over everything, if any.
+    prompt: Option<draw::overlays::prompt::Shown>,
 }
 
 /// A Path2D's control point: where it is and its tangents, each against
@@ -239,6 +242,7 @@ impl Default for Gui {
             glyphs: text::Glyphs::default(),
             images: images::Images::default(),
             paths: FxHashMap::default(),
+            prompt: None,
         }
     }
 }

@@ -3,7 +3,8 @@
 //! style), a ScrollingFrame's bars, then its image or text, cut by its
 //! UICorner and colored by its UIGradient, then its UIStroke; CanvasGroups
 //! drawn apart and laid over as one; what each world GUI's canvas draws,
-//! the same way; and the names and health bars over heads. Order and
+//! the same way; the names and health bars over heads; and the
+//! disconnect prompt over everything. Order and
 //! clipping rules:
 //! docs/behavior/gui/layout.md#drawing, docs/behavior/gui/modern.md.
 
@@ -259,6 +260,7 @@ impl Gui {
             glyphs: &mut self.glyphs,
         };
         let (layout, messages) = (&self.layout, &self.messages);
-        (self.screen).draw(dom, layout, (&mut text, &mut self.images), focus, messages)
+        let overlays = (messages, self.prompt.as_mut());
+        (self.screen).draw(dom, layout, (&mut text, &mut self.images), focus, overlays)
     }
 }

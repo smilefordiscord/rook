@@ -1,5 +1,6 @@
 mod appearance;
 mod emotes;
+pub(crate) mod leaving;
 pub(crate) mod movement;
 pub(crate) mod ownership;
 mod rigs;
@@ -19,6 +20,7 @@ use crate::runtime::world::World;
 
 pub(crate) use appearance::request as request_avatar;
 pub use appearance::{Avatar, Scales};
+pub use leaving::ExitReason;
 pub use rigs::{BuildRig, RigSource, RigType};
 
 /// The names a character's root part goes by, in the order they're looked
@@ -67,6 +69,7 @@ pub(super) fn native(owner: &str, name: &str) -> Option<RawMethod> {
         ("Players", "GetPlayerFromCharacter" | "playerFromCharacter") => player_from_character,
         ("Players", "GetPlayerByUserId") => player_by_user_id,
         ("Player", "LoadCharacter" | "LoadCharacterAsync") => load_character,
+        ("Player", "Kick") => leaving::kick,
         ("Humanoid", "TakeDamage") => take_damage,
         ("Players", "GetHumanoidDescriptionFromUserId") => appearance::description_from_user_id,
         ("Humanoid", "ApplyDescription" | "ApplyDescriptionReset") => appearance::apply_description,
@@ -173,10 +176,22 @@ pub(super) fn take_damage(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Ou
 }
 
 /// `Player:LoadCharacter()`: the server spawns the player a new character.
+/// A player that left (kicked, or out of Players) gets none, so a respawn
+/// a script waited to make doesn't build a character no one plays
+/// (Inference: the message is the one players report).
 pub(super) fn load_character(lua: &Lua, this: InstanceId, _: &Args) -> ApiResult<Outcome> {
     if with_world(lua, |w| w.is_client) {
         return Err(ScriptError(
             "LoadCharacter can only be called by the backend server".into(),
+        ));
+    }
+    let in_players = with_world(lua, |w| {
+        let parent = w.dom.parent(this);
+        parent.is_some() && parent == w.dom.find_service("Players")
+    });
+    if !in_players {
+        return Err(ScriptError(
+            "LoadCharacter can only be called when Player is in the world".into(),
         ));
     }
     spawn_character(lua, this)?;
@@ -191,16 +206,7 @@ pub(super) fn load_character(lua: &Lua, this: InstanceId, _: &Args) -> ApiResult
 /// CharacterAdded fires, and only then is the character parented to
 /// Workspace.
 pub(crate) fn spawn_character(lua: &Lua, player: InstanceId) -> ApiResult<InstanceId> {
-    let old = with_world(lua, |w| w.dom.ref_property(player, "Character"));
-    if let Some(old) = old {
-        let ud = push_instance(lua, old)?;
-        fire(
-            lua,
-            &SignalKey::event(player, "CharacterRemoving"),
-            &[LuaValue::UserData(ud)],
-        );
-        mutate(lua, |w| w.dom.destroy(old))?;
-    }
+    leaving::remove_character(lua, player)?;
     let character = mutate(lua, |w| {
         let first = w.spawned.insert(player);
         let character = rigs::body(w, player)?;

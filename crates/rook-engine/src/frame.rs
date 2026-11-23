@@ -26,6 +26,9 @@ impl DataModel {
 
     fn step_frame(&mut self, dt: Option<f64>) {
         profiling::scope!("DataModel::step");
+        if self.session_ended() {
+            return;
+        }
         let (now, dt) = {
             let mut w = self.runtime.world_mut();
             let dt = match dt {

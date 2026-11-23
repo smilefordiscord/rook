@@ -154,9 +154,18 @@ impl ClientHost {
         self.hover_out.extend(out);
     }
 
+    /// A message from the server. Once the connection has ended, nothing
+    /// more arrives.
     pub fn deliver(&mut self, msg: &ToClient) {
+        if self.client.session_ended() {
+            return;
+        }
         let rt = self.client.runtime();
         match msg {
+            ToClient::Kicked { message } => {
+                self.client
+                    .end_session(crate::session::ended::kick_prompt(message));
+            }
             &ToClient::Updates { time, ref updates } => {
                 let (start, local, added) = {
                     let mut w = rt.world_mut();
@@ -316,8 +325,24 @@ impl ClientHost {
 
     /// Remote calls, Tool moves and the character's pose since the last
     /// call (a pose only when it changed). An invoke of a RemoteFunction
-    /// the server doesn't share fails at once.
+    /// the server doesn't share fails at once. A LocalScript that kicked
+    /// the local player ends the connection: what came before goes, then
+    /// [`ToServer::Leave`], then nothing.
     pub fn outgoing(&mut self) -> Vec<ToServer> {
+        if self.client.session_ended() {
+            return Vec::new();
+        }
+        let kicked = self.client.runtime().take_kicks().into_iter().next();
+        let mut out = self.messages();
+        if let Some((_, message)) = kicked {
+            out.push(ToServer::Leave);
+            self.client
+                .end_session(crate::session::ended::kick_prompt(&message));
+        }
+        out
+    }
+
+    fn messages(&mut self) -> Vec<ToServer> {
         let mut out = std::mem::take(&mut self.hover_out);
         let poses = self.owned_poses();
         self.last_poses.retain(|root, _| {

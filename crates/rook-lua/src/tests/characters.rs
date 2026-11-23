@@ -1,4 +1,6 @@
-//! Characters (docs/behavior/characters/): HumanoidDescriptions and Tools.
+//! Characters (docs/behavior/characters/): HumanoidDescriptions, Tools
+//! and players leaving.
 
 mod descriptions;
+mod leaving;
 mod tools;

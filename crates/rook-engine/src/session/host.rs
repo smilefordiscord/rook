@@ -40,6 +40,10 @@ pub enum ToClient {
     /// What scripts made this client the owner of now (network
     /// ownership), sent when it changes.
     Owned(rook_lua::OwnedHere),
+    /// A server script kicked this client's player (`Player:Kick`), with
+    /// the message to show (empty: the default notice): the last message
+    /// the client gets.
+    Kicked { message: String },
 }
 
 /// From a client to the server, with the server's instance ids.
@@ -68,6 +72,9 @@ pub enum ToServer {
     /// A ProximityPrompt's hold or trigger event fired here: it fires on
     /// the server too, with the server's Player.
     Prompt(rook_lua::PromptAction),
+    /// The client's own scripts kicked its player (`Player:Kick` in a
+    /// LocalScript): it has gone, and its player leaves.
+    Leave,
     /// Where the client's simulation put an assembly it owns (its
     /// character, or what a script made it the owner of): the root part,
     /// which the rest of the assembly follows.

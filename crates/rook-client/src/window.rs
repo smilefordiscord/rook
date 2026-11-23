@@ -361,6 +361,9 @@ impl App {
         let dt = self.frame_clock.step(elapsed.as_secs_f64()).min(0.1) as f32;
         self.last_frame = now;
         self.apply_inbox(event_loop);
+        if self.game.left() {
+            event_loop.exit();
+        }
         let drawn = self.update(dt);
         // The menu's Leave.
         if self.game.leaving() {
