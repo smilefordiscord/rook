@@ -388,3 +388,35 @@ fn spent_budgets_queue_requests_until_they_refill() {
         &lines,
     );
 }
+
+/// An increment past a 64-bit integer raises and leaves the value as it
+/// was, in either kind of store, instead of wrapping around (or crashing
+/// a build that checks overflow). User ids are whole numbers.
+#[test]
+fn increments_and_user_ids_stay_whole_numbers() {
+    expect(
+        r#"
+        local dss = game:GetService("DataStoreService")
+        local ds = dss:GetDataStore("Big")
+        local od = dss:GetOrderedDataStore("Big")
+        local function try(f) print(select(2, pcall(f))) end
+        ds:IncrementAsync("k", 2^62)
+        try(function() ds:IncrementAsync("k", 2^62) end)
+        print(ds:GetAsync("k") == 2^62)
+        od:SetAsync("k", 2^62)
+        try(function() od:IncrementAsync("k", 2^62) end)
+        print(od:GetAsync("k") == 2^62)
+        try(function() ds:SetAsync("u", 1, { 1.5 }) end)
+        try(function() ds:SetAsync("u", 1, { 0/0 }) end)
+        "#,
+        60,
+        &[
+            "IncrementAsync's result is outside the range of a 64-bit integer.",
+            "true",
+            "IncrementAsync's result is outside the range of a 64-bit integer.",
+            "true",
+            "513: Attribute userId format is invalid.",
+            "513: Attribute userId format is invalid.",
+        ],
+    );
+}

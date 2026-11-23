@@ -112,6 +112,9 @@ pub(crate) fn user_ids_of(value: &LuaValue) -> Result<Vec<i64>, StoreError> {
             LuaValue::Integer(_) | LuaValue::Number(_) => number_of(&v),
             _ => None,
         };
+        // A user id is a whole number (Inference: Roblox's check isn't
+        // documented; NaN or a fraction would be stored as another id).
+        let id = id.filter(|n| n.is_finite() && n.fract() == 0.0);
         ids.push(id.ok_or(StoreError::BadUserId)? as i64);
     }
     if ids.len() > USER_ID_LIMIT {

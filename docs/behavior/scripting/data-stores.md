@@ -1,7 +1,7 @@
 # Data stores
 
 Checked against Studio 0.748 on 2026-11-23, from the creator docs only:
-no data store request has been measured in Studio yet (see
+no data store request has been measured in Studio (see
 [what needs a Studio check](#what-needs-a-studio-check)).
 
 How `DataStoreService` and its objects behave in Rook. The backing, budgets
@@ -76,7 +76,7 @@ reads return only the value, and `RemoveAsync` deletes the key for good.
   (Inference), both in Unix milliseconds of the game's clock.
   `GetUserIds` and `GetMetadata` are what that version was written with.
 - `SetAsync(key, value, userIds, options)` and `IncrementAsync` take user
-  IDs (an array of numbers, at most 4: Inference from older docs) and the
+  IDs (an array of whole numbers, at most 4: Inference from older docs) and the
   metadata of a `DataStoreSetOptions` or `DataStoreIncrementOptions`
   (`SetMetadata`); a write without them leaves the new version with none.
 - `RemoveAsync` returns the latest value and its key info and appends a
@@ -108,7 +108,9 @@ wording). An error in the transform is raised from `UpdateAsync` as it is.
 
 Adds `delta` (default 1) to an integer value, a missing key counting as 0;
 a value that isn't an integer raises 103 (Inference). A fractional delta is
-cut to its whole part, as Roblox passes it as an `int` (Inference).
+cut to its whole part, as Roblox passes it as an `int` (Inference). A sum
+past a 64-bit integer raises and leaves the value as it was (Inference:
+the docs give no limit).
 
 ## Pages
 

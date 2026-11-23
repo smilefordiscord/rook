@@ -152,7 +152,8 @@ fn json_type(value: &Json) -> &'static str {
 /// `IncrementAsync(key, delta = 1, userIds, options)`: the new value and,
 /// for a standard store, its key info. Both must be integers
 /// (creator-docs); a fractional delta is cut to one, as Roblox passes it
-/// as an `int` (Inference).
+/// as an `int` (Inference). A sum past a 64-bit integer raises, leaving
+/// the value as it was (Inference: Roblox's limit isn't documented).
 pub(super) fn increment(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> {
     let store = target(lua, this)?;
     let key = a.string(0)?;
@@ -172,7 +173,8 @@ pub(super) fn increment(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outc
                         return Err(StoreError::NotAllowed(json_type(&other).into()).into());
                     }
                 };
-                let value = Json::from(current + delta);
+                let sum = i64::checked_add(current, delta).ok_or(StoreError::IncrementOverflow)?;
+                let value = Json::from(sum);
                 let info = s.write(&full, Content::Value(value.clone()), user_ids, metadata, ms);
                 Ok((value, info))
             });
@@ -182,10 +184,12 @@ pub(super) fn increment(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outc
             check_key(&key)?;
             let value = with_world(lua, |w| {
                 let s = w.data_stores.ordered.get_mut(name, scope);
-                let value = s.get(&key).unwrap_or(0) + delta;
+                let value = (s.get(&key).unwrap_or(0))
+                    .checked_add(delta)
+                    .ok_or(StoreError::IncrementOverflow)?;
                 s.set(&key, value);
-                value
-            });
+                Ok::<_, StoreError>(value)
+            })?;
             ordered_result(lua, Some(value))
         }
     }

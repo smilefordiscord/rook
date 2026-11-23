@@ -68,6 +68,8 @@ pub(crate) enum StoreError {
     BatchOnStandard,
     #[error("BatchGetAsync takes from 1 to 100 keys.")]
     BatchSize,
+    #[error("IncrementAsync's result is outside the range of a 64-bit integer.")]
+    IncrementOverflow,
     #[error("{0} can't be configured with SetRateLimitForRequestType.")]
     NotConfigurable(&'static str),
     #[error("{name}'s {argument} must be from 0 to {max}.")]

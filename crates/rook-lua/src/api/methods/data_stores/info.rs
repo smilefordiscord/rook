@@ -79,6 +79,8 @@ fn set_metadata(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> {
 }
 
 fn options_metadata(lua: &Lua, this: InstanceId, _: &Args) -> ApiResult<Outcome> {
+    // Metadata SetMetadata couldn't take raises when a request carries
+    // it (`options_of`); read back, it is none (Inference).
     let metadata = with_world(lua, |w| {
         (w.data_stores.objects.metadata.get(&this)).and_then(|m| m.clone().ok())
     });
