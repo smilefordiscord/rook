@@ -89,6 +89,7 @@
     - [Datatype errors](behavior/scripting/datatype-errors.md): their messages in `pcall`
     - [Faces, Axes and PhysicalProperties](behavior/scripting/faces-and-axes.md): their `typeof` and printing
     - [JSON](behavior/scripting/json.md): which tables `JSONEncode` writes as arrays
+    - [Luau's libraries](behavior/scripting/luau-libraries.md): `buffer`, `vector` and the rest of the Luau Roblox runs
     - [Member lookup](behavior/scripting/member-lookup.md): lowercase first letters, and what a child of that name beats
     - [Nil Instance arguments](behavior/scripting/nil-arguments.md): what each method does with the null object
     - [Parallel Luau](behavior/scripting/parallel-luau.md): Actors, serial and parallel phases, messages and SharedTable

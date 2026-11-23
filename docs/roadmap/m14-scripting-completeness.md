@@ -17,7 +17,8 @@ the target counts only errors Rook causes, checked against Studio.
 5. HttpService, opt-in per place.
 6. Modern Luau: [Parallel Luau](../behavior/scripting/parallel-luau.md)
    (Actor, `task.desynchronize`, SharedTable), `buffer`, and the
-   libraries and syntax of the Luau live Roblox runs.
+   [libraries](../behavior/scripting/luau-libraries.md) and syntax of the
+   Luau live Roblox runs.
    - *Scope*: what scripts observe: Actors as contexts with their own
      globals and modules, `SendMessage`, `BindToMessage` and
      `BindToMessageParallel`, `task.desynchronize`/`synchronize`,
