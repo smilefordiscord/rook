@@ -72,9 +72,8 @@ fn check_user_badges(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
         return Err(a.wrong(1, "Array"));
     };
     let badges: Vec<i64> = (ids.clone().sequence_values::<f64>())
-        .filter_map(Result::ok)
-        .map(|n| n as i64)
-        .collect();
+        .map(|n| n.map(|n| n as i64))
+        .collect::<mlua::Result<_>>()?;
     if badges.len() > MAX_CHECKED {
         return Err(ScriptError(
             "BadgeService:CheckUserBadgesAsync() checks at most 10 badges".into(),

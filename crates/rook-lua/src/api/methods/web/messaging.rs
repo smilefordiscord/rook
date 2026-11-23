@@ -126,8 +126,13 @@ fn deliver(lua: &Lua, args: MultiValue) -> ApiResult<Outcome> {
         t.raw_set("Sent", sent)?;
         Ok(LuaValue::Table(t))
     };
-    // Making a table fails only when Luau is out of memory, which has
-    // raised already wherever it happened.
-    crate::runtime::threads::fire_with(lua, &key, || vec![message().unwrap_or(LuaValue::Nil)]);
+    // Making a table fails only when Luau is out of memory; the
+    // subscriber still hears of the message, with nil.
+    crate::runtime::threads::fire_with(lua, &key, || {
+        vec![message().unwrap_or_else(|e| {
+            tracing::warn!("a message to a subscriber couldn't be made: {e}");
+            LuaValue::Nil
+        })]
+    });
     Outcome::ret(lua, ())
 }

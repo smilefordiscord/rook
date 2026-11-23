@@ -167,7 +167,13 @@ fn group_info(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
         lua,
         WebRequest::get(info_url),
         Box::new(move |_, answer| {
-            let info = web::json(answer).map_err(|_| failed())?;
+            // Inference: the groups API answers 400 for an id with no
+            // group; other failures keep their own reason.
+            if answer.as_ref().is_ok_and(|r| matches!(r.status, 400 | 404)) {
+                return Err(failed());
+            }
+            let info = web::json(answer)
+                .map_err(|e| format!("GroupService:GetGroupInfoAsync() failed: {e}"))?;
             let decode: web::Decode = Box::new(move |lua, answer| {
                 let roles = web::json(answer)?;
                 let t = info_table(lua, &info, &roles).map_err(|e| e.to_string())?;
