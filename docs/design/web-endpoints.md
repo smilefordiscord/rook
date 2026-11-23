@@ -56,10 +56,11 @@ These answer locally only, with no endpoint path yet:
 | `PolicyService:GetPolicyInfoForPlayerAsync` | Roblox's own policy service | No restrictions |
 | DataStores (`DataStoreService`, `GlobalDataStore`, ordered stores) | Roblox's game servers | Kept in memory for the run |
 | MemoryStoreService | Roblox's game servers | Kept in memory for the session ([memory stores](../behavior/scripting/memory-stores.md)) |
+| MessagingService | Roblox's game servers | Delivered to the session's own subscribers ([messaging](../behavior/scripting/messaging.md)) |
 | `LocalizationService:GetTranslatorForPlayerAsync` and cloud tables | `localizationtables` | The place's own LocalizationTables |
 | TextChatService messages | `textfilter` | Delivered unfiltered |
 
-These aren't implemented yet and raise "not implemented in Rook yet" (Roblox's CoreScripts get nil): `Players:GetFriendsAsync` (`friends`), `Players:GetCharacterAppearanceInfoAsync` and AvatarEditorService (`avatar`), GroupService (`groups`), `BadgeService:GetBadgeInfoAsync` and `AwardBadge` (`badges`), `MarketplaceService:GetProductInfo` (`economy`), AssetService (`games`, `develop`), and MessagingService (Roblox's game servers). Each gets a local answer and an endpoint path when it's implemented, listed here.
+These aren't implemented yet and raise "not implemented in Rook yet" (Roblox's CoreScripts get nil): `Players:GetFriendsAsync` (`friends`), `Players:GetCharacterAppearanceInfoAsync` and AvatarEditorService (`avatar`), GroupService (`groups`), `BadgeService:GetBadgeInfoAsync` and `AwardBadge` (`badges`), `MarketplaceService:GetProductInfo` (`economy`), and AssetService (`games`, `develop`). Each gets a local answer and an endpoint path when it's implemented, listed here.
 
 ## What a server of your own needs
 

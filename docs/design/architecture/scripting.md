@@ -32,7 +32,7 @@ Signals, the scheduler and the Luau bridge. Part of the [architecture](../archit
   ```
 
   Deferred-event drains happen at each documented resumption point.
-- Queues: a min-heap of waiting threads by resume time; legacy `wait` (with its own minimum and throttling, behavior to be measured); `task.defer`/`task.spawn`; the deferred-event queue.
+- Queues: a min-heap of waiting threads by resume time; legacy `wait` (with its own minimum and throttling, behavior to be measured); `task.defer`/`task.spawn`; the deferred-event queue; and jobs held for the next frame's resumption point, never this frame's, for work that stands for a round trip (MessagingService's messages).
 - **Time source abstraction**: real time (player) or fixed-step simulated time (headless runs and tests), so conformance runs are deterministic.
 
 ## Luau bridge (`rook-lua`)

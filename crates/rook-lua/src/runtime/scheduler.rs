@@ -83,6 +83,9 @@ pub struct Scheduler<T> {
     legacy: BinaryHeap<Timer<T>>,
     task: BinaryHeap<Timer<T>>,
     deferred: VecDeque<T>,
+    /// Jobs for the next frame's resumption points, whenever in this
+    /// frame they were scheduled.
+    next_frame: Vec<(Queue, T)>,
 }
 
 impl<T> Scheduler<T> {
@@ -96,6 +99,7 @@ impl<T> Scheduler<T> {
             legacy: BinaryHeap::new(),
             task: BinaryHeap::new(),
             deferred: VecDeque::new(),
+            next_frame: Vec::new(),
         }
     }
 
@@ -128,6 +132,7 @@ impl<T> Scheduler<T> {
         self.delta = dt;
         self.now += dt;
         self.frame += 1;
+        self.release_next_frame();
         dt
     }
 
@@ -140,7 +145,15 @@ impl<T> Scheduler<T> {
         self.delta = next - self.now;
         self.now = next;
         self.frame += 1;
+        self.release_next_frame();
         self.delta
+    }
+
+    /// The jobs held for this frame become due now.
+    fn release_next_frame(&mut self) {
+        for (queue, job) in std::mem::take(&mut self.next_frame) {
+            self.schedule(queue, 0.0, job);
+        }
     }
 
     /// Fixed clocks only: jump forward whole frames so that the next frame
@@ -150,7 +163,7 @@ impl<T> Scheduler<T> {
         let Clock::Fixed { step } = self.clock else {
             return self.has_work();
         };
-        if !self.deferred.is_empty() {
+        if !self.deferred.is_empty() || !self.next_frame.is_empty() {
             return true;
         }
         let Some(next) = self.next_timer() else {
@@ -173,7 +186,10 @@ impl<T> Scheduler<T> {
     }
 
     pub fn has_work(&self) -> bool {
-        !self.deferred.is_empty() || !self.legacy.is_empty() || !self.task.is_empty()
+        !self.deferred.is_empty()
+            || !self.legacy.is_empty()
+            || !self.task.is_empty()
+            || !self.next_frame.is_empty()
     }
 
     /// Run `job` once `delay` seconds have passed, at `queue`'s resumption point.
@@ -190,6 +206,12 @@ impl<T> Scheduler<T> {
             Queue::Legacy => self.legacy.push(timer),
             Queue::Task => self.task.push(timer),
         }
+    }
+
+    /// Run `job` at `queue`'s resumption point in the next frame, never in
+    /// this one, even where that point is still to come.
+    pub fn schedule_next_frame(&mut self, queue: Queue, job: T) {
+        self.next_frame.push((queue, job));
     }
 
     /// Jobs on `queue` whose time has come, earliest first; ties keep
@@ -233,11 +255,14 @@ impl<T> Scheduler<T> {
     /// Remove pending jobs matching `pred` (for `task.cancel`). Returns how
     /// many were removed.
     pub fn cancel(&mut self, mut pred: impl FnMut(&T) -> bool) -> usize {
-        let before = self.legacy.len() + self.task.len() + self.deferred.len();
+        let count =
+            |s: &Self| s.legacy.len() + s.task.len() + s.deferred.len() + s.next_frame.len();
+        let before = count(self);
         self.legacy.retain(|t| !pred(&t.job));
         self.task.retain(|t| !pred(&t.job));
         self.deferred.retain(|j| !pred(j));
-        before - (self.legacy.len() + self.task.len() + self.deferred.len())
+        self.next_frame.retain(|(_, j)| !pred(j));
+        before - count(self)
     }
 }
 
@@ -259,6 +284,17 @@ mod tests {
         assert!(s.take_due(Queue::Task).is_empty());
         s.begin_frame();
         assert_eq!(s.take_due(Queue::Task), ["late"]);
+    }
+
+    #[test]
+    fn next_frame_jobs_wait_for_the_next_frame() {
+        let mut s = Scheduler::fixed(60.0);
+        s.begin_frame();
+        s.schedule_next_frame(Queue::Task, "next");
+        assert!(s.take_due(Queue::Task).is_empty());
+        assert!(s.skip_idle());
+        s.begin_frame();
+        assert_eq!(s.take_due(Queue::Task), ["next"]);
     }
 
     #[test]

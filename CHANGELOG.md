@@ -5,6 +5,7 @@ Every release, newest first. How versions are numbered is in
 
 ## [Unreleased]
 
+- MessagingService delivers what a server publishes to that server's own subscribers in the next frame, and a subscription's connection unsubscribes when disconnected. Rook raised "not implemented" for it. See [messaging](docs/behavior/scripting/messaging.md).
 - MemoryStoreService works within a session: sorted maps, queues and hash maps keep their items in Roblox's order until they expire, queues hide what they read until it's removed, and hash maps list their items in pages. Rook raised "not implemented" for it. See [memory stores](docs/behavior/scripting/memory-stores.md).
 - A member's argument that doesn't cast names a table as `Array` or `Dictionary` in its error, and an EnumItem as its enum, as in Roblox. Rook named either by its type in some members' errors.
 - A member function called with an instance of another class in place of `self` raises `Expected ':' not '.'`, as in Roblox. Rook ran the member on whatever instance it was given. See [member lookup](docs/behavior/scripting/member-lookup.md#calling-a-member-function).

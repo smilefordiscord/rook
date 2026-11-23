@@ -25,6 +25,9 @@ pub enum SignalKind {
     /// CollectionService's `GetInstanceAddedSignal(tag)` (`added`) and
     /// `GetInstanceRemovedSignal(tag)`, kept on the DataModel's root.
     Tag { tag: String, added: bool },
+    /// MessagingService's messages on a topic (`SubscribeAsync`), kept
+    /// on the service.
+    Message(String),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

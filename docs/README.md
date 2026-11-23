@@ -91,6 +91,7 @@
     - [JSON](behavior/scripting/json.md): which tables `JSONEncode` writes as arrays
     - [Member lookup](behavior/scripting/member-lookup.md): lowercase first letters, and what a child of that name beats
     - [Memory stores](behavior/scripting/memory-stores.md): MemoryStoreService's sorted maps, queues and hash maps within one session
+    - [Messaging](behavior/scripting/messaging.md): MessagingService's topics within one session
     - [Nil Instance arguments](behavior/scripting/nil-arguments.md): what each method does with the null object
     - [Random](behavior/scripting/random.md): Luau's generator and each method's draws
     - [Running scripts](behavior/scripting/running-scripts.md): scripts stop the moment they're removed from where they run or disabled
