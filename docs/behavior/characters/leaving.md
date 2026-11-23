@@ -1,6 +1,11 @@
 # Leaving and kicks
 
-Checked against Studio 0.748 on 2026-11-23, by reading its CoreScripts; nothing here is measured yet.
+Checked against Studio 0.748 on 2026-11-23.
+
+Measured: what calling `Kick` on something that isn't a Player does, in
+conformance cases `scripting/teleport_args` (server) and
+`scripting/client_teleport` (client). The prompt is read from Studio's
+CoreScripts; the rest is creator-docs or Inference, as marked.
 
 How a player leaves a game, and `Player:Kick` (in 1,237 archive files).
 Rook's play session holds every client in one process
@@ -20,6 +25,14 @@ Enum.PlayerExitReason):
 - In a LocalScript only the local player can be kicked. Kicking another
   player there raises `Cannot kick a non-local Player from a LocalScript`
   (Inference: the text isn't measured).
+
+Confirmed (Studio 0.748): `Kick` is Player's alone. Called with anything
+but a Player as `self` (`player.Kick(workspace, "x")`, `player.Kick(nil)`,
+`player.Kick(Players)`), on a server or a client, it raises `Expected ':'
+not '.' calling member function Kick` and kicks no one, as every member
+function does for an instance of another class
+([member lookup](../scripting/member-lookup.md#calling-a-member-function)).
+`workspace.Kick` is `Kick is not a valid member of Workspace "Workspace"`.
 
 Inference, to check in Studio: the call returns at once with the player
 still in Players, and the player leaves once the session handles the kick,
