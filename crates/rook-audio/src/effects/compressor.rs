@@ -1,7 +1,11 @@
-//! AudioCompressor: turns the sound down by `Ratio` above `Threshold`,
-//! following its level in `Attack` and `Release` seconds, then adds
-//! `MakeupGain` dB (creator-docs). The level it follows is its
-//! **Sidechain** input's when one is wired, else its own.
+//! AudioCompressor and CompressorSoundEffect: turns the sound down by
+//! `Ratio` above `Threshold`, following its level in `Attack` and
+//! `Release` seconds, then adds `MakeupGain` (`GainMakeup`) dB
+//! (creator-docs). AudioCompressor follows its **Sidechain** input's
+//! level when one is wired, else its own. The two classes document
+//! different ranges (CompressorSoundEffect's `Threshold` goes down to -80
+//! dB and its `Attack` from 0.1 to 1 s), so each reader keeps its class's
+//! settings to them and this keeps only to the widest of both.
 //!
 //! A feed-forward compressor following the level of both sides together,
 //! `sqrt(L² + R²)` (Approximation: of the detectors tried, the one that
@@ -46,9 +50,9 @@ impl Compressor {
     pub(super) fn process(&mut self, frames: &mut [Frame], key: Option<&[Frame]>) {
         let s = self.settings;
         let coefficient = |seconds: f32| 1.0 - (-1.0 / (seconds.max(1e-4) * self.rate)).exp();
-        let attack = coefficient(s.attack.clamp(0.0001, 0.5));
-        let release = coefficient(s.release.clamp(0.01, 5.0));
-        let threshold = s.threshold.clamp(-60.0, 0.0);
+        let attack = coefficient(s.attack.clamp(0.0001, 1.0));
+        let release = coefficient(s.release.clamp(0.0, 5.0));
+        let threshold = s.threshold.clamp(-80.0, 0.0);
         let slope = 1.0 - 1.0 / s.ratio.clamp(1.0, 50.0);
         let makeup = s.makeup.clamp(-30.0, 30.0);
         for (i, frame) in frames.iter_mut().enumerate() {

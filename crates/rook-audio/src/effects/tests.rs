@@ -39,3 +39,60 @@ fn keeps_state_across_settings() {
     chain.sync(&[DIST]);
     assert!(matches!(chain.stages[0], Stage::Distortion(_)));
 }
+
+/// A script's new setting reaches a running effect without restarting
+/// it: a tremolo half a cycle in carries on from its trough.
+#[test]
+fn new_effects_take_settings_in_place() {
+    let mut chain = Chain::new(crate::SAMPLE_RATE);
+    chain.sync(&[Effect::Tremolo(Tremolo::default())]);
+    let mut frames = vec![[1.0, 1.0]; crate::SAMPLE_RATE as usize / 10];
+    chain.process(&mut frames);
+    chain.sync(&[Effect::Tremolo(Tremolo {
+        depth: 0.5,
+        ..Tremolo::default()
+    })]);
+    let mut next = [[1.0, 1.0]];
+    chain.process(&mut next);
+    assert!((next[0][0] - 0.5).abs() < 0.01, "{:?}", next[0]);
+    let flange = |delay, mix, rate| Effect::Flange { delay, mix, rate };
+    let mut stage = Stage::new(&flange(0.01, 0.5, 1.0), crate::SAMPLE_RATE as f32);
+    assert!(
+        stage.set(&flange(0.02, 0.8, 2.0)),
+        "a flange is taken in place"
+    );
+    for (a, b) in [
+        (
+            Effect::Filter(Filter::default()),
+            Effect::Filter(Filter {
+                kind: FilterType::Lowpass48dB,
+                ..Filter::default()
+            }),
+        ),
+        (
+            Effect::Limiter {
+                max_level: 0.0,
+                release: 0.01,
+            },
+            Effect::Limiter {
+                max_level: -6.0,
+                release: 0.1,
+            },
+        ),
+        (
+            Effect::Gate {
+                threshold: [-36.0, -24.0],
+                attack: 0.01,
+                release: 0.1,
+            },
+            Effect::Gate {
+                threshold: [-50.0, -40.0],
+                attack: 0.1,
+                release: 1.0,
+            },
+        ),
+    ] {
+        let mut stage = Stage::new(&a, crate::SAMPLE_RATE as f32);
+        assert!(stage.set(&b), "{b:?} is taken in place");
+    }
+}

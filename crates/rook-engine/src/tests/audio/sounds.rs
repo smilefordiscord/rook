@@ -125,6 +125,13 @@ fn effects_groups_and_local_sounds() {
         cut.LowGain = -80 cut.MidGain = -80 cut.HighGain = -80 cut.Parent = quiet
         quiet:Play()
         local plain = new('Plain') plain:Play()
+        local b = new('B')
+        for _, class in { 'ChorusSoundEffect', 'EchoSoundEffect', 'CompressorSoundEffect', 'FlangeSoundEffect', 'TremoloSoundEffect' } do
+            local e = Instance.new(class)
+            if class == 'TremoloSoundEffect' then e.Frequency = 0/0 end
+            e.Parent = b
+        end
+        b:Play()
         SS.AmbientReverb = Enum.ReverbType.Cave
         task.wait(0.3)
         print('loudness', plain.PlaybackLoudness > 100, quiet.PlaybackLoudness < 1)
@@ -164,6 +171,41 @@ fn effects_groups_and_local_sounds() {
         ]
     );
     assert_eq!(sound.group, Some(inner));
+    // The five unmeasured effects share base priority 0, so the later
+    // child runs first. The tremolo's NaN `Frequency` is ignored, as in
+    // Studio, where it once stuck in the swing's phase and silenced the
+    // mix.
+    let b = named(ss, "B");
+    let sound = playing.iter().find(|s| s.id == b).unwrap();
+    assert_eq!(
+        sound.effects,
+        [
+            Effect::Tremolo(rook_audio::effects::Tremolo::default()),
+            Effect::Flange {
+                delay: 0.45 * rook_audio::effects::FLANGE_SPAN,
+                mix: 0.85,
+                rate: 5.0,
+            },
+            Effect::Compressor {
+                threshold: -40.0,
+                ratio: 40.0,
+                attack: 0.1,
+                release: 0.1,
+                makeup: 0.0,
+            },
+            Effect::Echo {
+                delay: 1.0,
+                dry: 0.0,
+                wet: 0.0,
+                feedback: 0.5,
+            },
+            Effect::Chorus {
+                depth: 0.15,
+                mix: 0.5,
+                rate: 0.5,
+            },
+        ]
+    );
     assert!(
         playing.iter().any(|s| s.id == once),
         "the local sound plays once"

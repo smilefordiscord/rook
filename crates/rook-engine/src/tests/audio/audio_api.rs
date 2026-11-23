@@ -134,3 +134,94 @@ fn channel_splitter_into_mixer() {
             && w.to_channel == Some(rook_audio::graph::Channel::Right)
     }));
 }
+
+/// AudioFilter, AudioFlanger, AudioTremolo, AudioLimiter and AudioGate
+/// are heard: a limiter caps what reaches its analyzer, a gate whose
+/// threshold the tone never reaches lets nothing through, `GetGainAt`
+/// reads the filter's curve, and a setting a script changes reaches the
+/// graph.
+#[test]
+fn filter_flanger_tremolo_limiter_and_gate_are_heard() {
+    use rook_audio::effects::{Effect, FLANGER_SPAN, Filter, FilterType, Tremolo};
+    use rook_audio::graph::NodeKind;
+    let options = tone_options("audio-api-effects");
+    let mut server = DataModel::new(&options).unwrap();
+    let first = service(&server, "ReplicatedFirst");
+    add_under(
+        &server,
+        first,
+        "LocalScript",
+        "Effects",
+        r#"
+        local function wire(a, b)
+            local w = Instance.new('Wire') w.SourceInstance = a w.TargetInstance = b w.Parent = workspace
+        end
+        local function new(class)
+            local e = Instance.new(class) e.Parent = workspace return e
+        end
+        local p = new('AudioPlayer') p.Asset = 'rbxasset://sounds/tone.wav' p.Looping = true
+        local limiter = new('AudioLimiter') limiter.MaxLevel = -12
+        local gate = new('AudioGate') gate.Threshold = NumberRange.new(10, 20)
+        local filter = new('AudioFilter') filter.FilterType = Enum.AudioFilterType.Lowpass12dB
+        filter.Frequency = 1000
+        local flanger, tremolo = new('AudioFlanger'), new('AudioTremolo')
+        local limited, gated, shaped = new('AudioAnalyzer'), new('AudioAnalyzer'), new('AudioAnalyzer')
+        wire(p, limiter) wire(limiter, limited)
+        wire(p, gate) wire(gate, gated)
+        wire(p, filter) wire(filter, flanger) wire(flanger, tremolo) wire(tremolo, shaped)
+        print('gain', math.round(filter:GetGainAt(1000) * 10) / 10, math.abs(filter:GetGainAt(100)) < 0.1)
+        while not p.IsReady do task.wait() end
+        p:Play()
+        task.wait(0.3)
+        print('limited', limited.PeakLevel > 0.2, limited.PeakLevel <= 0.2512)
+        print('gated', gated.PeakLevel, shaped.PeakLevel > 0)
+        tremolo.Depth = 0.25
+        "#,
+    );
+    server.start();
+    let mut session = Session::new(server, options);
+    let index = session.join("Player1", 1).unwrap();
+    session.run_for(0.8);
+    let client = session.client(index).unwrap();
+    let log = lines(client);
+    for line in ["gain -3 true", "limited true true", "gated 0 true"] {
+        assert!(log.contains(&line.to_owned()), "{line}: {log:?}");
+    }
+    let effects: Vec<Effect> = client
+        .audio_graph()
+        .nodes
+        .into_iter()
+        .filter_map(|n| match n.kind {
+            NodeKind::Effect(e) => e,
+            _ => None,
+        })
+        .collect();
+    let expected = [
+        Effect::Limiter {
+            max_level: -12.0,
+            release: 0.01,
+        },
+        Effect::Gate {
+            threshold: [10.0, 20.0],
+            attack: 0.01,
+            release: 0.1,
+        },
+        Effect::Filter(Filter {
+            kind: FilterType::Lowpass12dB,
+            frequency: 1000.0,
+            ..Filter::default()
+        }),
+        Effect::Flange {
+            delay: 0.45 * FLANGER_SPAN,
+            mix: 0.85,
+            rate: 5.0,
+        },
+        Effect::Tremolo(Tremolo {
+            depth: 0.25,
+            ..Tremolo::default()
+        }),
+    ];
+    for e in expected {
+        assert!(effects.contains(&e), "{e:?} in {effects:?}");
+    }
+}

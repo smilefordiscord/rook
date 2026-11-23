@@ -2,45 +2,79 @@
 //! groups that one is in, and `SoundService.AmbientReverb`
 //! (`docs/behavior/audio/soundgroups-and-effects.md`).
 
-use rook_audio::effects::{Chain, Effect, Reverb, ordered};
+use rook_audio::effects::{Chain, Effect, FLANGE_SPAN, Reverb, Tremolo, ordered};
 
 use super::*;
 
 /// The effect a SoundEffect instance is, if Rook plays its class. Defaults
 /// are Studio's.
 fn effect(dom: &Dom, id: InstanceId) -> Option<Effect> {
+    // A saved file can hold NaN (a script's is ignored, Confirmed), which
+    // would stick in an effect's state and silence the mix for good.
+    // Inference: NaN plays as the default.
+    let f = |name: &str, default: f32| {
+        (dom.float_property(id, name))
+            .filter(|v| !v.is_nan())
+            .unwrap_or(default)
+    };
     Some(match dom.class_name(id) {
         "EqualizerSoundEffect" => Effect::Equalizer {
-            low: dom.float_property(id, "LowGain").unwrap_or(-20.0),
-            mid: dom.float_property(id, "MidGain").unwrap_or(-10.0),
-            high: dom.float_property(id, "HighGain").unwrap_or(0.0),
+            low: f("LowGain", -20.0),
+            mid: f("MidGain", -10.0),
+            high: f("HighGain", 0.0),
             range: rook_audio::effects::CROSSOVERS,
         },
         "ReverbSoundEffect" => Effect::Reverb(Reverb {
-            decay: dom.float_property(id, "DecayTime").unwrap_or(1.5),
-            density: dom.float_property(id, "Density").unwrap_or(1.0),
-            diffusion: dom.float_property(id, "Diffusion").unwrap_or(1.0),
+            decay: f("DecayTime", 1.5),
+            density: f("Density", 1.0),
+            diffusion: f("Diffusion", 1.0),
             // Within ReverbSoundEffect's -80 to 10 dB (creator-docs),
             // narrower than AudioReverb's.
-            dry: dom
-                .float_property(id, "DryLevel")
-                .unwrap_or(-6.0)
-                .clamp(-80.0, 10.0),
-            wet: dom
-                .float_property(id, "WetLevel")
-                .unwrap_or(0.0)
-                .clamp(-80.0, 10.0),
+            dry: f("DryLevel", -6.0).clamp(-80.0, 10.0),
+            wet: f("WetLevel", 0.0).clamp(-80.0, 10.0),
             ..Reverb::default()
         }),
         "DistortionSoundEffect" => Effect::Distortion {
-            level: dom.float_property(id, "Level").unwrap_or(0.75),
+            level: f("Level", 0.75),
         },
         "PitchShiftSoundEffect" => Effect::PitchShift {
-            octave: dom.float_property(id, "Octave").unwrap_or(1.25),
+            octave: f("Octave", 1.25),
         },
-        // TODO: play ChorusSoundEffect, CompressorSoundEffect,
-        // EchoSoundEffect, FlangeSoundEffect and TremoloSoundEffect
-        // (docs/behavior/audio/soundgroups-and-effects.md).
+        // The legacy effects keep to the ranges creator-docs gives each
+        // property, though they read back whatever was set.
+        "ChorusSoundEffect" => Effect::Chorus {
+            depth: f("Depth", 0.15),
+            mix: f("Mix", 0.5),
+            rate: f("Rate", 0.5),
+        },
+        "EchoSoundEffect" => Effect::Echo {
+            // From 0.01 s, where AudioEcho's DelayTime goes down to 0.001.
+            delay: f("Delay", 1.0).clamp(0.01, 5.0),
+            dry: f("DryLevel", 0.0),
+            wet: f("WetLevel", 0.0),
+            feedback: f("Feedback", 0.5),
+        },
+        // TODO: duck by `SideChain`'s Sound or SoundGroup; the mixer has to
+        // hand that sound's level to the compressor as its key.
+        "CompressorSoundEffect" => Effect::Compressor {
+            threshold: f("Threshold", -40.0).clamp(-80.0, 0.0),
+            // Creator-docs gives no range; AudioCompressor's (Inference).
+            ratio: f("Ratio", 40.0).clamp(1.0, 50.0),
+            attack: f("Attack", 0.1).clamp(0.1, 1.0),
+            release: f("Release", 0.1).clamp(0.0, 5.0),
+            makeup: f("GainMakeup", 0.0).clamp(-30.0, 30.0),
+        },
+        "FlangeSoundEffect" => Effect::Flange {
+            delay: f("Depth", 0.45).clamp(0.01, 1.0) * FLANGE_SPAN,
+            mix: f("Mix", 0.85),
+            rate: f("Rate", 5.0),
+        },
+        "TremoloSoundEffect" => Effect::Tremolo(Tremolo {
+            depth: f("Depth", 1.0),
+            duty: f("Duty", 0.5),
+            frequency: f("Frequency", 5.0).clamp(0.1, 20.0),
+            ..Tremolo::default()
+        }),
         _ => return None,
     })
 }

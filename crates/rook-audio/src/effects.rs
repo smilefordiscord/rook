@@ -5,24 +5,36 @@
 //!
 //! An effect is one DSP for both APIs where Studio's are the same:
 //! Equalizer, Reverb, Distortion, PitchShift and Chorus gave the same
-//! levels on one recording in either form (Confirmed). A [`Chain`] runs a
+//! levels on one recording in either form (Confirmed); Echo, Compressor,
+//! Flange and Tremolo have the same controls in both (Inference), and
+//! each reader turns its class's into the effect's. A [`Chain`] runs a
 //! list of them over stereo frames and keeps their state (filters, reverb
-//! tails) from one block to the next.
+//! tails, oscillators) from one block to the next, also when their
+//! settings change.
 
+mod biquad;
 mod chorus;
 mod compressor;
 mod distortion;
 mod echo;
 mod equalizer;
+mod filter;
+mod flange;
+mod gate;
+mod limiter;
 mod line;
 mod pitch;
 mod reverb;
 mod stage;
+mod tremolo;
 
 use stage::Stage;
 
 pub use equalizer::CROSSOVERS;
+pub use filter::{Filter, FilterType};
+pub use flange::{FLANGE_SPAN, FLANGER_SPAN};
 pub use reverb::{Reverb, ambient};
+pub use tremolo::Tremolo;
 
 /// One effect and its settings, as the instance's properties give them
 /// (unclamped: each effect keeps to its range when it runs).
@@ -67,6 +79,27 @@ pub enum Effect {
         release: f32,
         makeup: f32,
     },
+    /// `delay`: the deepest the copy is delayed, in seconds (`Depth` times
+    /// [`FLANGE_SPAN`] or [`FLANGER_SPAN`]); `Mix` 0 to 1, `Rate` in Hz.
+    Flange {
+        delay: f32,
+        mix: f32,
+        rate: f32,
+    },
+    Tremolo(Tremolo),
+    Filter(Filter),
+    /// AudioLimiter: `MaxLevel` in dB, `Release` in seconds.
+    Limiter {
+        max_level: f32,
+        release: f32,
+    },
+    /// AudioGate: `Threshold`'s low and high ends in dB, `Attack` and
+    /// `Release` in seconds.
+    Gate {
+        threshold: [f32; 2],
+        attack: f32,
+        release: f32,
+    },
     /// AudioFader: a plain gain, 0 to 3 (Confirmed: a fader at 2 doubled
     /// a recording's peak exactly).
     Fader {
@@ -77,8 +110,10 @@ pub enum Effect {
 impl Effect {
     /// The priority a legacy effect with `Priority` 0 runs at (Confirmed by
     /// bisection against Studio's output: Equalizer and Reverb 8,
-    /// Distortion 4, PitchShift 3). The others aren't played as legacy
-    /// effects, so they have none.
+    /// Distortion 4, PitchShift 3). Chorus, Compressor, Echo, Flange and
+    /// Tremolo aren't measured and run after those at 0 (Approximation:
+    /// their place beside Distortion, PitchShift or the compressor changes
+    /// how it sounds). The audio API's effects have no priority.
     pub fn base_priority(&self) -> i32 {
         match self {
             Self::Equalizer { .. } | Self::Reverb(_) => 8,

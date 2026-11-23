@@ -1,6 +1,6 @@
 # The audio API
 
-Checked against Studio 0.742 on 2026-10-15.
+Checked against Studio 0.748 on 2026-11-23.
 
 AudioPlayer, the Audio
 effects, AudioEmitter, AudioListener, AudioDeviceOutput and
@@ -32,7 +32,8 @@ AudioDistortion at `Level` 1 (about 0.967 rms).
 
 *AudioPlayer* (Confirmed):
 
-- Defaults: `Asset` "", `Volume` 1 (0 to 10; NaN becomes 10),
+- Defaults: `Asset` "", `Volume` 1 (0 to 10; NaN is ignored, as on
+  every ranged property below),
   `PlaybackSpeed` 1 (0 to 20), `TimePosition` not clamped, `AutoLoad`
   true, `AutoPlay` false. `Asset` turns `\` into `/`. `IsPlaying` can't
   be set ("lacking capability RobloxEngine"; Rook's `RobloxSecurity`
@@ -170,21 +171,74 @@ the delays, the low shelf, `ReferenceFrequency`) aren't played
   Within 8% at five settings, but 0.6 times as loud at the defaults.
   `MakeupGain` is exact (10 dB was 3.16 times).
 
+The five below play by creator-docs; none of their levels is measured
+against Studio. A value saved in a file outside a property's range plays
+at the range's end, as a script's would, and a saved NaN at the
+property's default (Inference).
+
+- **AudioFilter** (Confirmed: `GetGainAt` matches Studio's to 0.01 dB
+  for every `FilterType` at 20, 200, 1,000, 2,000, 4,000 and 20,000 Hz,
+  `Frequency` 2,000, `Gain` 6 and the default `Q`, conformance case
+  `content/sound_effects`). Each `FilterType` is built from the Audio EQ
+  Cookbook's second-order sections at `Frequency` (20 to 22,000 Hz),
+  at 48 kHz: Peak with `Gain` (-30 to 30 dB) and `Q` (0.1 to 10);
+  LowShelf and HighShelf with `Gain` and the cookbook's slope 1
+  (creator-docs: `Q` doesn't apply); Bandpass (0 dB at its peak) and
+  Notch with `Q`. Lowpass12dB and Highpass12dB are one section; 24dB and
+  48dB are two and four identical sections, each with `Q` to the power
+  of one over their count, so the whole reads `Q` at `Frequency` (-3 dB
+  at the default) and bulges before it (Lowpass48dB is +2.61 dB an
+  octave below). Lowpass6dB is a one-pole smoother, `y += a (x - y)`
+  with `a = 1 - e^(-2π Frequency / 48000)`: -2.99 dB at `Frequency` and
+  only -17.41 dB a decade above it. `GetGainAt` returns the curve's gain
+  in dB at a frequency, worked out in single precision, so a deep stop
+  band reads Studio's rounding (-320.41 dB for Highpass48dB at 20 Hz;
+  there is no floor) and a notch's center reads -122.57 dB, not minus
+  infinity. A frequency of 0 or below reads 0 dB on a Peak (Confirmed);
+  Rook reads it as 0 Hz on every type (Inference). Its argument is cast
+  as a float: `"x"` is "Unable to cast string to float".
+- **AudioFlanger** (Inference). One copy of the sound whose delay sweeps
+  from none to `Depth` × 10 ms (creator-docs) and back at `Rate`, by a
+  raised cosine, mixed in at `Mix`, without feedback.
+- **AudioTremolo** (Inference). The volume swings by `Depth` at
+  `Frequency`, as `1 - Depth (1 - lfo) / 2`, starting at full volume.
+  The oscillator follows creator-docs' description of each control:
+  `Shape` morphs a triangle (0) into a sine (1), `Duty` is the share of a
+  cycle on its upper half, `Skew` moves where each half turns, and
+  `Square` amplifies and clips it toward a square wave.
+- **AudioLimiter** (Inference). A peak limiter with an instant attack and
+  no look-ahead: nothing comes out over `MaxLevel`, and the gain comes
+  back with time constant `Release`.
+- **AudioGate** (Inference). Closed at first; it opens when the level
+  goes over `Threshold`'s high end and closes below its low end
+  (creator-docs' hysteresis), its gain moving linearly to full in
+  `Attack` and to silence in `Release`. The level is a peak follower
+  falling with a 50 ms time constant (Approximation: how Studio measures
+  it isn't documented). `Threshold` is a NumberRange whose ends each
+  keep within -80 to 30 dB, and `Attack` and `Release` keep within 0.001
+  to 5 s (Confirmed: -90..-85 reads -80..-80, 20..40 reads 20..30).
+
 *Ranges* (Confirmed; Rook keeps them as Studio does): AudioFader
 `Volume` 0 to 3; AudioEqualizer gains -80 to 10; AudioDistortion
 `Level` 0 to 1; AudioPitchShifter `Pitch` 0.5 to 2; the rest of
-AudioReverb, AudioEcho, AudioChorus, AudioFlanger, AudioCompressor,
-AudioFilter and AudioLimiter are in `rook-lua`'s `audio/ranges.rs`.
+AudioReverb, AudioEcho, AudioChorus, AudioFlanger, AudioTremolo,
+AudioCompressor, AudioFilter, AudioLimiter and AudioGate are in
+`rook-lua`'s `audio_api/ranges.rs`. Infinities keep to the ends too. NaN
+is ignored: the value before stays (Confirmed in Studio 0.748 on every
+ranged property of every effect; AudioPlayer's `Volume` read 10 after
+11 then NaN).
 
-The script-visible rules are the conformance case `content/audio_api`
-(recorded in Studio). The engine test `tests/audio/audio_api.rs` checks
-playback, the default listener, scheduled calls and analyzers on a
-client.
+The script-visible rules are the conformance cases `content/audio_api`
+and `content/sound_effects` (recorded in Studio). The engine test `tests/audio/audio_api.rs` checks
+playback, the default listener, scheduled calls, analyzers and the
+effects above on a client.
 
 *Not done:*
 
 - AudioFilter, AudioFlanger, AudioTremolo, AudioLimiter and AudioGate
-  pass sound through. The other audio classes aren't wired at all.
+  aren't measured: their levels on the test sound, and a listen to the
+  flanger's and tremolo's shapes. The other
+  audio classes aren't wired at all.
 - AudioPlayer `PlaybackRegion` and `LoopRegion` keep their values but
   don't change playback.
 - The near-field spread, 7.1 layouts and Studio's curve encoding,

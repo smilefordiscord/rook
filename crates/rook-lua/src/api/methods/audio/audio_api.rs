@@ -222,6 +222,14 @@ pub(super) fn get_spectrum(lua: &Lua, this: InstanceId, _: &Args) -> ApiResult<O
     )
 }
 
+/// `AudioFilter:GetGainAt(frequency)`: the gain in dB its curve gives at
+/// `frequency` Hz, the same curve the mixer plays (creator-docs).
+pub(super) fn get_gain_at(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> {
+    let frequency = a.float(0)?;
+    let gain = with_world(lua, |w| audio_api::filter(&w.dom, this).gain_at(frequency));
+    Outcome::ret(lua, f64::from(gain))
+}
+
 pub(super) fn native(owner: &str, name: &str) -> Option<RawMethod> {
     Some(match (owner, name) {
         ("SoundService", "GetMixerTime") => get_mixer_time,
@@ -239,6 +247,7 @@ pub(super) fn native(owner: &str, name: &str) -> Option<RawMethod> {
         ("AudioEmitter", "GetInteractingListeners") => get_interacting_listeners,
         ("AudioListener", "GetInteractingEmitters") => get_interacting_emitters,
         ("AudioAnalyzer", "GetSpectrum") => get_spectrum,
+        ("AudioFilter", "GetGainAt") => get_gain_at,
         _ => return None,
     })
 }

@@ -224,7 +224,8 @@ impl Args {
     }
 
     /// A `float` argument of a reflected method: a number, or a string
-    /// that reads as one.
+    /// that reads as one. Measured on `AudioFilter:GetGainAt("x")`:
+    /// `Unable to cast string to float`.
     pub(crate) fn float(&self, i: usize) -> ApiResult<f32> {
         (number_of(self.get(i)).map(|n| n as f32)).ok_or_else(|| self.cast_error(i, "float"))
     }

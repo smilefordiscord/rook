@@ -1,6 +1,6 @@
 # SoundService, SoundGroups and effects
 
-Checked against Studio 0.742 on 2026-10-15.
+Checked against Studio 0.748 on 2026-11-23.
 
 Each of these changes what the player hears: a Sound's own effects, its
 SoundGroup (and the groups that one is nested in) with that group's
@@ -20,15 +20,15 @@ no new scan):
 | PitchShiftSoundEffect | 240 | 2,949 | heard |
 | DistortionSoundEffect | 229 | 6,263 | heard |
 | SoundGroup | 222 | 735 | heard |
-| ChorusSoundEffect | 125 | 1,508 | kept, not heard |
-| EchoSoundEffect | 123 | 1,508 | kept, not heard |
-| CompressorSoundEffect | 70 | 512 | kept, not heard |
-| FlangeSoundEffect | 61 | 1,716 | kept, not heard |
-| TremoloSoundEffect | 42 | 441 | kept, not heard |
+| ChorusSoundEffect | 125 | 1,508 | heard, not measured |
+| EchoSoundEffect | 123 | 1,508 | heard, not measured |
+| CompressorSoundEffect | 70 | 512 | heard, not measured |
+| FlangeSoundEffect | 61 | 1,716 | heard, not measured |
+| TremoloSoundEffect | 42 | 441 | heard, not measured |
 
 Each of the four most used effects is in about twice as many files as
-any of the rest. Those four are done; the other five pass sound through
-unchanged. Scripts call `SoundService:PlayLocalSound` in 38 files (327
+any of the rest. Those four were measured in Studio; the other five play
+by creator-docs, sharing the audio API's effects, unmeasured. Scripts call `SoundService:PlayLocalSound` in 38 files (327
 calls), so it is done too.
 
 The corpus doesn't count SoundService's property values, so five places
@@ -99,13 +99,60 @@ the same file the same way
   equalizer: shifting up before cutting the low bands kept 15.9 of the
   explosion, while cutting first kept 6.4.
 
+The other five share the audio API's effect of the same kind
+([the audio API](audio-api.md)), each property kept to the range
+creator-docs gives the legacy class when it plays. None of their levels
+or sounds is measured against Studio:
+
+- **ChorusSoundEffect** (Confirmed one effect with AudioChorus: Studio
+  gave both the same level). `Depth`, `Mix` 0 to 1, `Rate` 0 to 20 Hz;
+  Studio's defaults are 0.15, 0.5 and 0.5 Hz, lower than AudioChorus's.
+- **EchoSoundEffect** (Inference: AudioEcho's controls). `Delay` 0.01 to
+  5 s, `DryLevel` and `WetLevel` -80 to 10 dB, `Feedback` 0 to 1
+  (creator-docs). Each repeat is `Feedback` times the last.
+- **CompressorSoundEffect** (Inference: AudioCompressor's controls).
+  `Threshold` -80 to 0 dB, `Attack` 0.1 to 1 s, `Release` 0 to 5 s,
+  `GainMakeup` -30 to 30 dB (creator-docs). Creator-docs gives `Ratio` no
+  range; Rook keeps it to AudioCompressor's 1 to 50. `SideChain`, a Sound
+  or SoundGroup that ducks the compressor, isn't followed. It takes
+  nothing else (Confirmed: a Part is "CompressorSoundEffect.SideChain
+  must be Sound or SoundGroup", a string "Unable to assign property
+  SideChain. Instance expected, got string", conformance case
+  `content/int_properties`), and still points at a Sound
+  that has been destroyed.
+- **FlangeSoundEffect** (Inference: FMOD's flange, whose controls,
+  ranges and 40 ms span it has). One copy of the sound whose delay sweeps
+  from none to `Depth` × 40 ms (`Depth` 0.01 to 1, creator-docs) and back
+  at `Rate` Hz, mixed in at `Mix`. AudioFlanger is the same with a 10 ms
+  span.
+- **TremoloSoundEffect** (Inference: FMOD's tremolo). `Depth` 0 to 1,
+  `Duty` 0 to 1, `Frequency` 0.1 to 20 Hz (creator-docs), the swing's
+  other controls at AudioTremolo's defaults (a triangle, no skew, not
+  squared).
+
+*What scripts read back* (Confirmed in Studio 0.748, conformance case
+`content/sound_effects`). Every legacy effect's number properties read
+back whatever was set, however far outside creator-docs' range: -1e9,
+1e9 and both infinities on all nine classes. NaN is ignored: the value
+before stays. A NaN saved in a file plays at the property's default
+(Inference). `Priority` is a 32-bit integer: a fraction is cut toward
+zero (2.7 is 2, -2.7 is -2), and NaN or anything outside the integer's
+range reads -2147483648 on either side (conformance case
+`content/int_properties`); a string that reads as a number
+is taken. `Enabled` takes any value by truthiness (0 is true, nil
+false).
+
 *Order* (Confirmed). Higher `Priority` runs first, and `Priority` 0 means
 the effect's own base priority (creator-docs). The base priorities were
 found by bisection, pairing one non-linear effect with another so the
 order shows in the level: Equalizer 8, Reverb 8, Distortion 4,
 PitchShift 3. For example, a Distortion at Priority 9 ran before an
 Equalizer at 0, and one at 8 ran after it. Negative priorities sort the
-same way.
+same way. Chorus, Compressor, Echo, Flange and Tremolo aren't measured,
+so Rook gives them 0, after the four above (Approximation). Their place
+beside Distortion, PitchShift or a Compressor changes what is heard: a
+Tremolo before a Distortion swings how hard it drives, and one after it
+swings what it gives out.
 
 In the three ties measured, the effect added later ran first, and Rook
 breaks ties that way (Inference; creator-docs calls the order
@@ -202,13 +249,15 @@ that has been destroyed, and Rook then ignores it.
   Rook plays it from where the sound was when it was called (Inference),
   loading the file if nothing had loaded it yet.
 
-The script-visible rules are the conformance case `content/sound_groups`:
+The script-visible rules are the conformance cases `content/sound_groups`
+and `content/sound_effects`:
 
 - SoundService's defaults;
 - SoundGroup `Volume` and its limits;
 - `Sound.SoundGroup`;
 - every effect class's `Enabled`, `Priority` and defaults;
-- effect properties reading back unclamped;
+- effect properties reading back unclamped, and NaN ignored;
+- CompressorSoundEffect's `SideChain`;
 - `PlayLocalSound` on a server.
 
 The engine test `effects_groups_and_local_sounds` checks the rest on a
@@ -216,10 +265,10 @@ client.
 
 *Not done:*
 
-- Chorus, Compressor, Echo, Flange and Tremolo pass sound through
-  unchanged (Approximation, left out by archive use). Step 5 added
-  chorus, echo and compressor effects for the audio API, but these
-  three still need their base priorities measured.
+- Chorus, Compressor, Echo, Flange and Tremolo are heard but not
+  measured: their base priorities (by bisection, as above), their levels
+  on the test sound, and a listen to the flange's and tremolo's shapes.
+- CompressorSoundEffect's `SideChain` doesn't duck it.
 - A sound that is playing and is also given to `PlayLocalSound` is heard
   only once.
 - `PlaybackLoudness` doesn't reflect the sound's group, as in Studio.

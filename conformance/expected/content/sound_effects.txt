@@ -1,0 +1,110 @@
+-- studio 0.748.0.7481526
+-- signals: deferred
+ChorusSoundEffect Depth 0.15 -1e+09 1e+09 1e+09 -inf inf
+ChorusSoundEffect Mix 0.5 -1e+09 1e+09 1e+09 -inf inf
+ChorusSoundEffect Rate 0.5 -1e+09 1e+09 1e+09 -inf inf
+CompressorSoundEffect Attack 0.1 -1e+09 1e+09 1e+09 -inf inf
+CompressorSoundEffect GainMakeup 0 -1e+09 1e+09 1e+09 -inf inf
+CompressorSoundEffect Ratio 40 -1e+09 1e+09 1e+09 -inf inf
+CompressorSoundEffect Release 0.1 -1e+09 1e+09 1e+09 -inf inf
+CompressorSoundEffect Threshold -40 -1e+09 1e+09 1e+09 -inf inf
+DistortionSoundEffect Level 0.75 -1e+09 1e+09 1e+09 -inf inf
+EchoSoundEffect Delay 1 -1e+09 1e+09 1e+09 -inf inf
+EchoSoundEffect DryLevel 0 -1e+09 1e+09 1e+09 -inf inf
+EchoSoundEffect Feedback 0.5 -1e+09 1e+09 1e+09 -inf inf
+EchoSoundEffect WetLevel 0 -1e+09 1e+09 1e+09 -inf inf
+FlangeSoundEffect Depth 0.45 -1e+09 1e+09 1e+09 -inf inf
+FlangeSoundEffect Mix 0.85 -1e+09 1e+09 1e+09 -inf inf
+FlangeSoundEffect Rate 5 -1e+09 1e+09 1e+09 -inf inf
+ReverbSoundEffect DecayTime 1.5 -1e+09 1e+09 1e+09 -inf inf
+ReverbSoundEffect Density 1 -1e+09 1e+09 1e+09 -inf inf
+ReverbSoundEffect Diffusion 1 -1e+09 1e+09 1e+09 -inf inf
+ReverbSoundEffect DryLevel -6 -1e+09 1e+09 1e+09 -inf inf
+ReverbSoundEffect WetLevel 0 -1e+09 1e+09 1e+09 -inf inf
+TremoloSoundEffect Depth 1 -1e+09 1e+09 1e+09 -inf inf
+TremoloSoundEffect Duty 0.5 -1e+09 1e+09 1e+09 -inf inf
+TremoloSoundEffect Frequency 5 -1e+09 1e+09 1e+09 -inf inf
+PitchShiftSoundEffect Octave 1.25 -1e+09 1e+09 1e+09 -inf inf
+EqualizerSoundEffect LowGain -20 -1e+09 1e+09 1e+09 -inf inf
+EqualizerSoundEffect MidGain -10 -1e+09 1e+09 1e+09 -inf inf
+EqualizerSoundEffect HighGain 0 -1e+09 1e+09 1e+09 -inf inf
+near FlangeSoundEffect Depth 0=0 0.005=0.005 1.5=1.5
+near TremoloSoundEffect Frequency 0=0 0.05=0.05 25=25
+near EchoSoundEffect Delay 0=0 0.005=0.005 6=6
+near CompressorSoundEffect Attack 0=0 0.05=0.05 2=2
+near CompressorSoundEffect Ratio 0=0 0.5=0.5 100=100
+near ChorusSoundEffect Rate -1=-1 21=21
+Priority -5 true -5
+Priority 2.7 true 2
+Priority -2.7 true -2
+Priority string ok 3
+Priority bad string ok 
+Enabled number ok true
+Enabled nil ok false
+IsA true ChorusSoundEffect
+SideChain nil
+SideChain Sound ok true
+SideChain SoundGroup ok true
+SideChain Part error CompressorSoundEffect.SideChain must be Sound or SoundGroup
+SideChain nil ok nil
+SideChain destroyed true
+AudioFilter Frequency 2000 20 2.2e+04 2.2e+04 20 2.2e+04
+AudioFilter Gain 0 -30 30 30 -30 30
+AudioFilter Q 0.707 0.1 10 10 0.1 10
+AudioFlanger Depth 0.45 0.01 1 1 0.01 1
+AudioFlanger Mix 0.85 0 1 1 0 1
+AudioFlanger Rate 5 0 20 20 0 20
+AudioTremolo Depth 1 0 1 1 0 1
+AudioTremolo Duty 0.5 0 1 1 0 1
+AudioTremolo Frequency 5 0 20 20 0 20
+AudioTremolo Shape 0 0 1 1 0 1
+AudioTremolo Skew 0 -1 1 1 -1 1
+AudioTremolo Square 0 0 1 1 0 1
+AudioLimiter MaxLevel 0 -12 0 0 -12 0
+AudioLimiter Release 0.01 0.001 1 1 0.001 1
+AudioGate Attack 0.01 0.001 5 5 0.001 5
+AudioGate Release 0.1 0.001 5 5 0.001 5
+AudioReverb DecayRatio 0.5 0.1 1 1 0.1 1
+AudioReverb EarlyDelayTime 0.02 0 0.3 0.3 0 0.3
+AudioReverb LateDelayTime 0.04 0 0.1 0.1 0 0.1
+AudioReverb LowShelfFrequency 250 20 2e+04 2e+04 20 2e+04
+AudioReverb LowShelfGain 0 -36 12 12 -36 12
+AudioReverb ReferenceFrequency 5000 20 2e+04 2e+04 20 2e+04
+AudioEcho RampTime 0 0 6e+04 6e+04 0 6e+04
+nan AudioFader Volume=1
+nan AudioEqualizer LowGain=0 MidGain=0 HighGain=0
+nan AudioDistortion Level=0.5
+nan AudioPitchShifter Pitch=1.25
+nan AudioReverb DecayTime=1.5 Density=1 Diffusion=1 DryLevel=0 WetLevel=-6 HighCutFrequency=2e+04
+nan AudioChorus Depth=0.45 Mix=0.85 Rate=5
+nan AudioEcho DelayTime=1 DryLevel=0 Feedback=0.5 WetLevel=0
+nan AudioCompressor Attack=0.1 MakeupGain=0 Ratio=40 Release=0.1 Threshold=-40
+AudioGate Threshold -36..-24 false
+AudioGate Threshold set -200..100 true -80..30
+AudioGate Threshold set -10..-10 true -10..-10
+AudioGate Threshold set -90..-85 true -80..-80
+AudioGate Threshold set 20..40 true 20..30
+AudioGate Threshold number error Unable to assign property Threshold. NumberRange expected, got number
+AudioGate pins Input Output
+AudioFilterType Peak=0 LowShelf=1 HighShelf=2 Lowpass12dB=3 Lowpass24dB=4 Lowpass48dB=5 Highpass12dB=6 Highpass24dB=7 Highpass48dB=8 Bandpass=9 Notch=10 Lowpass6dB=11
+FilterType Enum.AudioFilterType.Peak
+GetGainAt default 20=0.00 200=0.00 1000=0.00 2000=0.00 4000=0.00 20000=0.00
+GetGainAt Peak 20=0.00 200=0.13 1000=2.81 2000=6.00 4000=2.75 20000=0.02
+GetGainAt LowShelf 20=6.00 200=6.00 1000=5.63 2000=3.00 4000=0.35 20000=0.00
+GetGainAt HighShelf 20=0.00 200=0.00 1000=0.37 2000=3.00 4000=5.65 20000=6.00
+GetGainAt Lowpass12dB 20=0.00 200=0.00 1000=-0.26 2000=-3.01 4000=-12.59 20000=-58.10
+GetGainAt Lowpass24dB 20=0.00 200=0.05 1000=0.76 2000=-3.01 4000=-23.94 20000=-116.20
+GetGainAt Lowpass48dB 20=0.00 200=0.14 1000=2.61 2000=-3.01 4000=-46.81 20000=-232.39
+GetGainAt Highpass12dB 20=-80.06 200=-40.10 1000=-12.38 2000=-3.01 4000=-0.25 20000=0.00
+GetGainAt Highpass24dB 20=-160.19 200=-80.15 1000=-23.47 2000=-3.01 4000=0.75 20000=0.01
+GetGainAt Highpass48dB 20=-320.41 200=-160.26 1000=-45.85 2000=-3.01 4000=2.57 20000=0.02
+GetGainAt Bandpass 20=-37.04 200=-17.04 1000=-3.31 2000=0.00 4000=-3.41 20000=-26.04
+GetGainAt Notch 20=0.00 200=-0.09 1000=-2.73 2000=-122.57 4000=-2.65 20000=-0.01
+GetGainAt Lowpass6dB 20=0.00 200=-0.04 1000=-0.96 2000=-2.99 4000=-6.89 20000=-17.41
+GetGainAt bad error Unable to cast string to float
+GetGainAt nil error Argument 1 missing or nil
+GetGainAt 0 and negative ok 0.00 0.00
+AudioFilter pins Input Output
+pins AudioFlanger false Input Output
+pins AudioTremolo false Input Output
+pins AudioLimiter false Input Output
