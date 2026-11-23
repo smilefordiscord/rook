@@ -65,6 +65,7 @@
   - Lighting
     - [Local lights](behavior/lighting/local-lights.md): PointLight, SpotLight and SurfaceLight
     - [Ambient and OutdoorAmbient](behavior/lighting/ambient.md)
+    - [The clock](behavior/lighting/clock.md): ClockTime, TimeOfDay and SetMinutesAfterMidnight, the sun's and moon's directions
     - [The sun](behavior/lighting/sun.md)
     - [The sky over the day](behavior/lighting/sky.md): its tint at dawn and dusk, and what it reaches, the sun, moon, stars and night sky
     - [Atmosphere](behavior/lighting/atmosphere.md): haze, glare and aerial perspective, in place of fog

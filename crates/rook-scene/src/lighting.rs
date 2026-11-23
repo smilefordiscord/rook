@@ -11,15 +11,15 @@ pub(super) use post::post_effects;
 
 use super::*;
 use sky::{night_sky, sky_of, sky_tint};
-use sun::{sun_and_moon, sun_now};
+use sun::sun_and_moon;
 
 pub(super) fn lighting(dom: &Dom) -> Lighting {
     let mut l = Lighting::default();
     let Some(id) = dom.find_service("Lighting") else {
         return l;
     };
-    let hours = dom.clock_time(id) as f32;
-    let sun = sun_now(dom, id);
+    let hours = dom.clock(id).hours() as f32;
+    let sun = dom.sun_direction(id);
     let brightness = dom.float_property(id, "Brightness").unwrap_or(2.0);
     (l.sun_direction, l.sun_color) = sun_and_moon(sun, brightness);
     if let Some(c) = dom.color3_property(id, "Ambient").map(Color3::to_array) {
@@ -88,8 +88,8 @@ impl SceneCache {
         let sky = sky_of(dom);
         self.sky(dom, sky, &mut l);
         if let Some(id) = dom.find_service("Lighting") {
-            let hours = dom.clock_time(id) as f32;
-            self.celestial(dom, sky, (hours, sun_now(dom, id)), &mut l);
+            let hours = dom.clock(id).hours() as f32;
+            self.celestial(dom, sky, (hours, dom.sun_direction(id)), &mut l);
         }
         l
     }

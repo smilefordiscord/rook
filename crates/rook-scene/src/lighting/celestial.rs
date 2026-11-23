@@ -4,7 +4,8 @@
 use rook_render::{Disc, DiscImage, Stars};
 
 use super::sky::SkyImage;
-use super::sun::{day_turn, horizon_fade, moon_direction};
+use super::sun::{day_turn, horizon_fade};
+use rook_types::moon_direction;
 use super::*;
 
 /// What a Sky's celestial bodies are without a Sky, or before its

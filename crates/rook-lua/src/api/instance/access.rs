@@ -144,9 +144,7 @@ pub(crate) fn write_property(
         "Size" if params => properties::params_size(value),
         _ => from_lua(lua, value, prop.ty)?,
     };
-    if let Some(e) = with_world(lua, |w| {
-        properties::wrong_ref_class(w, id, name, &converted)
-    }) {
+    if let Some(e) = with_world(lua, |w| properties::rejected(w, id, name, &converted)) {
         return Ok(Err(ScriptError(e)));
     }
     if name == "Parent" {

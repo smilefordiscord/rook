@@ -16,7 +16,7 @@ mod gui;
 mod part;
 mod value;
 
-pub use clock::{clock_hours, time_of_day};
+pub use clock::{Clock, MOON_PHASE, TimeOfDayError, moon_direction, sun_direction};
 pub use enums::{
     GamepadKey, MeshType, RollOffMode, RunContext, UserInputState, UserInputType, VibrationMotor,
 };
