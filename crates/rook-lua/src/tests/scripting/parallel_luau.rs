@@ -133,6 +133,54 @@ fn connect_parallel_handlers_start_in_the_parallel_phase() {
     );
 }
 
+/// A signal fired by desynchronized code runs its serial handlers, those
+/// of a script outside any Actor included, at the next serial resumption
+/// point and not as that Actor's parallel code, which would refuse what
+/// they may do.
+#[test]
+fn serial_handlers_of_a_signal_fired_in_parallel_run_serially() {
+    for behavior in ["Immediate", "Deferred"] {
+        let rt = place();
+        let sss = service(&rt, "ServerScriptService");
+        add(&rt, sss, "BindableEvent", "Event", "");
+        let listener = add(
+            &rt,
+            sss,
+            "Script",
+            "Listener",
+            r#"
+            local event = script.Parent.Event
+            event.Event:Connect(function(n)
+                print("heard", n, pcall(function() event.Name = "Event" end))
+            end)
+            "#,
+        );
+        let actor = add(&rt, sss, "Actor", "Actor", "");
+        let script = add(
+            &rt,
+            actor,
+            "Script",
+            "Script",
+            r#"
+            local event = script.Parent.Parent.Event
+            task.desynchronize()
+            event:Fire(1)
+            print("fired")
+            "#,
+        );
+        rt.world_mut().signal_behavior = if behavior == "Immediate" {
+            SignalBehavior::Immediate
+        } else {
+            SignalBehavior::Deferred
+        };
+        assert_eq!(
+            play(&rt, &[listener, script], 2),
+            ["fired", "heard 1 true"],
+            "{behavior}"
+        );
+    }
+}
+
 #[test]
 fn connecting_in_parallel_outside_an_actor_is_an_error() {
     let rt = place();

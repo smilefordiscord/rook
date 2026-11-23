@@ -272,6 +272,13 @@ impl<T> Scheduler<T> {
         }
     }
 
+    /// Run `job` at the next serial resumption point, in whatever phase it
+    /// was made: a signal's serial handlers, which desynchronized code
+    /// firing it mustn't run as its own.
+    pub fn defer_serial(&mut self, job: T) {
+        self.deferred.push_back(job);
+    }
+
     /// Run `job` in `actor`'s next parallel phase (`task.desynchronize`,
     /// `ConnectParallel` and `BindToMessageParallel` handlers).
     pub fn desynchronize(&mut self, actor: InstanceId, job: T) {
