@@ -269,8 +269,9 @@ fn closing_joins_the_ends() {
     assert_eq!(lines(&drawn(&mut gui, &dom)).len(), 3);
 }
 
-/// Positions come back as UDim2s in the parent, by parameter or by
-/// length; tangents as unit vectors; the length and bounds in pixels.
+/// Positions come back as UDim2s of the parent's size, by parameter or by
+/// length; tangents as the segment's derivative; the length in pixels and
+/// the bounding rect round the points on the screen (Studio 0.748).
 #[test]
 fn queries_read_the_curve_where_it_is_laid_out() {
     let (mut dom, frame) = boxed();
@@ -283,7 +284,7 @@ fn queries_read_the_curve_where_it_is_laid_out() {
         point(0.25, 0, 1.0, 0),
     ];
     set_points(&mut dom, p, &points);
-    let curve = gui.path_curve(&mut dom, p);
+    let curve = gui.path_curve(&mut dom, p).unwrap();
     assert_eq!(curve.segments(), 2);
     assert!((curve.length() - 400.0).abs() < 1e-2);
     assert_eq!(curve.position(0.5), Some(UDim2::new(0.25, 0, 0.0, 0)));
@@ -294,26 +295,48 @@ fn queries_read_the_curve_where_it_is_laid_out() {
         (by_length.y.scale - 1.0 / 3.0).abs() < 1e-4,
         "{by_length:?}"
     );
-    assert!(curve.tangent(0.25).unwrap().abs_diff_eq(Vec2::X, 1e-5));
-    assert!(
-        curve
-            .tangent_by_length(0.5)
-            .unwrap()
-            .abs_diff_eq(Vec2::Y, 1e-5)
-    );
-    // In GUI pixels, like AbsolutePosition, grown by half the thickness.
-    let (lo, hi) = curve.bounds(2.0).unwrap();
-    assert!(lo.abs_diff_eq(Vec2::new(8.0, 18.0), 1e-3), "{lo}");
-    assert!(hi.abs_diff_eq(Vec2::new(112.0, 322.0), 1e-3), "{hi}");
+    assert_eq!(curve.tangent(0.25), Some(Vec2::new(100.0, 0.0)));
+    assert_eq!(curve.tangent_by_length(0.5), Some(Vec2::new(0.0, 300.0)));
+    // Like AbsolutePosition, grown by half the thickness and half a pixel.
+    let (lo, hi) = curve.bounding_rect(4.0).unwrap();
+    assert!(lo.abs_diff_eq(Vec2::new(7.5, 17.5), 1e-3), "{lo}");
+    assert!(hi.abs_diff_eq(Vec2::new(112.5, 322.5), 1e-3), "{hi}");
     set_points(&mut dom, p, &[point(0.0, 0, 0.0, 0)]);
-    let single = gui.path_curve(&mut dom, p);
+    let single = gui.path_curve(&mut dom, p).unwrap();
     assert_eq!((single.position(0.5), single.length()), (None, 0.0));
+    dom.set_parent(p, None).unwrap();
+    assert!(gui.path_curve(&mut dom, p).is_none());
+}
+
+/// A segment with no tangents is a straight line run at an even pace; one
+/// with a single tangent is a quadratic through that handle (Studio
+/// 0.748: `t` a quarter along a line is a quarter of the way, and a
+/// quadratic leaves its zero end towards the handle at twice its
+/// distance).
+#[test]
+fn segments_are_lines_quadratics_or_cubics_by_their_tangents() {
+    let (mut dom, frame) = boxed();
+    let p = path(&mut dom, frame, 1.0);
+    let mut gui = laid_out(&mut dom);
+    let line = [point(0.0, 0, 0.0, 0), point(0.0, 100, 0.0, 0)];
+    set_points(&mut dom, p, &line);
+    let curve = gui.path_curve(&mut dom, p).unwrap();
+    assert_eq!(curve.position(0.25), Some(UDim2::new(0.0625, 0, 0.0, 0)));
+    assert_eq!(curve.tangent(0.0), Some(Vec2::new(100.0, 0.0)));
+    let end = PathPoint {
+        left: UDim2::from_offset(-20, 0),
+        ..line[1]
+    };
+    set_points(&mut dom, p, &[line[0], end]);
+    let curve = gui.path_curve(&mut dom, p).unwrap();
+    assert_eq!(curve.tangent(0.0), Some(Vec2::new(160.0, 0.0)));
+    assert!((curve.length() - 100.0).abs() < 1e-3);
 }
 
 /// A script can place a tangent at `math.huge`, NaN or far off the
 /// screen: the path draws nothing or a bounded number of lines, and its
-/// length is answered, where flattening it as it is panicked or ran out of
-/// memory.
+/// length is answered (NaN through a NaN), where flattening it as it is
+/// panicked or ran out of memory.
 #[test]
 fn points_far_away_or_nowhere_stay_bounded() {
     for far in [f32::INFINITY, f32::NAN, 1e12] {
@@ -326,7 +349,7 @@ fn points_far_away_or_nowhere_stay_bounded() {
         gui.sync(&mut dom);
         let quads = drawn(&mut gui, &dom);
         assert!(lines(&quads).len() < 4096, "{far}: {}", quads.len());
-        let length = gui.path_curve(&mut dom, p).length();
-        assert!(length > 1e9, "{far}: {length}");
+        let length = gui.path_curve(&mut dom, p).unwrap().length();
+        assert!(length > 1e9 || length.is_nan(), "{far}: {length}");
     }
 }

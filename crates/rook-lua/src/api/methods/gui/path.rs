@@ -1,7 +1,9 @@
 //! Path2D's methods (docs/behavior/gui/modern.md#path2d): its control
-//! points, kept in its `PropertiesSerialize` ([`rook_gui::path_points`]),
-//! and where its curve runs as laid out now ([`rook_gui::PathCurve`]). The cap
-//! is creator-docs'; the setters' errors are Inference.
+//! points, kept in its `PropertiesSerialize` ([`rook_gui::path_points`])
+//! and its spline (`rook-gui`'s `path/spline.rs`), and where its curve
+//! runs as laid out now ([`rook_gui::PathCurve`]). Arguments are cast as
+//! Roblox's reflection casts them; the order of the checks after that is
+//! Studio 0.748's.
 
 use mlua::{Lua, Value as LuaValue};
 use rook_dom::InstanceId;
@@ -9,7 +11,7 @@ use rook_gui::{PathCurve, PathPoint};
 use rook_types::Vector2;
 
 use super::RawMethod;
-use crate::runtime::ctx::args::{Args, borrow_clone, format_number};
+use crate::runtime::ctx::args::Args;
 use crate::runtime::ctx::{ApiResult, Outcome, ScriptError, with_world};
 use crate::runtime::signal::SignalKey;
 use crate::runtime::threads::fire;
@@ -67,35 +69,59 @@ fn points(lua: &Lua, this: InstanceId) -> Vec<PathPoint> {
     with_world(lua, |w| rook_gui::path_points(&w.dom, this))
 }
 
-/// Keep `points` as the path's and fire `ControlPointChanged`
-/// (Confirmed: creator-docs, for each of the four setters).
+/// Keep `points` as the path's.
 fn store(lua: &Lua, this: InstanceId, points: &[PathPoint]) -> ApiResult<()> {
     with_world(lua, |w| rook_gui::set_path_points(&mut w.dom, this, points))?;
-    fire(lua, &SignalKey::event(this, "ControlPointChanged"), &[]);
     Ok(())
 }
 
-/// Inference: `Path2D:GetControlPoint() at index 5 access out of bounds`.
-fn out_of_bounds(member: &str, index: f64) -> ScriptError {
+/// Confirmed (creator-docs; Studio 0.748): each setter fires
+/// `ControlPointChanged`, with no arguments, once it has finished; one
+/// that raises fires nothing, whatever it changed first.
+fn changed(lua: &Lua, this: InstanceId) -> ApiResult<Outcome> {
+    fire(lua, &SignalKey::event(this, "ControlPointChanged"), &[]);
+    Outcome::ret(lua, ())
+}
+
+/// Confirmed (Studio 0.748): `Path2D:GetControlPoint() at index 5 access
+/// out of bounds`, the index as cast.
+fn out_of_bounds(member: &str, index: i32) -> ScriptError {
     ScriptError(format!(
-        "Path2D:{member}() at index {} access out of bounds",
-        format_number(index)
+        "Path2D:{member}() at index {index} access out of bounds"
     ))
 }
 
+/// Confirmed (Studio 0.748).
 fn too_many(member: &str) -> ScriptError {
     ScriptError(format!(
         "Path2D:{member}() only supports {MAX_POINTS} control points."
     ))
 }
 
-/// A 1-based index within `1..=last`, or the member's error.
+/// Confirmed (Studio 0.748).
+fn invalid_parent() -> ScriptError {
+    ScriptError("Attempting to use Path2D with invalid parent".into())
+}
+
+/// Confirmed (Studio 0.748): the spline's own message, its index from 0.
+fn spline_out_of_bounds(doing: &str, index: usize) -> ScriptError {
+    ScriptError(format!(
+        "Spline {doing} control point at index {index} access out of bounds"
+    ))
+}
+
+/// Argument 1, an `int`, as a 0-based index within `1..=last`, or the
+/// member's error.
 fn index(a: &Args, member: &str, last: usize) -> ApiResult<usize> {
-    let i = a.number(0)?;
-    if i.fract() != 0.0 || i < 1.0 || i > last as f64 {
-        return Err(out_of_bounds(member, i));
+    let i = a.int(0)?;
+    match usize::try_from(i) {
+        Ok(n) if (1..=last).contains(&n) => Ok(n - 1),
+        _ => Err(out_of_bounds(member, i)),
     }
-    Ok(i as usize - 1)
+}
+
+fn placed(lua: &Lua, this: InstanceId) -> bool {
+    with_world(lua, |w| rook_gui::path_is_placed(&w.dom, this))
 }
 
 fn get_points(lua: &Lua, this: InstanceId, _: &Args) -> ApiResult<Outcome> {
@@ -107,28 +133,34 @@ fn get_points(lua: &Lua, this: InstanceId, _: &Args) -> ApiResult<Outcome> {
     Outcome::ret(lua, t)
 }
 
-/// Inference: past the cap the first 100 are kept and it raises; anything
-/// but a point in the array is `Variant cast failed`.
+/// Confirmed (Studio 0.748): the points are emptied, then each item added
+/// in turn, so an item that isn't a point (`Variant cast failed`) or the
+/// 101st raises with those before it kept. No parent is needed.
 fn set_points(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> {
-    let LuaValue::Table(list) = a.get(0) else {
-        return Err(a.wrong(0, "Array"));
-    };
+    let items = a.array(0)?;
+    with_world(lua, |w| w.gui.empty_path_spline(this));
     let mut out = Vec::new();
-    for v in list.clone().sequence_values::<LuaValue>() {
-        let point = match v? {
-            LuaValue::UserData(ud) => borrow_clone::<LPath2DControlPoint>(&ud),
+    let mut failed = None;
+    for item in &items {
+        let point = match item {
+            LuaValue::UserData(ud) => ud.borrow::<LPath2DControlPoint>().ok().map(|p| *p),
             _ => None,
+        };
+        let Some(point) = point else {
+            failed = Some(ScriptError("Variant cast failed".into()));
+            break;
+        };
+        if out.len() >= MAX_POINTS {
+            failed = Some(too_many("SetControlPoints"));
+            break;
         }
-        .ok_or_else(|| ScriptError("Variant cast failed".into()))?;
         out.push(to_point(&point));
     }
-    let over = out.len() > MAX_POINTS;
-    out.truncate(MAX_POINTS);
     store(lua, this, &out)?;
-    if over {
-        return Err(too_many("SetControlPoints"));
+    match failed {
+        Some(e) => Err(e),
+        None => changed(lua, this),
     }
-    Outcome::ret(lua, ())
 }
 
 fn get_point(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> {
@@ -137,47 +169,77 @@ fn get_point(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> {
     Outcome::ret(lua, from_point(&list[i]))
 }
 
-/// Rook inserts wherever the path is. Inference: Studio refuses this on a
-/// path with no parent ("Attempting to use Path2D with invalid parent").
+/// Confirmed (Studio 0.748): with no parent to place the point in it
+/// raises and changes nothing; with one, the point is inserted, then the
+/// spline told.
 fn insert_point(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> {
+    a.int(0)?;
+    let point = a.datatype::<LPath2DControlPoint>(1, "Path2DControlPoint")?;
     let mut list = points(lua, this);
-    let i = index(a, "InsertControlPoint", list.len() + 1)?;
-    let point = a.userdata::<LPath2DControlPoint>(1, "Path2DControlPoint")?;
     if list.len() >= MAX_POINTS {
         return Err(too_many("InsertControlPoint"));
     }
+    let i = index(a, "InsertControlPoint", list.len() + 1)?;
+    if !placed(lua, this) {
+        return Err(invalid_parent());
+    }
     list.insert(i, to_point(&point));
     store(lua, this, &list)?;
-    Outcome::ret(lua, ())
+    if !with_world(lua, |w| w.gui.insert_into_path_spline(this, i)) {
+        return Err(spline_out_of_bounds("inserting", i));
+    }
+    changed(lua, this)
 }
 
+/// Confirmed (Studio 0.748): no parent is needed; the point is removed,
+/// then the spline told.
 fn remove_point(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> {
     let mut list = points(lua, this);
     let i = index(a, "RemoveControlPoint", list.len())?;
     list.remove(i);
     store(lua, this, &list)?;
-    Outcome::ret(lua, ())
+    if !with_world(lua, |w| w.gui.remove_from_path_spline(this, i)) {
+        return Err(spline_out_of_bounds("removing", i));
+    }
+    changed(lua, this)
 }
 
+/// Confirmed (Studio 0.748): with no parent it raises and changes nothing.
+/// Inference: the spline takes the new point wherever it is.
 fn update_point(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> {
+    a.int(0)?;
+    let point = a.datatype::<LPath2DControlPoint>(1, "Path2DControlPoint")?;
     let mut list = points(lua, this);
     let i = index(a, "UpdateControlPoint", list.len())?;
-    let point = a.userdata::<LPath2DControlPoint>(1, "Path2DControlPoint")?;
+    if !placed(lua, this) {
+        return Err(invalid_parent());
+    }
     list[i] = to_point(&point);
     store(lua, this, &list)?;
-    Outcome::ret(lua, ())
+    changed(lua, this)
 }
 
-fn curve(lua: &Lua, this: InstanceId) -> PathCurve {
-    with_world(lua, |w| w.gui.path_curve(&mut w.dom, this))
+/// The path's curve, or the invalid parent error.
+fn curve(lua: &Lua, this: InstanceId) -> ApiResult<PathCurve> {
+    with_world(lua, |w| w.gui.path_curve(&mut w.dom, this)).ok_or_else(invalid_parent)
 }
 
-/// Confirmed (creator-docs): the curve queries raise with fewer than two
-/// points. Inference: the message.
-fn too_few(member: &str) -> ScriptError {
+/// Confirmed (Studio 0.748): what the curve queries raise with fewer than
+/// two points, checked before the parent.
+fn no_segments(member: &str) -> ScriptError {
     ScriptError(format!(
-        "Path2D:{member}() requires at least 2 control points"
+        "Path2D:{member}() attempting to query with zero segments"
     ))
+}
+
+/// The curve to query with argument 1, `t` (a `float`): `no_segments`
+/// with none. Inference: the parent is checked as `GetLength` checks it.
+fn queried(lua: &Lua, this: InstanceId, a: &Args, member: &str) -> ApiResult<(PathCurve, f32)> {
+    let t = a.float(0)?;
+    if with_world(lua, |w| rook_gui::path_segments(&w.dom, this)) == 0 {
+        return Err(no_segments(member));
+    }
+    Ok((curve(lua, this)?, t))
 }
 
 /// `GetPositionOnCurve` and its arc-length twin: a UDim2 in the path's
@@ -189,8 +251,8 @@ fn position(
     member: &str,
     at: fn(&PathCurve, f32) -> Option<rook_types::UDim2>,
 ) -> ApiResult<Outcome> {
-    let t = a.number(0)? as f32;
-    let at = at(&curve(lua, this), t).ok_or_else(|| too_few(member))?;
+    let (curve, t) = queried(lua, this, a, member)?;
+    let at = at(&curve, t).ok_or_else(|| no_segments(member))?;
     Outcome::ret(lua, LUDim2(at))
 }
 
@@ -202,24 +264,22 @@ fn tangent(
     member: &str,
     at: fn(&PathCurve, f32) -> Option<glam::Vec2>,
 ) -> ApiResult<Outcome> {
-    let t = a.number(0)? as f32;
-    let v = at(&curve(lua, this), t).ok_or_else(|| too_few(member))?;
+    let (curve, t) = queried(lua, this, a, member)?;
+    let v = at(&curve, t).ok_or_else(|| no_segments(member))?;
     Outcome::ret(lua, LVector2(Vector2::new(v.x, v.y)))
 }
 
-/// In pixels as drawn. Inference: 0 with fewer than two points.
+/// In the parent's pixels. Inference: 0 with fewer than two points.
 fn get_length(lua: &Lua, this: InstanceId, _: &Args) -> ApiResult<Outcome> {
-    Outcome::ret(lua, f64::from(curve(lua, this).length()))
+    Outcome::ret(lua, f64::from(curve(lua, this)?.length()))
 }
 
-/// Confirmed (creator-docs): the box round the curve, grown by its
-/// thickness. Inference: half of it each way (the stroke's edge), in the
-/// pixels `AbsolutePosition` is in, and an empty Rect with fewer than two
-/// points.
+/// In the pixels `AbsolutePosition` is in. Inference: an empty Rect with
+/// no points.
 fn get_bounding_rect(lua: &Lua, this: InstanceId, _: &Args) -> ApiResult<Outcome> {
+    let curve = curve(lua, this)?;
     let thickness = with_world(lua, |w| w.dom.float_property(this, "Thickness"));
-    let grow = thickness.unwrap_or(1.0).clamp(0.0, 100.0) * 0.5;
-    let (lo, hi) = (curve(lua, this).bounds(grow)).unwrap_or_default();
+    let (lo, hi) = (curve.bounding_rect(thickness.unwrap_or(1.0))).unwrap_or_default();
     let v = |p: glam::Vec2| rbx_types::Vector2::new(p.x, p.y);
     Outcome::ret(lua, LRect(rbx_types::Rect::new(v(lo), v(hi))))
 }

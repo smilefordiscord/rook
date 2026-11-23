@@ -29,7 +29,7 @@ pub use images::GuiImage;
 pub use input::hits::WorldHit;
 pub use input::scrolling::BarDrag;
 pub use layout::GUI_INSET;
-pub use path::{PathCurve, PathPoint, path_points, set_path_points};
+pub use path::{PathCurve, PathPoint, path_is_placed, path_points, path_segments, set_path_points};
 
 use changes::Watch;
 use layout::{Layout, Turning};
@@ -172,6 +172,9 @@ pub struct Gui {
     fonts: text::Fonts,
     glyphs: text::Glyphs,
     images: images::Images,
+    /// Path2Ds whose spline holds fewer points than they do, and how many:
+    /// see `path/spline.rs`.
+    splines: FxHashMap<InstanceId, usize>,
 }
 
 impl Default for Gui {
@@ -214,6 +217,7 @@ impl Default for Gui {
             fonts: text::Fonts::default(),
             glyphs: text::Glyphs::default(),
             images: images::Images::default(),
+            splines: FxHashMap::default(),
         }
     }
 }

@@ -186,6 +186,59 @@ impl Args {
         }
     }
 
+    /// A datatype argument of a reflected method, named `name` in its
+    /// cast error (`Unable to cast UDim2 to Path2DControlPoint`).
+    pub(crate) fn datatype<T: UserData + Clone + 'static>(
+        &self,
+        i: usize,
+        name: &str,
+    ) -> ApiResult<T> {
+        match self.get(i) {
+            LuaValue::UserData(ud) => borrow_clone::<T>(ud),
+            _ => None,
+        }
+        .ok_or_else(|| self.cast_error(i, name))
+    }
+
+    /// An `int` argument of a reflected method: a number, or a string that
+    /// reads as one, rounded to the nearest whole one. Measured on
+    /// `Path2D:GetControlPoint`: 1.5 is 2 and 3.9 is 4, NaN and anything
+    /// past an `int32` -2147483648, `"a"` `Unable to cast string to int`.
+    pub(crate) fn int(&self, i: usize) -> ApiResult<i32> {
+        let n = number_of(self.get(i)).ok_or_else(|| self.cast_error(i, "int"))?;
+        let n = n.round();
+        Ok(
+            if (f64::from(i32::MIN)..=f64::from(i32::MAX)).contains(&n) {
+                n as i32
+            } else {
+                i32::MIN
+            },
+        )
+    }
+
+    /// A `float` argument of a reflected method: a number, or a string
+    /// that reads as one.
+    pub(crate) fn float(&self, i: usize) -> ApiResult<f32> {
+        (number_of(self.get(i)).map(|n| n as f32)).ok_or_else(|| self.cast_error(i, "float"))
+    }
+
+    /// An `Array` argument of a reflected method: its items from 1 to its
+    /// length, nils in holes included. Measured on
+    /// `Path2D:SetControlPoints`: a table with no first item but other keys
+    /// is `Unable to cast Dictionary to Array`, a string `Unable to cast
+    /// string to Array`.
+    pub(crate) fn array(&self, i: usize) -> ApiResult<Vec<LuaValue>> {
+        let LuaValue::Table(t) = self.get(i) else {
+            return Err(self.cast_error(i, "Array"));
+        };
+        if is_dictionary(t) {
+            return Err(self.cast_error(i, "Array"));
+        }
+        (1..=t.raw_len())
+            .map(|k| Ok(t.raw_get::<LuaValue>(k)?))
+            .collect()
+    }
+
     pub(crate) fn number(&self, i: usize) -> ApiResult<f64> {
         match self.get(i) {
             LuaValue::Nil => Err(self.missing(i)),

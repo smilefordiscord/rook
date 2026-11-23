@@ -67,7 +67,7 @@ pub(in crate::draw) fn emit(
     if !curve.is_finite() {
         return;
     }
-    let Some((lo, hi)) = curve.bounds(width * 0.5) else {
+    let Some((lo, hi)) = curve.drawn_bounds(width * 0.5) else {
         return;
     };
     let tolerance = if world { WORLD_TOLERANCE } else { TOLERANCE };

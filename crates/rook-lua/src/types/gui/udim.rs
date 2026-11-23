@@ -7,7 +7,7 @@ use mlua::{
 };
 use rook_types::{UDim, UDim2};
 
-use crate::runtime::ctx::args::{Num, borrow_clone, number_of};
+use crate::runtime::ctx::args::{Num, borrow_clone, number_of, type_name};
 use crate::types::fmt_f32;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -31,6 +31,20 @@ impl UserData for LPath2DControlPoint {
         f.add_field_method_get("Position", |_, t| Ok(LUDim2(t.position)));
         f.add_field_method_get("LeftTangent", |_, t| Ok(LUDim2(t.left)));
         f.add_field_method_get("RightTangent", |_, t| Ok(LUDim2(t.right)));
+        // Confirmed (Studio 0.748): assigning a member doesn't raise.
+        // Inference: it changes this value, as a Font's members do.
+        f.add_field_method_set("Position", |_, t, v: LuaValue| {
+            t.position = assigned(&v)?;
+            Ok(())
+        });
+        f.add_field_method_set("LeftTangent", |_, t, v: LuaValue| {
+            t.left = assigned(&v)?;
+            Ok(())
+        });
+        f.add_field_method_set("RightTangent", |_, t, v: LuaValue| {
+            t.right = assigned(&v)?;
+            Ok(())
+        });
     }
 
     fn add_methods<M: UserDataMethods<Self>>(m: &mut M) {
@@ -40,7 +54,32 @@ impl UserData for LPath2DControlPoint {
             crate::types::members::Wording::Quoted,
         );
         m.add_meta_method(MetaMethod::Eq, |_, t, o: UserDataRef<Self>| Ok(*t == *o));
+        // Confirmed (Studio 0.748): `Path2DControlPoint { Position = {0.5,
+        // 10}, {0.25, -20}, LeftTangent = ..., RightTangent = ... }`.
+        m.add_meta_method(MetaMethod::ToString, |_, t, ()| {
+            Ok(format!(
+                "Path2DControlPoint {{ Position = {}, LeftTangent = {}, RightTangent = {} }}",
+                fmt_udim2(t.position),
+                fmt_udim2(t.left),
+                fmt_udim2(t.right)
+            ))
+        });
     }
+}
+
+/// A UDim2 assigned to a point's member. Inference: anything else raises
+/// as the constructor does.
+fn assigned(v: &LuaValue) -> mlua::Result<UDim2> {
+    match v {
+        LuaValue::UserData(ud) => borrow_clone::<LUDim2>(ud).map(|u| u.0),
+        _ => None,
+    }
+    .ok_or_else(|| {
+        mlua::Error::runtime(format!(
+            "invalid argument #3 (UDim2 expected, got {})",
+            type_name(v)
+        ))
+    })
 }
 
 /// Offsets are integers. Measured: fractions are cut toward zero (3.7 is
@@ -57,6 +96,10 @@ fn offset(v: Num) -> i32 {
 
 fn fmt_udim(u: UDim) -> String {
     format!("{}, {}", fmt_f32(u.scale), u.offset)
+}
+
+fn fmt_udim2(u: UDim2) -> String {
+    format!("{{{}}}, {{{}}}", fmt_udim(u.x), fmt_udim(u.y))
 }
 
 impl UserData for LUDim {
@@ -117,9 +160,7 @@ impl UserData for LUDim2 {
             MetaMethod::Eq,
             |_, t, o: UserDataRef<LUDim2>| Ok(t.0 == o.0),
         );
-        m.add_meta_method(MetaMethod::ToString, |_, t, ()| {
-            Ok(format!("{{{}}}, {{{}}}", fmt_udim(t.0.x), fmt_udim(t.0.y)))
-        });
+        m.add_meta_method(MetaMethod::ToString, |_, t, ()| Ok(fmt_udim2(t.0)));
     }
 }
 
@@ -141,6 +182,39 @@ fn udim2_new(_: &Lua, args: MultiValue) -> mlua::Result<LUDim2> {
         n(2).f32(),
         offset(n(3)),
     )))
+}
+
+/// `Path2DControlPoint.new()`, `.new(position)` or `.new(position,
+/// leftTangent, rightTangent)`. Confirmed (Studio 0.748): any other count
+/// raises before the arguments are looked at, and each given must be a
+/// UDim2, nil included (`invalid argument #1 to 'new' (UDim2 expected,
+/// got nil)`).
+fn path_point_new(_: &Lua, args: MultiValue) -> mlua::Result<LPath2DControlPoint> {
+    let args = args.into_vec();
+    if !matches!(args.len(), 0 | 1 | 3) {
+        return Err(mlua::Error::runtime(
+            "Trying to create a Path2DControlPoint with wrong number of arguments",
+        ));
+    }
+    let at = |i: usize| match args.get(i) {
+        None => Ok(UDim2::default()),
+        Some(v) => match v {
+            LuaValue::UserData(ud) => borrow_clone::<LUDim2>(ud).map(|u| u.0),
+            _ => None,
+        }
+        .ok_or_else(|| {
+            mlua::Error::runtime(format!(
+                "invalid argument #{} to 'new' (UDim2 expected, got {})",
+                i + 1,
+                type_name(v)
+            ))
+        }),
+    };
+    Ok(LPath2DControlPoint {
+        position: at(0)?,
+        left: at(1)?,
+        right: at(2)?,
+    })
 }
 
 pub(crate) fn install(lua: &Lua) -> mlua::Result<()> {
@@ -167,20 +241,11 @@ pub(crate) fn install(lua: &Lua) -> mlua::Result<()> {
     )?;
     lua.globals().set("UDim2", u2)?;
 
-    // `Path2DControlPoint.new(position, leftTangent, rightTangent)`, each
-    // optional.
-    type Point = Option<UserDataRef<LUDim2>>;
-    let point = lua.create_function(|_, (position, left, right): (Point, Point, Point)| {
-        let or_zero = |u: Point| u.map_or(UDim2::default(), |u| u.0);
-        Ok(LPath2DControlPoint {
-            position: or_zero(position),
-            left: or_zero(left),
-            right: or_zero(right),
-        })
-    })?;
     let point = {
         let t = lua.create_table()?;
-        t.set("new", point)?;
+        t.set("new", lua.create_function(path_point_new)?)?;
+        // Confirmed (Studio 0.748): `attempt to modify a readonly table`.
+        t.set_readonly(true);
         t
     };
     lua.globals().set("Path2DControlPoint", point)?;

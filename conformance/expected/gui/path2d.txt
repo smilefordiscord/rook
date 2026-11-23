@@ -1,0 +1,143 @@
+-- studio 0.748.0.7481526
+-- signals: deferred
+global table table
+keys new:function
+new() Path2DControlPoint userdata {0.000,0}{0.000,0}/{0.000,0}{0.000,0}/{0.000,0}{0.000,0}
+tostring new() Path2DControlPoint { Position = {0, 0}, {0, 0}, LeftTangent = {0, 0}, {0, 0}, RightTangent = {0, 0}, {0, 0} }
+new(3) {0.500,10}{0.250,-20}/{0.000,-5}{0.000,0}/{0.100,3}{0.000,4}
+tostring new(3) Path2DControlPoint { Position = {0.5, 10}, {0.25, -20}, LeftTangent = {0, -5}, {0, 0}, RightTangent = {0.100000001, 3}, {0, 4} }
+new(1) {0.000,7}{0.000,8}/{0.000,0}{0.000,0}/{0.000,0}{0.000,0}
+new(nil,nil,x) error invalid argument #1 to 'new' (UDim2 expected, got nil)
+member types UDim2 UDim2 UDim2
+equal true true
+not equal false false false false
+raw equal false
+unknown member error 'Foo' is not a valid member of Path2DControlPoint
+lowercase member error 'position' is not a valid member of Path2DControlPoint
+number key error '1' is not a valid member of Path2DControlPoint
+assign Position ok 
+new number error invalid argument #1 to 'new' (UDim2 expected, got number)
+new string error invalid argument #1 to 'new' (UDim2 expected, got string)
+new UDim error invalid argument #1 to 'new' (UDim2 expected, got UDim)
+new Vector2 error invalid argument #1 to 'new' (UDim2 expected, got Vector2)
+new tangent number error Trying to create a Path2DControlPoint with wrong number of arguments
+new four args error Trying to create a Path2DControlPoint with wrong number of arguments
+method call error Trying to create a Path2DControlPoint with wrong number of arguments
+table assign error attempt to modify a readonly table
+compare error attempt to compare Path2DControlPoint < Path2DControlPoint
+concat error attempt to concatenate string with Path2DControlPoint
+arith error attempt to perform arithmetic (add) on Path2DControlPoint
+defaults false 0, 0, 0 1 true 1 Path2D
+IsA true false false
+no points 0 100
+Transparency error The current thread cannot read 'Transparency' (lacking capability RobloxScript)
+GetMaxLength error GetMaxLength is not a valid member of Path2D "Path2D"
+GetSegmentCount error The current thread cannot call 'GetSegmentCount' (lacking capability RobloxScript)
+AbsolutePosition error AbsolutePosition is not a valid member of Path2D "Path2D"
+Thickness -5.000 0.000
+Thickness 0.000 0.000
+Thickness 2.500 2.500
+Thickness 150.000 100.000
+Thickness 1000000000.000 100.000
+Thickness nan nan
+Thickness inf 100.000
+ZIndex 2.7 2
+GetPositionOnCurve none error Path2D:GetPositionOnCurve() attempting to query with zero segments
+GetTangentOnCurve none error Path2D:GetTangentOnCurve() attempting to query with zero segments
+GetPositionOnCurveArcLength none error Path2D:GetPositionOnCurveArcLength() attempting to query with zero segments
+GetTangentOnCurveArcLength none error Path2D:GetTangentOnCurveArcLength() attempting to query with zero segments
+GetLength none error Attempting to use Path2D with invalid parent
+GetBoundingRect none error Attempting to use Path2D with invalid parent
+SetControlPoints ok 
+after set 2 {0.000,0}{0.000,0}/{0.000,0}{0.000,0}/{0.000,0}{0.000,0} {0.000,100}{0.000,0}/{0.000,0}{0.000,0}/{0.000,0}{0.000,0}
+unparented insert error Attempting to use Path2D with invalid parent
+after insert 2
+unparented update error Attempting to use Path2D with invalid parent
+unparented remove error Spline removing control point at index 1 access out of bounds
+after update and remove 1 {0.000,0}{0.000,0}/{0.000,0}{0.000,0}/{0.000,0}{0.000,0}
+ControlPointChanged args 0
+ControlPointChanged count 1
+Changed 
+GetControlPoints copies true true
+set empty 0
+frame laid out 400.000,300.000 50.000,20.000
+insert parented error Spline inserting control point at index 1 access out of bounds
+points 3 {0.000,50}{0.000,0}/{0.000,0}{0.000,0}/{0.000,0}{0.000,0}
+GetControlPoint 0 error Path2D:GetControlPoint() at index 0 access out of bounds
+GetControlPoint 4 error Path2D:GetControlPoint() at index 4 access out of bounds
+GetControlPoint -1 error Path2D:GetControlPoint() at index -1 access out of bounds
+GetControlPoint 1.5 ok {0.000,50}{0.000,0}/{0.000,0}{0.000,0}/{0.000,0}{0.000,0}
+GetControlPoint 3.9 error Path2D:GetControlPoint() at index 4 access out of bounds
+GetControlPoint string ok {0.000,50}{0.000,0}/{0.000,0}{0.000,0}/{0.000,0}{0.000,0}
+GetControlPoint bad string error Unable to cast string to int
+GetControlPoint nil error Argument 1 missing or nil
+GetControlPoint nan error Path2D:GetControlPoint() at index -2147483648 access out of bounds
+GetControlPoint huge error Path2D:GetControlPoint() at index -2147483648 access out of bounds
+RemoveControlPoint 4 error Path2D:RemoveControlPoint() at index 4 access out of bounds
+RemoveControlPoint 0 error Path2D:RemoveControlPoint() at index 0 access out of bounds
+UpdateControlPoint 4 error Path2D:UpdateControlPoint() at index 4 access out of bounds
+UpdateControlPoint 0 error Path2D:UpdateControlPoint() at index 0 access out of bounds
+UpdateControlPoint nil point error Argument 2 missing or nil
+UpdateControlPoint UDim2 error Unable to cast UDim2 to Path2DControlPoint
+InsertControlPoint 0 error Path2D:InsertControlPoint() at index 0 access out of bounds
+InsertControlPoint 5 error Path2D:InsertControlPoint() at index 5 access out of bounds
+InsertControlPoint string point error Unable to cast string to Path2DControlPoint
+InsertControlPoint no point error Argument 2 missing or nil
+SetControlPoints nil error Argument 1 missing or nil
+SetControlPoints string error Unable to cast string to Array
+SetControlPoints numbers error Variant cast failed
+SetControlPoints UDim2s error Variant cast failed
+SetControlPoints mixed error Variant cast failed
+after bad sets 1
+SetControlPoints dictionary error Unable to cast Dictionary to Array
+after dictionary 1
+SetControlPoints hole error Variant cast failed
+after hole 1
+SetControlPoints 101 error Path2D:SetControlPoints() only supports 100 control points.
+after 101 100 {0.000,100}{0.000,0}/{0.000,0}{0.000,0}/{0.000,0}{0.000,0}
+SetControlPoints 100 ok nil
+InsertControlPoint full error Path2D:InsertControlPoint() only supports 100 control points.
+after full insert 100
+line length 100.000 rect 49.000,19.000 151.000,21.000
+line t=0.000 {0.000,0}{0.000,0} 100.000,0.000 {0.000,0}{0.000,0} 100.00,0.00
+line t=0.250 {0.062,0}{0.000,0} 100.000,0.000 {0.062,0}{0.000,0} 100.00,0.00
+line t=0.500 {0.125,0}{0.000,0} 100.000,0.000 {0.125,0}{0.000,0} 100.00,0.00
+line t=1.000 {0.250,0}{0.000,0} 100.000,0.000 {0.250,0}{0.000,0} 100.00,0.00
+line t edges ok {0.000,0}{0.000,0} {0.250,0}{0.000,0} 100.000,0.000
+line t nan ok {0.000,0}{0.000,0} 100.000,0.000
+line t huge ok {0.250,0}{0.000,0} {0.000,0}{0.000,0}
+line t string ok {0.125,0}{0.000,0}
+line t nil error Argument 1 missing or nil
+line t none error Argument 1 missing or nil
+same place length 0.000 rect 49.000,19.000 51.000,21.000
+same place t=0.000 {0.000,0}{0.000,0} 0.000,0.000 {0.000,0}{0.000,0} 0.00,0.00
+same place t=0.500 {0.000,0}{0.000,0} 0.000,0.000 {0.000,0}{0.000,0} 0.00,0.00
+bend length 154.887 rect 49.000,19.000 151.000,121.000
+bend t=0.000 {0.000,0}{0.000,0} 150.000,0.000 {0.000,0}{0.000,0} 150.00,0.00
+bend t=0.250 {0.092,0}{0.029,0} 140.625,65.625 {0.093,0}{0.030,0} 140.28,66.65
+bend t=0.500 {0.172,0}{0.104,0} 112.500,112.500 {0.172,0}{0.104,0} 112.50,112.50
+bend t=0.750 {0.229,0}{0.211,0} 65.625,140.625 {0.228,0}{0.209,0} 66.65,140.28
+bend t=1.000 {0.250,0}{0.333,0} 0.000,150.000 {0.250,0}{0.333,0} 0.00,150.00
+two segments length 400.000 rect 49.000,19.000 151.000,321.000
+two segments t=0.250 {0.125,0}{0.000,0} 100.000,0.000 {0.250,0}{0.000,0} 100.00,0.00
+two segments t=0.500 {0.250,0}{0.000,0} 0.000,300.000 {0.250,0}{0.333,0} 0.00,300.00
+two segments t=0.750 {0.250,0}{0.500,0} 0.000,300.000 {0.250,0}{0.667,0} 0.00,300.00
+closed length 716.228 rect 49.000,19.000 151.000,321.000
+closed t=0.500 {0.250,0}{0.500,0} 0.000,300.000 {0.250,0}{0.860,0} 0.00,300.00
+closed t=0.667 {0.250,0}{1.000,0} -100.000,-300.000 {0.189,0}{0.755,0} -100.00,-300.00
+closed t=0.900 {0.075,0}{0.300,0} -100.000,-300.000 {0.057,0}{0.226,0} -100.00,-300.00
+arch length 86.819 rect 49.000,19.000 111.000,21.000
+arch t=0.500 {0.075,0}{0.100,0} 45.000,0.000 {0.075,0}{0.100,0} 45.00,0.00
+rect thickness 0 50.000,20.000 110.000,20.000
+rect thickness 10 44.500,14.500 115.500,25.500
+zero ends length 200.000 rect 49.000,19.000 151.000,121.000
+zero ends t=0.000 {0.000,0}{0.000,0} 160.000,0.000 {0.000,0}{0.000,0} 160.00,0.00
+zero ends t=1.000 {0.250,0}{0.333,0} 0.000,100.000 {0.250,0}{0.333,0} 0.00,100.00
+scale length 430.813 rect 49.000,19.000 451.000,181.000
+scale t=0.500 {0.500,0}{0.267,0} 400.000,160.000 {0.500,0}{0.267,0} 400.00,160.00
+nan point ok nan {nan,0}{0.000,0} {nan,0}{nan,0}
+huge point ok inf 49.000,19.000 inf,21.000
+far offset ok {0.000,1000000000}{0.000,0}/{0.000,0}{0.000,0}/{0.000,0}{0.000,0} 1000000000.000
+clone 2 {0.000,1}{0.000,2}/{0.000,3}{0.000,4}/{0.000,5}{0.000,6} true 4 nil
+clone apart 0 2
+destroyed 2 nil

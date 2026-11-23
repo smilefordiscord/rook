@@ -33,7 +33,8 @@ health bars and leaderboards are GUI.
    [UIPageLayout](../behavior/gui/modern.md#uipagelayout) 69,
    [CanvasGroup](../behavior/gui/modern.md#canvasgroup) 34 and
    [UITableLayout](../behavior/gui/modern.md#uitablelayout) 7, and
-   [Path2D](../behavior/gui/modern.md#path2d), from the creator docs.
+   [Path2D](../behavior/gui/modern.md#path2d), from the creator docs and
+   its methods measured in Studio 0.748.
    Corners, strokes and gradients are parameters of the GUI quad drawn in
    its shader; a CanvasGroup is drawn to a texture of its own.
    - *Design* (2026-11-22), Path2D:
@@ -222,7 +223,7 @@ health bars and leaderboards are GUI.
       faces; text stroke, underline, Hint and Message measured; the
       TextBox's scrolling caret, Up and Down, composition and
       selection color; `AutomaticSize` with scaled children; Path2D's
-      line, queries and saved points
+      line, its spline's rebuilding and saved points
       ([open questions](../behavior/gui/modern.md#open-questions)); the
       Inferences in the GUI pages. Out: touch and gamepad (M19).
     - *Evidence*: the [stubs](../guide/stubs.md) rows taken over by this
