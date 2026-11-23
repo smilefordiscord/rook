@@ -78,6 +78,10 @@ pub(crate) enum MemoryStoreError {
     TooLarge,
     #[error("TransformCallbackFailed: Failed to invoke transformation callback function.")]
     Transform,
+    /// A structure's method called on an object that isn't that kind of
+    /// structure (Inference: the wording is Rook's).
+    #[error("This MemoryStore object is not available")]
+    Unavailable,
 }
 
 /// Seconds on the session's clock. Ordered by `total_cmp`: the clock is
@@ -204,11 +208,19 @@ pub(crate) struct MemoryStores {
     pub(crate) hash_maps: FxHashMap<String, HashMap>,
     /// The structure each object scripts were given stands for.
     pub(crate) objects: FxHashMap<InstanceId, Handle>,
+    reads: u64,
 }
 
 impl MemoryStores {
     pub(crate) fn sorted_map(&mut self, name: &str) -> &mut SortedMap {
         self.sorted_maps.entry(name.to_owned()).or_default()
+    }
+
+    /// A number for a queue read's id, unique in the session, so that one
+    /// queue's id passed to another's `RemoveAsync` removes nothing.
+    pub(crate) fn next_read(&mut self) -> u64 {
+        self.reads += 1;
+        self.reads
     }
 
     pub(crate) fn queue(&mut self, name: &str) -> &mut Queue {

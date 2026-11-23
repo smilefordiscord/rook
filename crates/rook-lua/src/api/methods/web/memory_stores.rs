@@ -59,7 +59,7 @@ pub(super) fn luau_source(owner: &str, name: &str) -> Option<&'static str> {
             local std = ...
             local ms, pcall, error = std.memorystore, std.pcall, std.error
             return function(self, key, transform, expiration)
-                ms.expiration(expiration)
+                ms.expiration(key, transform, expiration)
                 local old, oldSort = self:GetAsync(key)
                 local ok, new, newSort = pcall(transform, old, oldSort)
                 if not ok then
@@ -78,7 +78,7 @@ pub(super) fn luau_source(owner: &str, name: &str) -> Option<&'static str> {
             local std = ...
             local ms, pcall, error = std.memorystore, std.pcall, std.error
             return function(self, key, transform, expiration)
-                ms.expiration(expiration)
+                ms.expiration(key, transform, expiration)
                 local ok, new = pcall(transform, (self:GetAsync(key)))
                 if not ok then
                     error(ms.transform_failed, 0)
@@ -133,7 +133,7 @@ pub(crate) fn install(lua: &Lua) -> mlua::Result<()> {
         "expiration",
         api_fn(lua, |lua, args| {
             let a = Args::new(args, "UpdateAsync");
-            stores::expiration(a.number(0)?)?;
+            stores::expiration(a.number(2)?)?;
             Outcome::ret(lua, ())
         })?,
     )?;
@@ -205,7 +205,7 @@ fn with_stores<R>(
             .objects
             .get(&this)
             .cloned()
-            .ok_or_else(|| ScriptError("This MemoryStore object is not available".into()))?;
+            .ok_or(MemoryStoreError::Unavailable)?;
         f(stores, &handle, now).map_err(ScriptError::from)
     })
 }
@@ -327,10 +327,11 @@ fn read(lua: &Lua, args: MultiValue) -> ApiResult<Outcome> {
     let all_or_nothing = a.truthy(1);
     let read = with_stores(lua, this, |s, h, now| {
         let Handle::Queue { name, invisibility } = h else {
-            return Ok(None);
+            return Err(MemoryStoreError::Unavailable);
         };
+        let read = s.next_read();
         Ok(s.queue(name)
-            .read(now, count, all_or_nothing, *invisibility))
+            .read(now, (count, all_or_nothing), *invisibility, read))
     })?;
     let Some((values, id)) = read else {
         return Outcome::ret(lua, LuaValue::Nil);

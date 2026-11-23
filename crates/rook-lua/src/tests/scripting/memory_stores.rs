@@ -122,6 +122,27 @@ fn queue_reads_by_priority_and_hides_what_it_reads() {
     );
 }
 
+/// A read's id removes only from the queue that read: each queue's first
+/// read once had the same id, so one queue's removed another's items.
+#[test]
+fn a_read_id_removes_only_from_its_queue() {
+    expect(
+        r#"
+        local mss = game:GetService("MemoryStoreService")
+        local a, b = mss:GetQueue("A"), mss:GetQueue("B")
+        a:AddAsync("a", 60)
+        b:AddAsync("b", 60)
+        local _, idA = a:ReadAsync(1)
+        local _, idB = b:ReadAsync(1)
+        print(idA ~= idB)
+        b:RemoveAsync(idA)
+        print(a:GetSizeAsync(), b:GetSizeAsync())
+        "#,
+        0,
+        &["true", "1 1"],
+    );
+}
+
 /// Reads are tried again every two seconds until `waitTimeout`.
 #[test]
 fn read_async_waits_for_items() {

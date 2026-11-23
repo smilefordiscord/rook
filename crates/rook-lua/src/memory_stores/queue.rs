@@ -51,7 +51,6 @@ pub(crate) struct Queue {
     /// The items each read hid, by the id `ReadAsync` returned.
     reads: FxHashMap<u64, Vec<u64>>,
     next_item: u64,
-    next_read: u64,
     bytes: usize,
 }
 
@@ -130,22 +129,21 @@ impl Queue {
         Ok(())
     }
 
-    /// `ReadAsync`'s attempt: up to `count` items and the read's id,
-    /// hidden for `invisibility` seconds; `None` when there is nothing to
-    /// read, or fewer than `count` items and `all_or_nothing`.
+    /// `ReadAsync`'s attempt as read number `read`
+    /// ([`super::MemoryStores::next_read`]): up to `count` items and the
+    /// read's id, hidden for `invisibility` seconds; `None` when there is
+    /// nothing to read, or fewer than `count` items and `all_or_nothing`.
     pub(crate) fn read(
         &mut self,
         now: Time,
-        count: usize,
-        all_or_nothing: bool,
+        (count, all_or_nothing): (usize, bool),
         invisibility: f64,
+        read: u64,
     ) -> Option<(Vec<Json>, String)> {
         self.update(now);
         if self.visible.is_empty() || (all_or_nothing && self.visible.len() < count) {
             return None;
         }
-        self.next_read += 1;
-        let read = self.next_read;
         let until = now.after(invisibility);
         let mut values = Vec::with_capacity(count.min(self.visible.len()));
         let mut seqs = Vec::with_capacity(values.capacity());

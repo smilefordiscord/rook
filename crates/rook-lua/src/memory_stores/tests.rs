@@ -142,13 +142,13 @@ fn queues_read_by_priority_then_order_and_hide_what_they_read() {
     for (v, p) in [("a", 0.0), ("b", 0.0), ("urgent", 5.0)] {
         q.add(T0, json!(v), 60.0, p).unwrap();
     }
-    let (values, first) = q.read(T0, 2, false, 30.0).unwrap();
+    let (values, first) = q.read(T0, (2, false), 30.0, 1).unwrap();
     assert_eq!(values, [json!("urgent"), json!("a")]);
     assert_eq!(q.len(T0, false), 3);
     assert_eq!(q.len(T0, true), 1);
-    let (values, second) = q.read(T0, 5, false, 30.0).unwrap();
+    let (values, second) = q.read(T0, (5, false), 30.0, 2).unwrap();
     assert_eq!(values, [json!("b")]);
-    assert!(q.read(T0, 1, false, 30.0).is_none());
+    assert!(q.read(T0, (1, false), 30.0, 3).is_none());
     q.remove(T0, &second);
     assert_eq!(q.len(T0, false), 2);
     // The first read's hiding runs out: its items show again, and its id
@@ -156,7 +156,7 @@ fn queues_read_by_priority_then_order_and_hide_what_they_read() {
     let later = Time(30.0);
     q.remove(later, &first);
     assert_eq!(q.len(later, true), 2);
-    let (values, _) = q.read(later, 2, false, 30.0).unwrap();
+    let (values, _) = q.read(later, (2, false), 30.0, 4).unwrap();
     assert_eq!(values, [json!("urgent"), json!("a")]);
 }
 
@@ -164,9 +164,9 @@ fn queues_read_by_priority_then_order_and_hide_what_they_read() {
 fn queue_all_or_nothing_and_expiry() {
     let mut q = Queue::default();
     q.add(T0, json!(1), 10.0, 0.0).unwrap();
-    assert!(q.read(T0, 2, true, 30.0).is_none());
+    assert!(q.read(T0, (2, true), 30.0, 5).is_none());
     assert_eq!(
-        q.read(T0, 2, false, 30.0).map(|r| r.0),
+        q.read(T0, (2, false), 30.0, 6).map(|r| r.0),
         Some(vec![json!(1)])
     );
     assert_eq!(q.len(Time(10.0), false), 0);
