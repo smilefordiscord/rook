@@ -1,7 +1,8 @@
 //! What the local player's ScreenGuis draw, in order, over any Hint or
 //! Message: each visible GUI object's background and border (or legacy
 //! style), a ScrollingFrame's bars, then its image or text, cut by its
-//! UICorner and colored by its UIGradient, then its UIStroke; CanvasGroups
+//! UICorner and colored by its UIGradient, then its UIStroke; each
+//! Path2D's curve; CanvasGroups
 //! drawn apart and laid over as one; what each world GUI's canvas draws,
 //! the same way; and the names and health bars over heads. Order and
 //! clipping rules:
@@ -15,13 +16,14 @@ mod screen;
 use crate::*;
 use glam::Vec2;
 use modifiers::{corner, gradient, stroke};
-use objects::{caret, frame, group, image, scrolling, style, text, viewport};
+use objects::{caret, frame, group, image, path, scrolling, style, text, viewport};
 use rook_dom::{Dom, InstanceId};
 use rook_types::{GuiQuad, WorldCanvas};
 
 use crate::images::Images;
 use crate::layout::{Layout, Placed, turn};
 use crate::order::{self, Clip, Stacked};
+use crate::path::Paths;
 
 pub(crate) struct Text<'a> {
     pub(crate) fonts: &'a mut crate::text::Fonts,
@@ -52,7 +54,7 @@ pub(crate) fn world(
     layout: &Layout,
     guis: &[InstanceId],
     text: &mut Text<'_>,
-    images: &mut Images,
+    (images, paths): (&mut Images, &Paths),
     focus: Option<Focus>,
 ) -> Vec<WorldCanvas> {
     let mut canvases = Vec::new();
@@ -68,6 +70,7 @@ pub(crate) fn world(
             layout,
             text,
             images: &mut *images,
+            paths,
             out: &mut quads,
             world: true,
             focus,
@@ -92,6 +95,7 @@ struct Draw<'a, 'b> {
     layout: &'a Layout,
     text: &'a mut Text<'b>,
     images: &'a mut Images,
+    paths: &'a Paths,
     out: &'a mut Vec<GuiQuad>,
     /// On a world GUI's canvas: text is drawn from distance fields at
     /// every size, and a ViewportFrame draws only its border (observed).
@@ -134,6 +138,14 @@ impl Draw<'_, '_> {
     }
 
     fn emit(&mut self, d: &Stacked) {
+        if d.path {
+            // Inference: drawn wherever its points are, even off a world
+            // canvas (its parent's box isn't its extent).
+            let points = self.paths.get(&d.id).map_or(&[][..], Vec::as_slice);
+            let at = (points, d.placed);
+            path::emit(self.dom, d.id, at, d.clip, self.world, self.out);
+            return;
+        }
         if !touches(d.placed, self.canvas) {
             return;
         }
@@ -259,6 +271,7 @@ impl Gui {
             glyphs: &mut self.glyphs,
         };
         let (layout, messages) = (&self.layout, &self.messages);
-        (self.screen).draw(dom, layout, (&mut text, &mut self.images), focus, messages)
+        let drawn = (&mut text, &mut self.images, &self.paths);
+        (self.screen).draw(dom, layout, drawn, focus, messages)
     }
 }

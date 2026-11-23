@@ -24,7 +24,9 @@ gradients in `rook-render`'s `shaders/gui/gui_paint.wgsl`, ramps in
 `renderer/gui/ramps.rs`, groups' textures in `renderer/gui/groups.rs`;
 layouts in `rook-gui`'s `layout/list.rs`, `layout/table.rs` and
 `layout/page.rs`; UIPageLayout's methods in `rook-lua`'s
-`api/luau/page_layout.luau`.
+`api/luau/page_layout.luau`. Path2D's curve in `rook-gui`'s `path.rs`
+and `path/curve.rs`, drawn in `draw/objects/path.rs`; its methods in
+`rook-lua`'s `api/methods/gui/path.rs`.
 
 ## UICorner
 
@@ -181,8 +183,22 @@ UIListLayout's `HorizontalFlex` and `VerticalFlex` (whichever is along
 ## Path2D
 
 Not measured in Studio but where marked: from the creator docs (Path2D,
-Path2DControlPoint and the 2D paths guide) as of 2026-11-22.
+Path2DControlPoint and the 2D paths guide) as of 2026-11-22. What Studio
+draws is still to be compared, under [Open questions](#open-questions).
 
+### Points and the curve
+
+- Each pair of neighboring points is a cubic Bézier: from the first
+  point's `Position`, through its `Position` plus its `RightTangent` and
+  the second's `Position` plus its `LeftTangent`, to the second's
+  `Position`. With `Closed` and 3 points or more, the last point joins
+  the first the same way.
+- A point's `Position` is a UDim2 in the path's parent: its scale of the
+  parent's size, plus its offset in pixels. The tangents are UDim2s too,
+  added to it. Rook places the points in the parent's box as laid out,
+  turned and scaled with it (Inference: the box, not a ScrollingFrame's
+  canvas or the area inside a UIPadding), and a path with no GUI parent
+  by offsets alone (Inference).
 - Scripts set its points with `SetControlPoints`, `InsertControlPoint`,
   `UpdateControlPoint` and `RemoveControlPoint`, and read them with
   `GetControlPoints` and `GetControlPoint`; indexes start at 1. Each of
@@ -198,7 +214,62 @@ Path2DControlPoint and the 2D paths guide) as of 2026-11-22.
 - Measured: `InsertControlPoint` on a path with no parent raises
   `Attempting to use Path2D with invalid parent`. Rook inserts the point
   (Approximation).
-- `Thickness` is kept within 0 to 100.
 - Files save the points in `PropertiesSerialize`, a binary blob whose
   layout isn't documented; Rook doesn't read it yet, so a path saved in a
   place starts with no points.
+
+### Queries
+
+- `GetPositionOnCurve(t)` and `GetTangentOnCurve(t)` read the curve at
+  `t` from 0 to 1 by its parameter, so points bunch up where it bends;
+  the `ArcLength` versions read it at `t` of its length, evenly. With
+  fewer than two points they raise. Inference: each segment takes an
+  equal share of `t`, and `t` is held to 0 to 1; the message is Rook's
+  own (`Path2D:GetPositionOnCurve() requires at least 2 control points`).
+- Inference: a position is a UDim2 in the parent, each part of the
+  points' UDim2s carried along the curve and the offsets rounded to
+  whole pixels, so a GUI object given it as its `Position` sits on the
+  path and follows the parent as the points do (the creator docs' own
+  example does this). A tangent is a unit Vector2 on the screen; where
+  the curve stops at an end whose tangent is zero, it points to the next
+  control point.
+- `GetLength()` is the length on the screen, in pixels (Inference: 0
+  with fewer than two points).
+- `GetBoundingRect()` is the box round the curve grown by its thickness.
+  Inference: the curve's own extent (not its control points'), grown by
+  half `Thickness` each way, in the pixels `AbsolutePosition` is in.
+
+### Drawing
+
+- A visible path draws a line `Thickness` pixels wide (1 by default,
+  kept within 0 to 100) along its curve in `Color3` (black by default),
+  among its parent's children by `ZIndex`, as a GUI object would, and
+  clipped as they are. It takes no input (Inference).
+- A UIGradient under it colors the line in place of `Color3`
+  (Inference: over the line's bounding box). UIScales widen the line, as
+  they do a UIStroke's (Inference).
+- `Transparency` isn't scriptable; a file can save one, which Rook draws
+  (Inference). A translucent line is drawn whole and then faded, so its
+  joints don't show darker.
+- Rook draws the line with round joins and round ends, its edge smoothed
+  over a pixel, the curve kept within a quarter of a pixel (a sixteenth
+  on a SurfaceGui or BillboardGui, seen up close). Approximation: Studio's
+  joins, ends, smoothing and curve steps aren't compared yet.
+
+### Open questions
+
+To check side by side in Studio:
+
+- the line's shape: its joins at sharp corners, its ends, how its edge
+  is smoothed and how finely the curve is stepped, at thin and thick
+  widths;
+- what `t` the queries take per segment, their messages with too few
+  points, how positions round, whether tangents are unit vectors, and
+  which pixels `GetLength` and `GetBoundingRect` count in;
+- points in a ScrollingFrame or under a UIPadding, a UIScale's effect on
+  the width, a UIGradient's box, and whether a path stops drawing past a
+  SurfaceGui's edge;
+- what a 0 `Thickness` or a single point draws, and whether a path takes
+  input;
+- the layout of `PropertiesSerialize`, from a place Studio saves with a
+  path in it.

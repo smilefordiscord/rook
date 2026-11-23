@@ -14,6 +14,8 @@ pub(crate) struct Watch {
     ui: Option<ClassId>,
     /// Message, and Hint, its subclass: drawn under the ScreenGuis.
     message: Option<ClassId>,
+    /// Path2D: drawn among the GUI objects beside it.
+    path: Option<ClassId>,
     /// `Camera.ViewportSize`, the screen's size, and
     /// `Workspace.CurrentCamera`, which camera's it is.
     viewport: Option<PropertyId>,
@@ -81,6 +83,7 @@ impl Watch {
             gui: class("GuiBase2d"),
             ui: class("UIComponent"),
             message: class("Message"),
+            path: class("Path2D"),
             viewport: property("Camera", "ViewportSize"),
             current_camera: property("Workspace", "CurrentCamera"),
             looks: [
@@ -110,6 +113,10 @@ impl Watch {
                 ("UIStroke", "Color"),
                 ("UIStroke", "Transparency"),
                 ("UIStroke", "Thickness"),
+                ("Path2D", "Closed"),
+                ("Path2D", "Color3"),
+                ("Path2D", "Thickness"),
+                ("Path2D", "Transparency"),
             ]
             .into_iter()
             .chain(["ImageLabel", "ImageButton"].into_iter().flat_map(|owner| {
@@ -159,6 +166,8 @@ impl Watch {
                 .chain([property("TextBox", "PlaceholderColor3")])
                 .flatten()
                 .collect(),
+            // A Path2D shown or hidden: what its parent holds stacks
+            // again. Its ZIndex, as a GUI object's, lays its tree out.
             places: [
                 "AnchorPoint",
                 "ClipsDescendants",
@@ -168,7 +177,9 @@ impl Watch {
                 "Visible",
             ]
             .into_iter()
-            .filter_map(|name| property("GuiObject", name))
+            .map(|name| ("GuiObject", name))
+            .chain([("Path2D", "Visible")])
+            .filter_map(|(owner, name)| property(owner, name))
             .collect(),
             contents: [
                 ("Instance", "Name"),
@@ -254,7 +265,7 @@ impl Watch {
             return false;
         };
         let db = dom.database();
-        [self.gui, self.ui, self.message]
+        [self.gui, self.ui, self.message, self.path]
             .into_iter()
             .flatten()
             .any(|c| db.is_a(inst.class, c))

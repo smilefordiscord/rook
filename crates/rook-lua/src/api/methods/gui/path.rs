@@ -1,17 +1,19 @@
 //! Path2D's methods (docs/behavior/gui/modern.md#path2d): its control
-//! points, which live in the GUI ([`rook_gui::Gui::path_points`]). The cap
-//! and the errors were measured in Studio.
+//! points, which live in the GUI ([`rook_gui::Gui::path_points`]), and
+//! where its curve runs as laid out now ([`rook_gui::PathCurve`]). The cap
+//! and the setters' errors were measured in Studio.
 
 use mlua::{Lua, Value as LuaValue};
 use rook_dom::InstanceId;
-use rook_gui::PathPoint;
+use rook_gui::{PathCurve, PathPoint};
+use rook_types::Vector2;
 
 use super::RawMethod;
 use crate::runtime::ctx::args::{Args, borrow_clone, format_number};
 use crate::runtime::ctx::{ApiResult, Outcome, ScriptError, with_world};
 use crate::runtime::signal::SignalKey;
 use crate::runtime::threads::fire;
-use crate::types::LPath2DControlPoint;
+use crate::types::{LPath2DControlPoint, LRect, LUDim2, LVector2};
 
 /// Measured: `GetMaxControlPoints()` is 100 (Confirmed: creator-docs too).
 const MAX_POINTS: usize = 100;
@@ -25,6 +27,22 @@ pub(crate) fn native(owner: &str, name: &str) -> Option<RawMethod> {
         ("Path2D", "InsertControlPoint") => insert_point,
         ("Path2D", "RemoveControlPoint") => remove_point,
         ("Path2D", "UpdateControlPoint") => update_point,
+        ("Path2D", "GetLength") => get_length,
+        ("Path2D", "GetBoundingRect") => get_bounding_rect,
+        ("Path2D", "GetPositionOnCurve") => {
+            |l, this, a| position(l, this, a, "GetPositionOnCurve", PathCurve::position)
+        }
+        ("Path2D", "GetPositionOnCurveArcLength") => |l, this, a| {
+            let by_length = PathCurve::position_by_length;
+            position(l, this, a, "GetPositionOnCurveArcLength", by_length)
+        },
+        ("Path2D", "GetTangentOnCurve") => {
+            |l, this, a| tangent(l, this, a, "GetTangentOnCurve", PathCurve::tangent)
+        }
+        ("Path2D", "GetTangentOnCurveArcLength") => |l, this, a| {
+            let by_length = PathCurve::tangent_by_length;
+            tangent(l, this, a, "GetTangentOnCurveArcLength", by_length)
+        },
         _ => return None,
     })
 }
@@ -147,4 +165,60 @@ fn update_point(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> {
     list[i] = to_point(&point);
     store(lua, this, list);
     Outcome::ret(lua, ())
+}
+
+fn curve(lua: &Lua, this: InstanceId) -> PathCurve {
+    with_world(lua, |w| w.gui.path_curve(&mut w.dom, this))
+}
+
+/// Confirmed (creator-docs): the curve queries raise with fewer than two
+/// points. Inference: the message.
+fn too_few(member: &str) -> ScriptError {
+    ScriptError(format!(
+        "Path2D:{member}() requires at least 2 control points"
+    ))
+}
+
+/// `GetPositionOnCurve` and its arc-length twin: a UDim2 in the path's
+/// parent, `t` from 0 to 1 along the path.
+fn position(
+    lua: &Lua,
+    this: InstanceId,
+    a: &Args,
+    member: &str,
+    at: fn(&PathCurve, f32) -> Option<rook_types::UDim2>,
+) -> ApiResult<Outcome> {
+    let t = a.number(0)? as f32;
+    let at = at(&curve(lua, this), t).ok_or_else(|| too_few(member))?;
+    Outcome::ret(lua, LUDim2(at))
+}
+
+/// `GetTangentOnCurve` and its arc-length twin.
+fn tangent(
+    lua: &Lua,
+    this: InstanceId,
+    a: &Args,
+    member: &str,
+    at: fn(&PathCurve, f32) -> Option<glam::Vec2>,
+) -> ApiResult<Outcome> {
+    let t = a.number(0)? as f32;
+    let v = at(&curve(lua, this), t).ok_or_else(|| too_few(member))?;
+    Outcome::ret(lua, LVector2(Vector2::new(v.x, v.y)))
+}
+
+/// In pixels as drawn. Inference: 0 with fewer than two points.
+fn get_length(lua: &Lua, this: InstanceId, _: &Args) -> ApiResult<Outcome> {
+    Outcome::ret(lua, f64::from(curve(lua, this).length()))
+}
+
+/// Confirmed (creator-docs): the box round the curve, grown by its
+/// thickness. Inference: half of it each way (the stroke's edge), in the
+/// pixels `AbsolutePosition` is in, and an empty Rect with fewer than two
+/// points.
+fn get_bounding_rect(lua: &Lua, this: InstanceId, _: &Args) -> ApiResult<Outcome> {
+    let thickness = with_world(lua, |w| w.dom.float_property(this, "Thickness"));
+    let grow = thickness.unwrap_or(1.0).clamp(0.0, 100.0) * 0.5;
+    let (lo, hi) = (curve(lua, this).bounds(grow)).unwrap_or_default();
+    let v = |p: glam::Vec2| rbx_types::Vector2::new(p.x, p.y);
+    Outcome::ret(lua, LRect(rbx_types::Rect::new(v(lo), v(hi))))
 }

@@ -63,3 +63,41 @@ fn path2d_changes_fire_and_thickness_is_kept_in_range() {
         &["4", "100", "0"],
     );
 }
+
+/// Positions come back as UDim2s in the path's parent, tangents as unit
+/// vectors, the length and bounding box in pixels; with fewer than two
+/// points the curve queries raise (Confirmed: creator-docs).
+#[test]
+fn path2d_curve_queries() {
+    expect(
+        r#"
+        local f = Instance.new("Frame")
+        f.Size = UDim2.fromOffset(200, 100)
+        local p = Instance.new("Path2D")
+        p.Thickness = 4
+        p.Parent = f
+        print(pcall(p.GetPositionOnCurve, p, 0.5))
+        print(p:GetLength())
+        p:SetControlPoints({
+            Path2DControlPoint.new(UDim2.fromScale(0, 0.5)),
+            Path2DControlPoint.new(UDim2.fromScale(1, 0.5)),
+        })
+        local half = p:GetPositionOnCurveArcLength(0.5)
+        print(p:GetLength(), p:GetPositionOnCurve(0.25), math.abs(half.X.Scale - 0.5) < 1e-5, half.Y)
+        print(p:GetTangentOnCurve(0), p:GetTangentOnCurveArcLength(1))
+        local r = p:GetBoundingRect()
+        print(r.Min, r.Max)
+        f.Size = UDim2.fromOffset(100, 100)
+        print(p:GetLength())
+        "#,
+        0,
+        &[
+            "false Path2D:GetPositionOnCurve() requires at least 2 control points",
+            "0",
+            "200 {0.15625, 0}, {0.5, 0} true 0.5, 0",
+            "1, 0 1, 0",
+            "-2, 48 202, 52",
+            "100",
+        ],
+    );
+}

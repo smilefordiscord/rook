@@ -52,7 +52,7 @@ impl Placed {
     /// What children of an unparented object are placed in: nothing, at
     /// the origin (measured: an unparented Frame's `AbsoluteSize` is its
     /// `Size` offsets, at (0, 0)).
-    const NOWHERE: Self = Self {
+    pub(crate) const NOWHERE: Self = Self {
         center: Vec2::ZERO,
         local: Vec2::ZERO,
         scale: 1.0,

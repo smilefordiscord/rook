@@ -5,6 +5,7 @@ Every release, newest first. How versions are numbered is in
 
 ## [Unreleased]
 
+- Path2D draws its curve as a line among the GUI beside it, and answers `GetLength`, `GetBoundingRect` and where its curve runs, as in Roblox. Rook drew nothing for it and raised an error for those methods. See [modern UI objects](docs/behavior/gui/modern.md#path2d).
 - Scripts set and read a Path2D's control points, and `ControlPointChanged` fires when they change, as in Roblox. Rook raised an error for Path2D's methods. See [modern UI objects](docs/behavior/gui/modern.md#path2d).
 - A member's argument that doesn't cast names a table as `Array` or `Dictionary` in its error, and an EnumItem as its enum, as in Roblox. Rook named either by its type in some members' errors.
 - A member function called with an instance of another class in place of `self` raises `Expected ':' not '.'`, as in Roblox. Rook ran the member on whatever instance it was given. See [member lookup](docs/behavior/scripting/member-lookup.md#calling-a-member-function).

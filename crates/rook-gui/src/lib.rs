@@ -29,7 +29,7 @@ pub use images::GuiImage;
 pub use input::hits::WorldHit;
 pub use input::scrolling::BarDrag;
 pub use layout::GUI_INSET;
-pub use path::PathPoint;
+pub use path::{PathCurve, PathPoint};
 
 use changes::Watch;
 use layout::{Layout, Turning};
@@ -173,7 +173,7 @@ pub struct Gui {
     glyphs: text::Glyphs,
     images: images::Images,
     /// Each Path2D's control points.
-    paths: FxHashMap<InstanceId, Vec<path::PathPoint>>,
+    paths: path::Paths,
 }
 
 impl Default for Gui {

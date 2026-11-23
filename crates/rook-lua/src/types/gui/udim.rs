@@ -18,7 +18,6 @@ pub(crate) struct LUDim2(pub UDim2);
 
 /// A Path2D's point: where it is and its tangents (creator-docs
 /// Path2DControlPoint). Scripts make and read points.
-// TODO: draw Path2D.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) struct LPath2DControlPoint {
     pub(crate) position: UDim2,

@@ -11,6 +11,7 @@ mod draw;
 mod images;
 mod input;
 mod layouts;
+mod paths;
 mod scrolling;
 mod world;
 
