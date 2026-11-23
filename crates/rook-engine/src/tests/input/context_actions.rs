@@ -134,6 +134,59 @@ fn mouse_delta_is_the_frames_movement() {
     assert_eq!(lines(session.client(index).unwrap()), ["4 -1", "0 0"]);
 }
 
+/// `GetMouseDelta` is scaled by the player's `MouseSensitivity` and the
+/// game's `MouseDeltaSensitivity` (creator-docs
+/// UserInputService:GetMouseDelta), so a game dividing the setting back out
+/// (RoStrike) turns by the raw movement; InputChanged's `Delta` isn't.
+#[test]
+fn mouse_delta_follows_the_sensitivities() {
+    let mut server = Server::new(&Options::default()).unwrap();
+    let starter = service(&server, "StarterGui");
+    let screen = add_under(&server, starter, "ScreenGui", "Hud", "");
+    add_under(
+        &server,
+        screen,
+        "LocalScript",
+        "Look",
+        r#"
+        local uis = game:GetService("UserInputService")
+        uis.MouseBehavior = Enum.MouseBehavior.LockCenter
+        uis.MouseDeltaSensitivity = 0.5
+        local _ = UserSettings().GameSettings
+        uis.InputChanged:Connect(function(input)
+            print("changed", input.Delta.X, input.Delta.Y)
+        end)
+        game:GetService("RunService").RenderStepped:Connect(function()
+            local d = uis:GetMouseDelta()
+            if d.Magnitude > 0 then
+                print("delta", d.X, d.Y)
+            end
+        end)
+        "#,
+    );
+    server.start();
+    let mut session = Session::new(server, Options::default());
+    let index = session.join("Looker", 1).unwrap();
+    session.run_for(0.1);
+    {
+        let client = session.client(index).unwrap();
+        let mut w = client.runtime.world_mut();
+        let game = w
+            .dom
+            .find_first_child(w.user_settings.unwrap(), "GameSettings", false)
+            .unwrap();
+        w.dom
+            .set_property_by_name(game, "MouseSensitivity", rook_types::Value::Float32(0.25))
+            .unwrap();
+    }
+    session.input(index, InputEvent::MouseMotion { dx: 16.0, dy: -8.0 });
+    session.run_for(0.1);
+    assert_eq!(
+        lines(session.client(index).unwrap()),
+        ["changed 16 -8", "delta 2 -1"]
+    );
+}
+
 /// A mouse locked to the center is at the center from the frame the lock
 /// comes, before it moves: the engine holds it there, not a window's
 /// warp, so a host that only reports its cursor (or none) still gives

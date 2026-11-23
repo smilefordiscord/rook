@@ -31,8 +31,25 @@ pub(super) fn get_mouse_location(lua: &Lua, _: InstanceId, _: &Args) -> ApiResul
     Outcome::ret(lua, LVector2(rook_types::Vector2::new(x, y)))
 }
 
-pub(super) fn get_mouse_delta(lua: &Lua, _: InstanceId, _: &Args) -> ApiResult<Outcome> {
-    let (x, y) = with_world(lua, |w| w.input.mouse_delta);
+/// The frame's movement, scaled by the player's `MouseSensitivity`
+/// (`UserSettings().GameSettings`) and `MouseDeltaSensitivity` (creator-docs
+/// UserInputService:GetMouseDelta: both influence the result). Games that
+/// want the raw movement divide the setting back out.
+pub(super) fn get_mouse_delta(lua: &Lua, uis: InstanceId, _: &Args) -> ApiResult<Outcome> {
+    let (x, y) = with_world(lua, |w| {
+        let (x, y) = w.input.mouse_delta;
+        let player = w
+            .user_settings
+            .and_then(|root| crate::user_settings::game_settings(&w.dom, root))
+            .and_then(|game| w.dom.float_property(game, "MouseSensitivity"))
+            .unwrap_or(1.0);
+        let script = w
+            .dom
+            .float_property(uis, "MouseDeltaSensitivity")
+            .unwrap_or(1.0);
+        let scale = player * script;
+        (x * scale, y * scale)
+    });
     Outcome::ret(lua, LVector2(rook_types::Vector2::new(x, y)))
 }
 
