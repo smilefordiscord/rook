@@ -179,7 +179,7 @@ fn service_send(lua: &Lua, args: MultiValue) -> ApiResult<Outcome> {
         None if a.string(1)? == "server" => RemoteKind::FireServer,
         None => RemoteKind::FireAllClients,
     };
-    let args = a.rest(2).iter().map(|v| to_net(v, 0)).collect();
+    let args = to_net(lua, &a.rest(2))?;
     with_world(lua, |w| {
         w.outbox.push(RemoteMessage {
             remote: Some(service),
