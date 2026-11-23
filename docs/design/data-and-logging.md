@@ -85,6 +85,7 @@ Each is given by its flag, then its variable, then its default; the first that g
 | `dataFolder` | `ROOK_DATA_DIR` | | developer | the platform's folders | Everything under one folder |
 | `coreScripts` | `ROOK_CORE_SCRIPTS` | `--core-scripts` | developer | `off` | Run Roblox's own CoreScripts on each client ([CoreScripts](../behavior/gui/core-scripts.md)); the flag is `rook-player`'s and `cargo xtask run-headless --join`'s |
 | `menu` | `ROOK_MENU` | `--no-menu` | any build | `on` | `rook-player`'s client runs Rook's own in-game menu, which Escape opens, unless it runs Roblox's CoreScripts ([the menu](../behavior/gui/menu.md)); off, Escape closes the player |
+| `httpLocalAddresses` | `ROOK_HTTP_LOCAL_ADDRESSES` | | developer | `off` | *Rook extension:* let HttpService's requests reach this machine, the LAN and other addresses off the public internet, which Roblox's game servers can't, so a place can talk to a backend of your own ([where a request may go](../behavior/scripting/http-requests.md#where-a-request-may-go)) |
 
 ### The Open Cloud key
 

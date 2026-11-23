@@ -106,6 +106,11 @@ impl DataModel {
                 .clone()
                 .unwrap_or_else(settings::endpoints),
         );
+        runtime.set_http_local_addresses(
+            options
+                .http_local_addresses
+                .unwrap_or_else(settings::http_local_addresses),
+        );
         runtime.set_heap_limit(options.memory_limit);
         if !loadstring_enabled {
             // Confirmed: creator-docs ServerScriptService.LoadStringEnabled.

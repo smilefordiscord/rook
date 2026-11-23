@@ -1,17 +1,22 @@
-//! HttpService: JSON, GUIDs and URL encoding, and scripts' requests
-//! (`GetAsync`, `PostAsync`, `RequestAsync`), which servers send when the
-//! place's `HttpService.HttpEnabled` is on and refuse otherwise, as
-//! Roblox does for a place whose game settings leave HTTP off. CoreScripts' requests to Roblox's web domains
-//! (`HttpService:RequestInternal`, HttpRbxApiService) go out only where
-//! the domain has an endpoint ([`super::requests`]), and fail as offline
-//! otherwise, which the CoreScripts handle.
+//! HttpService: JSON, GUIDs and URL encoding, and scripts' own requests
+//! (`GetAsync`, `PostAsync`, `RequestAsync`), which a server sends to any
+//! site on the public internet when its place enables HTTP; the rules are in
+//! `docs/behavior/scripting/http-requests.md`. CoreScripts' requests to
+//! Roblox's web domains (`HttpService:RequestInternal`,
+//! HttpRbxApiService) go out only where the domain has an endpoint
+//! ([`super::requests`]), and fail as offline otherwise, which the
+//! CoreScripts handle.
+
+use std::io::Write;
+use std::time::Duration;
 
 use mlua::{IntoLuaMulti, Lua, MultiValue, Table, Value as LuaValue};
 use rook_dom::InstanceId;
+use rook_platform::network::{NetworkError, Reach, Response};
 
 use super::RawMethod;
 use super::requests::{self as web, WebAnswer, WebRequest};
-use crate::runtime::ctx::args::Args;
+use crate::runtime::ctx::args::{Args, display_value, format_number, number_of};
 use crate::runtime::ctx::{ApiResult, Outcome, ScriptError, api_fn, with_world};
 
 pub(super) fn native(owner: &str, name: &str) -> Option<RawMethod> {
@@ -20,9 +25,9 @@ pub(super) fn native(owner: &str, name: &str) -> Option<RawMethod> {
         ("HttpService", "JSONDecode") => json_decode,
         ("HttpService", "GenerateGUID") => generate_guid,
         ("HttpService", "UrlEncode") => url_encode,
-        ("HttpService", "GetAsync") => http_get,
-        ("HttpService", "PostAsync") => http_post,
-        ("HttpService", "RequestAsync") => http_request,
+        ("HttpService", "GetAsync") => get_async,
+        ("HttpService", "PostAsync") => post_async,
+        ("HttpService", "RequestAsync") => request_async,
         ("HttpRbxApiService", "GetAsync") => |l, _, a| {
             let url = api_url(l, &a.string(0)?);
             rbx_api(l, "GET", url, None)
@@ -179,7 +184,12 @@ fn request_internal(lua: &Lua, args: MultiValue) -> ApiResult<Outcome> {
     };
     let mut request = request_of(options)?;
     let Some(url) = web::rewrite(lua, &request.url) else {
-        return Ok(Outcome::Return(response(lua, Err("offline".into()))?));
+        return Ok(Outcome::Return(response(
+            lua,
+            Err(NetworkError::ConnectFail(
+                "no endpoint for its domain".into(),
+            )),
+        )?));
     };
     request.url = url;
     web::call(
@@ -342,146 +352,446 @@ fn url_encode(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
     Outcome::ret(lua, out)
 }
 
-/// Why a script's request can't go: clients never send them and servers
-/// only when the place enables HTTP (creator-docs HttpService; the
-/// messages are Roblox's). `HttpEnabled` is saved in the place and scripts
-/// can't write it, so it's read where it's stored.
-fn http_refused(lua: &Lua) -> Option<ScriptError> {
-    with_world(lua, |w| {
-        if w.is_client {
-            return Some(ScriptError(
-                "Http requests can only be executed by game server".into(),
-            ));
+/// What a request to Roblox's own web domains raises (measured in Studio
+/// 0.748).
+const ROBLOX_REFUSED: &str = "HttpService is not allowed to access that Roblox resource";
+
+/// Requests HttpService sends in a minute at most; more fail
+/// (Confirmed, creator-docs HttpService:RequestAsync "Limitations").
+const REQUESTS_PER_MINUTE: usize = 500;
+
+/// The longest `RequestAsync`'s `Timeout` may be, in seconds (measured in
+/// Studio 0.748).
+const MAX_TIMEOUT: f64 = 120.0;
+
+/// Headers Roblox sets itself (`User-Agent`, `Roblox-Id`) or works out
+/// from the body (`Content-Length`): a script's raises `Header "<name>" is
+/// not allowed!`, whatever its case (measured in Studio 0.748).
+const LOCKED: [&str; 3] = ["User-Agent", "Roblox-Id", "Content-Length"];
+
+/// [`LOCKED`] for `PostAsync`, whose `content_type` sets `Content-Type`
+/// (measured in Studio 0.748).
+const POST_LOCKED: [&str; 4] = ["User-Agent", "Roblox-Id", "Content-Length", "Content-Type"];
+
+/// `RequestAsync`'s options; any other key raises `Unrecognized request
+/// option <key>` (measured in Studio 0.748).
+const OPTIONS: [&str; 6] = ["Url", "Method", "Headers", "Body", "Compress", "Timeout"];
+
+// Measured in Studio 0.748, which checks a request in this order: the
+// reflection layer's casts (`Argument 1 missing or nil`, `Unable to cast
+// string to bool`), then, on a client, `Http requests can only be executed
+// by game server`, then the method's own checks of the URL, options and
+// headers, then Roblox's own domains, and only then whether the place lets
+// requests out ([`send`]).
+
+/// `GetAsync(url, nocache, headers)`. Approximation: `nocache` changes
+/// nothing, as Rook keeps no answers to reuse and every call is sent.
+fn get_async(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> {
+    called_on_http_service(lua, this, "GetAsync")?;
+    present(a, 0)?;
+    a.bool_or(1, false)?;
+    only_on_servers(lua)?;
+    let mut request = WebRequest::get(url_of(a.get(0))?);
+    add_headers(lua, &mut request, a.get(2), &LOCKED)?;
+    send(lua, request, body_of_success)
+}
+
+/// `PostAsync(url, data, content_type, compress, headers)`.
+fn post_async(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> {
+    called_on_http_service(lua, this, "PostAsync")?;
+    present(a, 0)?;
+    // Measured: a number or even a table passes for `data`. Approximation:
+    // a number is sent as Luau writes it, and anything but a string or a
+    // number as no body, as what Roblox sends for one isn't measured.
+    let body = match a.get(1) {
+        LuaValue::Nil => return Err(a.missing(1)),
+        LuaValue::String(s) => s.as_bytes().to_vec(),
+        v @ (LuaValue::Integer(_) | LuaValue::Number(_)) => {
+            format_number(number_of(v).unwrap_or(0.0)).into_bytes()
         }
-        let enabled = w
-            .dom
-            .find_service("HttpService")
-            .and_then(|s| w.dom.bool_property(s, "HttpEnabled"))
-            == Some(true);
-        (!enabled)
-            .then(|| ScriptError("Http requests are not enabled. Enable via game settings".into()))
-    })
-}
-
-/// Adds a script's `headers` table (`GetAsync`/`PostAsync`'s last
-/// argument, `RequestAsync`'s `Headers`) to `request`.
-fn add_headers(request: &mut WebRequest, headers: &LuaValue) -> ApiResult<()> {
-    if let LuaValue::Table(t) = headers {
-        for pair in t.clone().pairs::<String, String>() {
-            request.headers.push(pair?);
-        }
+        _ => Vec::new(),
+    };
+    if !a.get(2).is_nil() {
+        a.enum_value(lua, 2, "HttpContentType")?;
     }
-    Ok(())
-}
-
-/// The reason phrase Roblox gives as `StatusMessage` and in `HTTP <code>
-/// (<reason>)` errors.
-fn reason(status: u16) -> &'static str {
-    match status {
-        200 => "OK",
-        201 => "Created",
-        202 => "Accepted",
-        204 => "No Content",
-        301 => "Moved Permanently",
-        302 => "Found",
-        304 => "Not Modified",
-        400 => "Bad Request",
-        401 => "Unauthorized",
-        403 => "Forbidden",
-        404 => "Not Found",
-        405 => "Method Not Allowed",
-        409 => "Conflict",
-        413 => "Payload Too Large",
-        429 => "Too Many Requests",
-        500 => "Internal Server Error",
-        502 => "Bad Gateway",
-        503 => "Service Unavailable",
-        504 => "Gateway Timeout",
-        _ => "",
-    }
-}
-
-/// `GetAsync`/`PostAsync`'s answer: the body of a 2xx response, `HTTP
-/// <code> (<reason>)` raised otherwise.
-fn body_or_raise(lua: &Lua, request: WebRequest) -> ApiResult<Outcome> {
-    web::call(
-        lua,
-        request,
-        Box::new(|lua, answer| {
-            let response = answer.map_err(|_| "HttpError: ConnectFail".to_owned())?;
-            if !(200..300).contains(&response.status) {
-                return Err(format!(
-                    "HTTP {} ({})",
-                    response.status,
-                    reason(response.status)
-                ));
-            }
-            let body = lua
-                .create_string(&response.body)
-                .map_err(|e| e.to_string())?;
-            body.into_lua_multi(lua).map_err(|e| e.to_string())
-        }),
-    )
-}
-
-/// `GetAsync(url, nocache, headers)`.
-fn http_get(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
-    if let Some(e) = http_refused(lua) {
-        return Err(e);
-    }
-    let mut request = WebRequest::get(a.string(0)?);
-    add_headers(&mut request, a.get(2))?;
-    body_or_raise(lua, request)
-}
-
-/// `PostAsync(url, data, content_type, compress, headers)`; `compress` is
-/// accepted and the body sent as it is.
-fn http_post(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
-    if let Some(e) = http_refused(lua) {
-        return Err(e);
-    }
-    let mut request = WebRequest::get(a.string(0)?);
+    let compress = a.bool_or(3, false)?;
+    only_on_servers(lua)?;
+    let mut request = WebRequest::get(url_of(a.get(0))?);
     request.method = "POST".into();
-    request.body = a.string(1)?.into_bytes();
+    request.body = body;
     request.headers.push((
         "Content-Type".into(),
         content_type(lua, a.get(2)).to_owned(),
     ));
-    add_headers(&mut request, a.get(4))?;
-    body_or_raise(lua, request)
+    add_headers(lua, &mut request, a.get(4), &POST_LOCKED)?;
+    if compress {
+        gzip(&mut request)?;
+    }
+    send(lua, request, body_of_success)
 }
 
-/// `RequestAsync({Url, Method, Body, Headers})`: `{Success, StatusCode,
-/// StatusMessage, Headers, Body}` whatever the status; only a request that
-/// got no answer raises.
-fn http_request(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
-    if let Some(e) = http_refused(lua) {
-        return Err(e);
+/// `RequestAsync({Url, Method, Headers, Body, Compress, Timeout})`.
+fn request_async(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> {
+    called_on_http_service(lua, this, "RequestAsync")?;
+    let options = a.dictionary(0)?;
+    only_on_servers(lua)?;
+    let request = script_request(lua, &options)?;
+    send(lua, request, response_table)
+}
+
+/// `RequestAsync`'s request from its options, checked as Studio 0.748
+/// checks them (measured: each message, and that an unknown key is found
+/// before a missing `Url`).
+fn script_request(lua: &Lua, options: &Table) -> ApiResult<WebRequest> {
+    for pair in options.pairs::<LuaValue, LuaValue>() {
+        let (key, _) = pair?;
+        let known = matches!(&key, LuaValue::String(s) if OPTIONS.iter().any(|o| s.as_bytes() == o.as_bytes()));
+        if !known {
+            return Err(ScriptError(format!(
+                "Unrecognized request option {}",
+                display_value(lua, &key)
+            )));
+        }
     }
-    let LuaValue::Table(options) = a.get(0) else {
-        return Err(a.wrong(0, "table"));
+    let invalid = |what: &str| ScriptError(format!("Invalid request options, {what}"));
+    let url = match options.raw_get::<LuaValue>("Url")? {
+        LuaValue::Nil => return Err(ScriptError("Invalid request options".into())),
+        v => url_of(&v)?,
     };
-    let request = request_of(options)?;
+    // Measured: any token passes, in any case, empty included.
+    let method = match options.raw_get::<LuaValue>("Method")? {
+        LuaValue::Nil => None,
+        LuaValue::String(s) => {
+            let method = s.to_string_lossy();
+            if !method.chars().all(is_token_char) {
+                return Err(ScriptError(format!("Invalid Http Method {method}")));
+            }
+            Some(method)
+        }
+        _ => return Err(invalid("Method should be a string")),
+    };
+    let body = match options.raw_get::<LuaValue>("Body")? {
+        LuaValue::Nil => None,
+        LuaValue::String(s) => Some(s.as_bytes().to_vec()),
+        _ => return Err(invalid("Body should be a string")),
+    };
+    // Measured: any Body, empty too, with `GET` or `HEAD` as written in
+    // capitals (`get` passes). Inference: no Method counts as `GET`.
+    if body.is_some() && matches!(method.as_deref().unwrap_or("GET"), "GET" | "HEAD") {
+        return Err(invalid("Body should be empty for 'GET' or 'HEAD' method"));
+    }
+    let mut request = WebRequest::get(url);
+    // Approximation: an empty Method is sent as `GET`.
+    if let Some(m) = method.filter(|m| !m.is_empty()) {
+        request.method = m.to_ascii_uppercase();
+    }
+    if let Some(b) = body {
+        request.body = b;
+    }
+    match options.raw_get::<LuaValue>("Headers")? {
+        LuaValue::Nil => {}
+        LuaValue::Table(t) if t.raw_get::<LuaValue>(1)?.is_nil() => {
+            request.headers = header_list(lua, &t, &LOCKED)?;
+        }
+        _ => return Err(invalid("Headers should be a table")),
+    }
+    // Measured: any value passes for Compress.
+    let compress: LuaValue = options.raw_get("Compress")?;
+    if crate::types::enums::item_name(lua, &compress, "HttpCompression") == Some("Gzip") {
+        gzip(&mut request)?;
+    }
+    match options.raw_get::<LuaValue>("Timeout")? {
+        LuaValue::Nil => {}
+        v @ (LuaValue::Integer(_) | LuaValue::Number(_)) => {
+            let seconds = number_of(&v).unwrap_or(0.0);
+            if !(seconds > 0.0 && seconds <= MAX_TIMEOUT) {
+                return Err(ScriptError(
+                    "Timeout value must be greater than 0 and no greater than 120 seconds.".into(),
+                ));
+            }
+            request.timeout = Some(Duration::from_secs_f64(seconds));
+        }
+        _ => return Err(ScriptError("Timeout value must be an integer.".into())),
+    }
+    Ok(request)
+}
+
+/// Raises as a call with `.` does when the method is called on another
+/// instance (measured: `HttpService.RequestAsync(workspace, options)`).
+fn called_on_http_service(lua: &Lua, this: InstanceId, name: &str) -> ApiResult<()> {
+    if with_world(lua, |w| w.dom.is_a(this, "HttpService")) {
+        return Ok(());
+    }
+    Err(ScriptError(format!(
+        "Expected ':' not '.' calling member function {name}"
+    )))
+}
+
+/// Raises `Argument <n> missing or nil` for a nil argument the method
+/// needs.
+fn present(a: &Args, i: usize) -> ApiResult<()> {
+    if a.get(i).is_nil() {
+        return Err(a.missing(i));
+    }
+    Ok(())
+}
+
+/// A request's URL, as Studio 0.748 checks it (measured): a string (or a
+/// Secret, which Rook doesn't have), not empty, starting `http://` or
+/// `https://` in any case. Anything past that is the network's to parse.
+fn url_of(v: &LuaValue) -> ApiResult<String> {
+    let LuaValue::String(s) = v else {
+        return Err(ScriptError(
+            "Invalid URL type, URL should be a string or secret.".into(),
+        ));
+    };
+    let url = s.to_string_lossy();
+    if url.is_empty() {
+        return Err(ScriptError("Empty URL".into()));
+    }
+    let scheme = url.get(..8).unwrap_or(&url).to_ascii_lowercase();
+    if !(scheme.starts_with("http://") || scheme.starts_with("https://")) {
+        return Err(ScriptError("URL must be http".into()));
+    }
+    Ok(url)
+}
+
+/// Raises on a client: only servers send requests (measured in Studio
+/// 0.748).
+fn only_on_servers(lua: &Lua) -> ApiResult<()> {
+    with_world(lua, |w| {
+        if w.is_client {
+            return Err(ScriptError(
+                "Http requests can only be executed by game server".into(),
+            ));
+        }
+        Ok(())
+    })
+}
+
+/// Raises unless the place enables HTTP. `HttpEnabled` is saved in the
+/// place and game scripts can't write it, so it's read where it's stored.
+/// Inference: the message, as players report it. Studio 0.748 checks
+/// every argument first, so a bad one raises its own error even with HTTP
+/// off (measured, through Studio's MCP, whose own HTTP permission stands
+/// at this point).
+fn only_if_enabled(lua: &Lua) -> ApiResult<()> {
+    with_world(lua, |w| {
+        let enabled = w
+            .dom
+            .find_service("HttpService")
+            .and_then(|s| w.dom.bool_property(s, "HttpEnabled"));
+        if enabled == Some(true) {
+            Ok(())
+        } else {
+            Err(ScriptError(
+                "Http requests are not enabled. Enable via game settings".into(),
+            ))
+        }
+    })
+}
+
+/// A character HTTP allows in a header's name or a method (RFC 9110's
+/// `tchar`). Measured: a space raises; Inference: the rest of the set.
+fn is_token_char(c: char) -> bool {
+    c.is_ascii_alphanumeric() || "!#$%&'*+-.^_`|~".contains(c)
+}
+
+/// Adds a script's headers table (`GetAsync` and `PostAsync`'s last
+/// argument) to `request`; a script's header replaces one Rook set.
+/// Measured: anything but a table without a first item raises `headers
+/// value must be a dictionary!`.
+fn add_headers(
+    lua: &Lua,
+    request: &mut WebRequest,
+    headers: &LuaValue,
+    locked: &[&str],
+) -> ApiResult<()> {
+    let headers = match headers {
+        LuaValue::Nil => return Ok(()),
+        LuaValue::Table(t) if t.raw_get::<LuaValue>(1)?.is_nil() => header_list(lua, t, locked)?,
+        _ => {
+            return Err(ScriptError("headers value must be a dictionary!".into()));
+        }
+    };
+    for (name, value) in headers {
+        request
+            .headers
+            .retain(|(n, _)| !n.eq_ignore_ascii_case(&name));
+        request.headers.push((name, value));
+    }
+    Ok(())
+}
+
+/// A script's headers, each checked as Studio 0.748 checks them
+/// (measured: the messages, a value that isn't a string, a locked name, a
+/// space in a name and a line break in a value; an empty name passes).
+/// Inference: a NUL in a value raises as a line break does, and characters
+/// outside HTTP's token set in a name as a space does.
+fn header_list(lua: &Lua, headers: &Table, locked: &[&str]) -> ApiResult<Vec<(String, String)>> {
+    let mut out = Vec::new();
+    for pair in headers.pairs::<LuaValue, LuaValue>() {
+        let (key, value) = pair?;
+        let name = match &key {
+            LuaValue::String(s) => s.to_string_lossy(),
+            k => display_value(lua, k),
+        };
+        let LuaValue::String(value) = value else {
+            return Err(ScriptError(format!(
+                "Header {name} must have its value be a string or secret!"
+            )));
+        };
+        let value = value.to_string_lossy();
+        if locked.iter().any(|l| name.eq_ignore_ascii_case(l)) {
+            return Err(ScriptError(format!("Header \"{name}\" is not allowed!")));
+        }
+        if let Some(c) = name.chars().find(|&c| !is_token_char(c)) {
+            return Err(ScriptError(format!(
+                "Header \"{name}\" has unallowed character \"{c}\""
+            )));
+        }
+        if let Some(c) = value.chars().find(|c| matches!(c, '\r' | '\n' | '\0')) {
+            return Err(ScriptError(format!(
+                "Header {name} has unallowed character {c} in value {value}"
+            )));
+        }
+        out.push((name, value));
+    }
+    Ok(out)
+}
+
+/// Gzips the body and says so in `Content-Encoding` (creator-docs
+/// HttpService:PostAsync, Enum.HttpCompression).
+fn gzip(request: &mut WebRequest) -> ApiResult<()> {
+    let failed = |e: std::io::Error| ScriptError(format!("couldn't compress the body: {e}"));
+    let mut encoder = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
+    encoder.write_all(&request.body).map_err(failed)?;
+    request.body = encoder.finish().map_err(failed)?;
+    request
+        .headers
+        .retain(|(name, _)| !name.eq_ignore_ascii_case("Content-Encoding"));
+    request
+        .headers
+        .push(("Content-Encoding".into(), "gzip".into()));
+    Ok(())
+}
+
+/// Sends a script's request once its arguments have passed, and returns
+/// what `answer` makes of the response; the calling thread waits
+/// meanwhile. Refused, in this order: a URL on Roblox's own web domains
+/// (measured: `apis.roblox.com` without an `x-api-key` header raises that
+/// it needs one, any other `HttpService is not allowed to access that
+/// Roblox resource`; Rook has no Secrets, so `apis` with a key raises the
+/// latter), a place that doesn't enable HTTP, and requests past the limit
+/// per minute. The network checks each hop's host and addresses again
+/// ([`Reach::Script`]).
+fn send(
+    lua: &Lua,
+    mut request: WebRequest,
+    answer: fn(&Lua, &Response) -> Result<MultiValue, String>,
+) -> ApiResult<Outcome> {
+    if let Some((domain, _)) = rook_platform::endpoints::roblox_domain(&request.url) {
+        let keyed = request
+            .headers
+            .iter()
+            .any(|(name, _)| name.eq_ignore_ascii_case("x-api-key"));
+        if domain == "apis" && !keyed {
+            return Err(ScriptError(
+                "Header \"x-api-key\" must be provided for Roblox resources!".into(),
+            ));
+        }
+        return Err(ScriptError(ROBLOX_REFUSED.into()));
+    }
+    only_if_enabled(lua)?;
+    with_world(lua, |w| {
+        let now = w.scheduler.now();
+        let sent = &mut w.web.script_sent;
+        while sent.front().is_some_and(|&at| at <= now - 60.0) {
+            sent.pop_front();
+        }
+        if sent.len() >= REQUESTS_PER_MINUTE {
+            // Inference: the message Roblox gives for its Open Cloud
+            // limit (creator-docs "In-game HTTP requests").
+            return Err(ScriptError("Number of requests exceeded limit".into()));
+        }
+        sent.push_back(now);
+        request.reach = Reach::Script {
+            local: w.web.local_addresses,
+        };
+        Ok(())
+    })?;
     web::call(
         lua,
         request,
-        Box::new(|lua, answer| {
-            let r = answer.map_err(|_| "HttpError: ConnectFail".to_owned())?;
-            let table = (|| -> mlua::Result<Table> {
-                let t = lua.create_table()?;
-                t.set("Success", (200..300).contains(&r.status))?;
-                t.set("StatusCode", r.status)?;
-                t.set("StatusMessage", reason(r.status))?;
-                let headers = lua.create_table()?;
-                for (name, value) in &r.headers {
-                    headers.set(name.to_ascii_lowercase(), value.as_str())?;
-                }
-                t.set("Headers", headers)?;
-                t.set("Body", lua.create_string(&r.body)?)?;
-                Ok(t)
-            })()
-            .map_err(|e| e.to_string())?;
-            table.into_lua_multi(lua).map_err(|e| e.to_string())
-        }),
+        Box::new(move |lua, response| answer(lua, &response.map_err(|e| http_error(&e))?)),
     )
+}
+
+/// What a request that got no answer raises: `HttpError: ` and the
+/// `Enum.HttpError` item for why (Inference from the creator docs'
+/// descriptions of the enum's items).
+fn http_error(e: &NetworkError) -> String {
+    let kind = match e {
+        NetworkError::InvalidUrl(_) => "InvalidUrl",
+        // Not one the docs describe: "does not map to any other value".
+        NetworkError::InvalidRequest(_) => "Unknown",
+        NetworkError::DnsResolve(_) => "DnsResolve",
+        // Inference: Roblox's game servers have no route to a local
+        // address, so connecting to one fails.
+        NetworkError::ConnectFail(_) | NetworkError::NotPublic(_) => "ConnectFail",
+        NetworkError::TimedOut(_) => "TimedOut",
+        NetworkError::TooManyRedirects => "TooManyRedirects",
+        NetworkError::InvalidRedirect(_) => "InvalidRedirect",
+        NetworkError::Tls(_) => "SslConnectFail",
+        NetworkError::ConnectionClosed(_) => "ConnectionClosed",
+        // Running out of memory on the answer.
+        NetworkError::TooLarge(_) => "OutOfMemory",
+        // A redirect there; Inference: refused as the first URL is.
+        NetworkError::RobloxDomain(_) => return ROBLOX_REFUSED.to_owned(),
+        NetworkError::Other(_) => "NetFail",
+    };
+    format!("HttpError: {kind}")
+}
+
+/// `GetAsync` and `PostAsync`'s answer: the body of a 2xx response, and
+/// `HTTP <code> (<reason>)` raised for any other, `HTTP <code>` for a code
+/// with no standard reason (Inference: the message players report).
+fn body_of_success(lua: &Lua, response: &Response) -> Result<MultiValue, String> {
+    if !(200..300).contains(&response.status) {
+        return Err(if response.reason.is_empty() {
+            format!("HTTP {}", response.status)
+        } else {
+            format!("HTTP {} ({})", response.status, response.reason)
+        });
+    }
+    let body = lua
+        .create_string(&response.body)
+        .map_err(|e| e.to_string())?;
+    body.into_lua_multi(lua).map_err(|e| e.to_string())
+}
+
+/// `RequestAsync`'s answer whatever the status: `{Success, StatusCode,
+/// StatusMessage, Headers, Body}`, `Success` when the status is 2xx
+/// (Confirmed, creator-docs HttpService:RequestAsync). Inference: a header
+/// sent more than once is its values joined with `, `, as HTTP allows.
+fn response_table(lua: &Lua, response: &Response) -> Result<MultiValue, String> {
+    let table = || -> mlua::Result<Table> {
+        let t = lua.create_table()?;
+        t.set("Success", (200..300).contains(&response.status))?;
+        t.set("StatusCode", response.status)?;
+        t.set("StatusMessage", response.reason.as_str())?;
+        let headers = lua.create_table()?;
+        for (name, value) in &response.headers {
+            let joined = match headers.get::<Option<String>>(name.as_str())? {
+                Some(before) => format!("{before}, {value}"),
+                None => value.clone(),
+            };
+            headers.set(name.as_str(), joined)?;
+        }
+        t.set("Headers", headers)?;
+        t.set("Body", lua.create_string(&response.body)?)?;
+        Ok(t)
+    };
+    let t = table().map_err(|e| e.to_string())?;
+    t.into_lua_multi(lua).map_err(|e| e.to_string())
 }

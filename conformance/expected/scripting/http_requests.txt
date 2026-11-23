@@ -1,0 +1,110 @@
+-- studio 0.748.0.7481526
+-- signals: deferred
+HttpEnabled false
+get no args error Argument 1 missing or nil
+get nil error Argument 1 missing or nil
+get number error Invalid URL type, URL should be a string or secret.
+get table error Invalid URL type, URL should be a string or secret.
+get bool error Invalid URL type, URL should be a string or secret.
+get empty error Empty URL
+get no scheme error URL must be http
+get words error URL must be http
+get ftp error URL must be http
+get file error URL must be http
+get scheme only error <not enabled>
+get upper scheme error <not enabled>
+get space in host error <not enabled>
+get 127.0.0.1 error <not enabled>
+get localhost error <not enabled>
+get ::1 error <not enabled>
+get 0.0.0.0 error <not enabled>
+get https local error <not enabled>
+get roblox.com error HttpService is not allowed to access that Roblox resource
+get ROBLOX.COM error HttpService is not allowed to access that Roblox resource
+get apis.roblox.com error Header "x-api-key" must be provided for Roblox resources!
+get roblox in query error <not enabled>
+get roblox in path error <not enabled>
+get unresolvable error <not enabled>
+get nocache error <not enabled>
+get nocache string error Unable to cast string to bool
+get headers error <not enabled>
+get headers string error headers value must be a dictionary!
+get headers array error headers value must be a dictionary!
+get header number error Header X must have its value be a string or secret!
+get header table error Header X must have its value be a string or secret!
+get header bool error Header X must have its value be a string or secret!
+get User-Agent error Header "User-Agent" is not allowed!
+get user-agent error Header "user-agent" is not allowed!
+get Roblox-Id error Header "Roblox-Id" is not allowed!
+get Content-Length error Header "Content-Length" is not allowed!
+get space in name error Header "Bad Name" has unallowed character " "
+get newline in value error Header X has unallowed character 
+ in value a
+b
+get empty name error <not enabled>
+post no data error Argument 2 missing or nil
+post number data error <not enabled>
+post table data error <not enabled>
+post content type error <not enabled>
+post content type name error <not enabled>
+post content type bad name error Unable to cast string to HttpContentType
+post content type number error <not enabled>
+post content type other enum error Unable to cast Material to HttpContentType
+post compress error <not enabled>
+post headers string error headers value must be a dictionary!
+post Content-Type header error Header "Content-Type" is not allowed!
+post roblox.com error HttpService is not allowed to access that Roblox resource
+post ftp error URL must be http
+request no args error Argument 1 missing or nil
+request nil error Argument 1 missing or nil
+request string error Unable to cast string to Dictionary
+request array error Unable to cast Array to Dictionary
+request empty error Invalid request options
+request Url number error Invalid URL type, URL should be a string or secret.
+request Url table error Invalid URL type, URL should be a string or secret.
+request lowercase url key error Unrecognized request option url
+request Url only error <not enabled>
+request unknown key error Unrecognized request option Foo
+request ftp error URL must be http
+request roblox.com error HttpService is not allowed to access that Roblox resource
+request localhost error <not enabled>
+method GET error <not enabled>
+method get error <not enabled>
+method POST error <not enabled>
+method PATCH error <not enabled>
+method OPTIONS error <not enabled>
+method FOO error <not enabled>
+method with space error Invalid Http Method BAD METHOD
+method empty error <not enabled>
+method number error Invalid request options, Method should be a string
+method table error Invalid request options, Method should be a string
+GET with Body error Invalid request options, Body should be empty for 'GET' or 'HEAD' method
+get with Body error <not enabled>
+HEAD with Body error Invalid request options, Body should be empty for 'GET' or 'HEAD' method
+GET with empty Body error Invalid request options, Body should be empty for 'GET' or 'HEAD' method
+POST without Body error <not enabled>
+POST Body number error Invalid request options, Body should be a string
+POST Body table error Invalid request options, Body should be a string
+Headers string error Invalid request options, Headers should be a table
+Headers array error Invalid request options, Headers should be a table
+Headers number value error Header X must have its value be a string or secret!
+Headers table value error Header X must have its value be a string or secret!
+Headers User-Agent error Header "User-Agent" is not allowed!
+Headers Roblox-Id error Header "Roblox-Id" is not allowed!
+Headers Content-Length error Header "Content-Length" is not allowed!
+Headers space in name error Header "Bad Name" has unallowed character " "
+Headers newline in value error Header X has unallowed character  in value a
+b
+Compress Gzip error <not enabled>
+Compress None error <not enabled>
+Compress name error <not enabled>
+Compress true error <not enabled>
+Compress other enum error <not enabled>
+Timeout 1 error <not enabled>
+Timeout 0 error Timeout value must be greater than 0 and no greater than 120 seconds.
+Timeout -1 error Timeout value must be greater than 0 and no greater than 120 seconds.
+Timeout 1000 error Timeout value must be greater than 0 and no greater than 120 seconds.
+Timeout string error Timeout value must be an integer.
+get dot error Expected ':' not '.' calling member function GetAsync
+request on Workspace error Expected ':' not '.' calling member function RequestAsync
+HttpEnabled after false

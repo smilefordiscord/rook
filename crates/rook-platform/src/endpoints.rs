@@ -110,26 +110,48 @@ impl Endpoints {
 
     /// A Roblox web URL (`https://users.roblox.com/v1/users/1`) on its
     /// domain's endpoint, or `None` when that domain has none or the URL
-    /// isn't on a Roblox web domain. `roblox.com` itself is the `www`
-    /// domain.
+    /// isn't on a Roblox web domain.
     pub fn rewrite(&self, url: &str) -> Option<String> {
-        let (_, rest) = url.split_once("://")?;
-        let (host, path) = rest
-            .find(['/', '?'])
-            .map_or((rest, ""), |at| rest.split_at(at));
-        let host = host.to_ascii_lowercase();
-        let domain = if host == ROBLOX {
-            "www"
-        } else {
-            host.strip_suffix(ROBLOX)?.strip_suffix('.')?
-        };
-        let path = if path.starts_with('?') {
-            format!("/{path}")
-        } else {
-            path.to_owned()
-        };
-        self.url(domain, &path)
+        let (domain, path) = roblox_domain(url)?;
+        self.url(&domain, &path)
     }
+}
+
+/// The Roblox web domain `url` is on (`users` for
+/// `https://users.roblox.com/v1`; `roblox.com` itself is the `www`
+/// domain) and its path and query, or `None` for any other host.
+pub fn roblox_domain(url: &str) -> Option<(String, String)> {
+    let (_, rest) = url.split_once("://")?;
+    let (authority, path) = rest
+        .find(['/', '?', '#', '\\'])
+        .map_or((rest, ""), |at| rest.split_at(at));
+    // The host the request connects to, as the HTTP client reads the
+    // authority: past any `user@`, before any `:port`, and without the
+    // trailing dot DNS accepts. HttpService refuses Roblox's domains by
+    // this, so every spelling that reaches them must match.
+    let host = authority
+        .rsplit_once('@')
+        .map_or(authority, |(_, host)| host);
+    let host = host.split_once(':').map_or(host, |(host, _)| host);
+    let domain = roblox_host_domain(host)?;
+    let path = if path.starts_with(['?', '#']) {
+        format!("/{path}")
+    } else {
+        path.to_owned()
+    };
+    Some((domain, path))
+}
+
+/// The Roblox web domain a host name (`users.roblox.com`, any case, with
+/// or without DNS's trailing dot) is, or `None` for any other host.
+pub fn roblox_host_domain(host: &str) -> Option<String> {
+    let host = host.trim_end_matches('.').to_ascii_lowercase();
+    let domain = if host == ROBLOX {
+        "www"
+    } else {
+        host.strip_suffix(ROBLOX)?.strip_suffix('.')?
+    };
+    Some(domain.to_owned())
 }
 
 fn roblox_host(domain: &str) -> String {
@@ -216,6 +238,29 @@ mod tests {
             "users.roblox.com/v1",
         ] {
             assert_eq!(e.rewrite(url), None, "{url}");
+        }
+    }
+
+    /// HttpService refuses Roblox's domains by this, so a port, a login,
+    /// a fragment or a trailing dot mustn't hide one.
+    #[test]
+    fn every_spelling_of_a_roblox_host_is_found() {
+        for url in [
+            "https://www.roblox.com:443/x",
+            "https://www.roblox.com./x",
+            "https://ROBLOX.COM.",
+            "https://name:secret@users.roblox.com/v1",
+            "https://users.roblox.com#x",
+            "https://users.roblox.com\\v1",
+        ] {
+            assert!(roblox_domain(url).is_some(), "{url}");
+        }
+        for url in [
+            "https://roblox.com@example.com/x",
+            "https://example.com:443/roblox.com",
+            "https://evilroblox.com/x",
+        ] {
+            assert_eq!(roblox_domain(url), None, "{url}");
         }
     }
 }

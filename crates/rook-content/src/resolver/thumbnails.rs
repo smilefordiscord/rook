@@ -8,7 +8,7 @@
 use std::time::{Duration, Instant};
 
 use rook_platform::endpoints::Endpoints;
-use rook_platform::network::Request;
+use rook_platform::network::{Reach, Request};
 use serde_json::{Value, json};
 
 use super::web::{self, failure_kind};
@@ -142,6 +142,8 @@ fn post(url: &str, body: &str) -> Result<Value, Failure> {
         headers: &[("Content-Type", "application/json")],
         body: body.as_bytes(),
         max_bytes: MAX_ANSWER,
+        timeout: None,
+        reach: Reach::Any,
     })?;
     let status = response.status;
     if !(200..300).contains(&status) {

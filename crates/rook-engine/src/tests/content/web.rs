@@ -2,63 +2,16 @@
 //! endpoint and by the configured host with one (a server on this
 //! machine standing in for it).
 
-use std::io::{BufRead, BufReader, Read, Write};
-use std::net::TcpListener;
-use std::sync::mpsc::{Receiver, channel};
+use std::sync::mpsc::Receiver;
 
 use rook_platform::endpoints::Endpoints;
 
 use crate::tests::*;
 
 /// A web server on a free local port answering each request with
-/// `answer(its base URL, path)`; each request comes out of the receiver
-/// as `"METHOD path body"`.
-fn serve(answer: fn(&str, &str) -> Vec<u8>) -> (String, Receiver<String>) {
-    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
-    let base = format!("http://{}", listener.local_addr().unwrap());
-    let (seen, requests) = channel();
-    let at = base.clone();
-    let accept = move || {
-        for stream in listener.incoming() {
-            let Ok(mut stream) = stream else { return };
-            let mut reader = BufReader::new(stream.try_clone().unwrap());
-            let mut line = String::new();
-            reader.read_line(&mut line).unwrap();
-            let mut length = 0;
-            loop {
-                let mut header = String::new();
-                reader.read_line(&mut header).unwrap();
-                if header.trim().is_empty() {
-                    break;
-                }
-                if let Some((name, value)) = header.split_once(':')
-                    && name.eq_ignore_ascii_case("content-length")
-                {
-                    length = value.trim().parse().unwrap();
-                }
-            }
-            let mut body = vec![0; length];
-            reader.read_exact(&mut body).unwrap();
-            let mut parts = line.split_whitespace();
-            let (method, path) = (parts.next().unwrap(), parts.next().unwrap());
-            let reply = answer(&at, path);
-            let _ = seen.send(format!(
-                "{method} {path} {}",
-                String::from_utf8_lossy(&body)
-            ));
-            let head = format!(
-                "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
-                reply.len()
-            );
-            stream.write_all(head.as_bytes()).unwrap();
-            stream.write_all(&reply).unwrap();
-        }
-    };
-    rook_platform::get()
-        .threads
-        .spawn("test-web", Box::new(accept))
-        .unwrap();
-    (base, requests)
+/// `answer(its base URL, path)`.
+fn serve(answer: fn(&str, &str) -> Vec<u8>) -> (String, Receiver<Seen>) {
+    serve_http(move |base, request| Reply::ok(answer(base, &request.path)))
 }
 
 /// A server DataModel whose Players holds Ann (user 5).
@@ -138,7 +91,7 @@ fn members_ask_the_configured_host() {
             "done"
         ]
     );
-    let seen: Vec<String> = requests.try_iter().collect();
+    let seen: Vec<String> = requests.try_iter().map(|r| r.line()).collect();
     assert_eq!(
         seen,
         [
@@ -187,7 +140,10 @@ fn request_internal_goes_only_where_configured() {
             "https://users.roblox.com/v1/users/1 false 0 ",
         ]
     );
-    assert_eq!(requests.try_iter().collect::<Vec<_>>(), ["GET /x?y=1 "]);
+    assert_eq!(
+        requests.try_iter().map(|r| r.line()).collect::<Vec<_>>(),
+        ["GET /x?y=1 "]
+    );
 }
 
 /// Asset delivery asks the configured host where an asset is and
@@ -210,7 +166,7 @@ fn asset_delivery_goes_to_the_configured_host() {
     };
     assert_eq!(&*resolver.resolve(&r).unwrap().bytes, b"asset bytes");
     assert_eq!(
-        requests.try_iter().collect::<Vec<_>>(),
+        requests.try_iter().map(|r| r.line()).collect::<Vec<_>>(),
         ["GET /v2/assetId/7 ", "GET /cdn/7 "]
     );
 }
@@ -250,7 +206,7 @@ fn old_thumbnail_urls_load_from_the_thumbnails_host() {
     assert_eq!(&*fetched.bytes, b"png bytes");
     assert_eq!(fetched.source.kind, rook_content::SourceKind::Thumbnails);
     assert_eq!(
-        requests.try_iter().collect::<Vec<_>>(),
+        requests.try_iter().map(|r| r.line()).collect::<Vec<_>>(),
         [
             r#"POST /thumbnails/v1/batch [{"format":"png","isCircular":false,"requestId":"0","size":"150x150","targetId":7,"type":"Asset"}]"#,
             "GET /cdn/thumb ",
@@ -272,7 +228,7 @@ fn rbxthumb_and_usernames_load_from_their_hosts() {
         assert_eq!(&*resolver.resolve(&r).unwrap().bytes, b"png bytes", "{url}");
     }
     assert_eq!(
-        requests.try_iter().collect::<Vec<_>>(),
+        requests.try_iter().map(|r| r.line()).collect::<Vec<_>>(),
         [
             r#"POST /thumbnails/v1/batch [{"format":"png","isCircular":true,"requestId":"0","size":"48x48","targetId":156,"type":"AvatarHeadShot"}]"#,
             "GET /cdn/thumb ",
@@ -299,7 +255,7 @@ fn pending_thumbnails_are_waited_for_and_errors_fail() {
     let resolver = network_resolver(Endpoints::new(Some(&base), []));
     let r = rook_content::ContentRef::parse("rbxthumb://type=Asset&id=7&w=420&h=420").unwrap();
     assert_eq!(&*resolver.resolve(&r).unwrap().bytes, b"png bytes");
-    let seen: Vec<String> = requests.try_iter().collect();
+    let seen: Vec<String> = requests.try_iter().map(|r| r.line()).collect();
     assert_eq!(seen.len(), 4, "{seen:?}");
 
     let (base, requests) = serve(|_, _| {
@@ -347,7 +303,7 @@ fn user_thumbnails_are_ready_when_the_host_has_them() {
     want.extend(errors);
     assert_eq!(out, want);
     assert_eq!(
-        requests.try_iter().collect::<Vec<_>>(),
+        requests.try_iter().map(|r| r.line()).collect::<Vec<_>>(),
         [
             r#"POST /thumbnails/v1/batch [{"format":"png","isCircular":false,"requestId":"0","size":"420x420","targetId":156,"type":"AvatarHeadShot"}]"#,
             r#"POST /thumbnails/v1/batch [{"format":"png","isCircular":false,"requestId":"0","size":"48x48","targetId":156,"type":"AvatarBust"}]"#,

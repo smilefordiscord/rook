@@ -123,7 +123,50 @@ the target counts only errors Rook causes, checked against Studio.
      player both ways in `rook-player` with its data and GUI, every
      failure fires `TeleportInitFailed` with Studio's result and words,
      and the session tests cover each routing.
-5. HttpService, opt-in per place.
+5. HttpService, opt-in per place: [HTTP requests](../behavior/scripting/http-requests.md).
+   - *Scope*: `GetAsync`, `PostAsync` and `RequestAsync` sent from the
+     servers of places whose saved `HttpEnabled` is on, with Roblox's
+     refusals (clients, HTTP off, URLs that aren't HTTP, Roblox's own
+     domains), its limit per minute, `Compress`, `Timeout`, and its
+     answers and errors. Also in: `nocache`'s caching, and Open Cloud
+     through HttpService with `GetSecret` and the Secret datatype. Out:
+     `CreateWebStreamClient`, which Roblox runs in Studio only, and a
+     host's switch that keeps a public server's HTTP off (M20 step 3).
+   - *Evidence*: the creator docs' HttpService, In-game HTTP requests,
+     `Enum.HttpError` and `Enum.HttpCompression`. Nothing is measured in
+     Studio yet: a place with HTTP enabled sending to a server on the same
+     machine settles each Inference on the page.
+   - *Design* (2026-11-22):
+     - Established engines run a script's request off the main thread
+       and hand the answer back on the main loop: Unity's
+       `UnityWebRequest.SendWebRequest` completes an async operation
+       the game polls each frame, Godot's `HTTPRequest` node emits
+       `request_completed` from its process step. Rook already does this
+       for Roblox's web APIs: a request waits in the World's outbox,
+       the engine sends it on a thread through `rook_platform::network`,
+       and the answer resumes the waiting script at the frame's web
+       step. HttpService takes the same path, so a script waits on the
+       network one way only. No host's frame waits for an answer:
+       Unity's and Godot's main loops never block on a request either,
+       and a server's frame loop can't stall on a slow site.
+     - Where a request may go is the network's to decide, as
+       browsers and server-side fetchers guard against SSRF: a
+       resolver that checks every address a name resolves to (and
+       every redirect's host) and hands the connection only those, so
+       DNS rebinding can't slip past a check made on the name
+       (`rook_platform::network::Reach`). A developer setting opens
+       local addresses, a Rook extension off by default.
+     - Failures are typed (`rook_platform::network::NetworkError`) by
+       the kinds an HTTP client tells apart, which HttpService raises
+       as their `Enum.HttpError` items.
+     - The limit per minute is a queue of send times per DataModel,
+       trimmed from its front as calls come.
+     - Cost: nothing per frame while no request is in flight; each
+       request holds a thread while it waits, as Roblox's web calls do
+       in Rook, at most 500 a minute.
+   - *Done when*: a conformance case recorded in Studio against a local
+     server gets the same answers, statuses and errors in Rook, and
+     `nocache`'s caching and Open Cloud with Secrets are done.
 6. Modern Luau: Parallel Luau (Actor, `task.desynchronize`, SharedTable),
    `buffer`, and the libraries and syntax of the Luau live Roblox runs.
 7. Client scripts in the corpus run too, once characters and GUI exist.

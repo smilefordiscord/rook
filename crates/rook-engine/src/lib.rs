@@ -109,6 +109,9 @@ pub struct Options {
     pub menu: bool,
     /// Where scripts' web requests go; `None` uses `settings::endpoints`.
     pub endpoints: Option<Arc<rook_platform::endpoints::Endpoints>>,
+    /// Whether HttpService's requests may reach local addresses, a Rook
+    /// extension; `None` uses `settings::http_local_addresses`.
+    pub http_local_addresses: Option<bool>,
     /// The player's settings file (`UserSettings().GameSettings`, see
     /// [`user_settings`]): clients load it and save it when the player
     /// changes something. `None` keeps Roblox's defaults, unsaved.
@@ -132,6 +135,7 @@ impl Default for Options {
             core_scripts: None,
             menu: false,
             endpoints: None,
+            http_local_addresses: None,
             user_settings: None,
             viewport: None,
         }

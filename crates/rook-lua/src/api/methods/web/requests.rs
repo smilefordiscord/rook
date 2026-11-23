@@ -1,7 +1,8 @@
-//! Requests to Roblox's web domains, for the members Roblox answers from
-//! its servers (users, filtering, CoreScripts' `HttpRbxApiService`).
+//! Web requests scripts wait on: to Roblox's web domains, for the members
+//! Roblox answers from its servers (users, filtering, CoreScripts'
+//! `HttpRbxApiService`), and HttpService's to any site.
 //!
-//! Each member has two answers: with no endpoint for its domain
+//! Each member on a Roblox domain has two answers: with no endpoint for its domain
 //! ([`rook_platform::endpoints`]), a local one; with one, a request in
 //! Roblox's shape. Requests wait in the World ([`WebRequests`]) for the
 //! engine to send (`Runtime::take_web_requests`), and the calling thread
@@ -10,11 +11,13 @@
 //! `docs/design/web-endpoints.md`.
 
 use rustc_hash::FxHashMap;
+use std::collections::VecDeque;
 use std::sync::Arc;
+use std::time::Duration;
 
 use mlua::{Function, Lua, MultiValue, Table, Thread, Value as LuaValue};
 use rook_platform::endpoints::Endpoints;
-use rook_platform::network::Response;
+use rook_platform::network::{NetworkError, Reach, Response};
 
 use crate::runtime::ctx::args::Args;
 use crate::runtime::ctx::{ApiResult, Outcome, api_fn, with_world};
@@ -25,6 +28,9 @@ pub struct WebRequest {
     pub url: String,
     pub headers: Vec<(String, String)>,
     pub body: Vec<u8>,
+    /// How long it may take, when shorter than the network's own limit.
+    pub timeout: Option<Duration>,
+    pub reach: Reach,
 }
 
 impl WebRequest {
@@ -34,6 +40,8 @@ impl WebRequest {
             url,
             headers: Vec::new(),
             body: Vec::new(),
+            timeout: None,
+            reach: Reach::Any,
         }
     }
 
@@ -44,12 +52,14 @@ impl WebRequest {
             url,
             headers: vec![("Content-Type".into(), "application/json".into())],
             body: body.to_string().into_bytes(),
+            timeout: None,
+            reach: Reach::Any,
         }
     }
 }
 
 /// What came back, whatever its status, or why nothing did.
-pub type WebAnswer = Result<Response, String>;
+pub type WebAnswer = Result<Response, NetworkError>;
 
 /// Turns an answer into what the waiting member returns, or the error
 /// it raises.
@@ -73,6 +83,12 @@ pub struct WebRequests {
     pub(crate) outbox: Vec<(u64, WebRequest)>,
     waiting: FxHashMap<u64, (Option<Thread>, Step)>,
     next: u64,
+    /// When each of HttpService's requests in the last minute went out
+    /// (scheduler seconds, oldest first), for its per-minute limit.
+    pub(crate) script_sent: VecDeque<f64>,
+    /// HttpService's requests may reach local addresses (the host's
+    /// `httpLocalAddresses` setting, a Rook extension).
+    pub local_addresses: bool,
 }
 
 impl std::fmt::Debug for WebRequests {

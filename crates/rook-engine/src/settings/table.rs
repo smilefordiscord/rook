@@ -148,6 +148,14 @@ pub const MENU: Setting = Setting {
     flag: Some("no-menu"),
 };
 
+pub const HTTP_LOCAL_ADDRESSES: Setting = Setting {
+    name: "httpLocalAddresses",
+    tier: Tier::Developer,
+    unset: Unset::Is("off"),
+    var: "ROOK_HTTP_LOCAL_ADDRESSES",
+    flag: None,
+};
+
 /// Every setting, in the docs' order.
 pub const ALL: &[&Setting] = &[
     &FRAME_TIMES,
@@ -168,6 +176,7 @@ pub const ALL: &[&Setting] = &[
     &DATA_FOLDER,
     &CORE_SCRIPTS,
     &MENU,
+    &HTTP_LOCAL_ADDRESSES,
 ];
 
 #[cfg(test)]

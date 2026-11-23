@@ -1,11 +1,12 @@
 //! Scripting (docs/behavior/scripting/): badges and groups, datatypes,
-//! encoding, errors, instances, JSON, members, memory stores, messaging,
-//! arguments, scheduling, scripts, teleports and tweens.
+//! encoding, errors, HTTP requests, instances, JSON, members, memory
+//! stores, messaging, arguments, scheduling, scripts, teleports and tweens.
 
 mod badges_and_groups;
 mod datatypes;
 mod encoding;
 mod errors;
+mod http_requests;
 mod instances;
 mod json;
 mod marketplace;
