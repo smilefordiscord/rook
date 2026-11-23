@@ -29,9 +29,10 @@ const MOON_LIGHT: f32 = 1.0;
 /// `AdvStars` scales its points' colors by values the pack doesn't hold).
 const STAR_LIGHT: f32 = 1.0;
 
-/// The most stars Rook draws, whatever `StarCount` says: a bound on their
-/// cost (Studio's own limit, if any, is unmeasured).
-const MOST_STARS: f64 = 100_000.0;
+/// The most stars a Sky draws: Studio keeps a script's `StarCount` within
+/// 0 to 5,000 (Confirmed: conformance case `lighting/sky_clamps`); a
+/// file's larger count draws 5,000 (Inference).
+const MOST_STARS: f64 = 5_000.0;
 
 impl SceneCache {
     /// The sun, moon and stars over the sky of the Sky `sky` (a new Sky's
@@ -87,9 +88,8 @@ impl SceneCache {
     }
 
     /// One body: its image by its `Content` property, its legacy name or
-    /// `default`; its angular size in degrees, clamped to 0 to 60
-    /// (Confirmed for the sun by creator-docs Sky; Inference for the
-    /// moon, whose page gives no range).
+    /// `default`; its angular size in degrees, within 0 to 60 as Studio
+    /// keeps a script's (Confirmed: conformance case `lighting/sky_clamps`).
     fn disc(
         &mut self,
         dom: &Dom,

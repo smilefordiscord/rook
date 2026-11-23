@@ -1,6 +1,6 @@
 # The sky over the day
 
-Checked against Studio 0.745 on 2026-11-05.
+Checked against Studio 0.748 on 2026-11-23.
 
 How Studio darkens and tints the sky at dawn and dusk, and how that
 reaches what the sky lights and what reflects it, measured in
@@ -107,16 +107,38 @@ loaded before showed no hole, which may be Studio's cache. Rook treats it as
 an image that won't load (Inference). Studio's sky while images load isn't
 measured; that it's the default sky follows from the failed case (Inference).
 
+## The Sky's properties
+
+Measured in Studio 0.748 on 2026-11-23 (conformance case
+`lighting/sky_clamps`), as scripts see them:
+
+- A new Sky has `CelestialBodiesShown` on, `SunAngularSize` 21,
+  `MoonAngularSize` 11, `StarCount` 3,000 and `SkyboxOrientation`
+  (0, 0, 0); `SunTextureId` `rbxasset://sky/sun.jpg`, `MoonTextureId`
+  `rbxasset://sky/moon.jpg`, and the six skybox images
+  `rbxasset://textures/sky/sky512_bk.tex` and so on. Each `Content`
+  property (`SunTextureContent`, `SkyboxBackContent`, ...) is a Uri of
+  its image's id, and an empty id reads as a `None` Content.
+- `SunAngularSize` and `MoonAngularSize` are kept within 0 to 60: a value
+  set outside reads back at the nearer end (-1 reads 0, 70 and `inf`
+  read 60), and NaN stays NaN.
+- `StarCount` is a whole number kept within 0 to 5,000: 2.5 reads 2,
+  1e9 reads 5,000, and NaN reads 0.
+- `SkyboxOrientation` is kept as it's set, angles past 360 and NaN
+  included.
+
+Rook keeps the same ranges (`crates/rook-lua/src/api/properties/ranges.rs`).
+
 ## The sun and moon
 
-Not measured in Studio; from the creator docs (Sky, the Skyboxes
-guide) and the install's files, read on 2026-11-23.
+From the creator docs (Sky, the Skyboxes guide) and the install's files,
+read on 2026-11-23; the properties' ranges are [measured](#the-skys-properties).
 
 - A Sky's `CelestialBodiesShown` off hides the sun, moon and stars;
-  `SunAngularSize` and `MoonAngularSize` (degrees, default 21 and 11) are
-  clamped to 0 to 60, and 0 hides that body alone (Confirmed for the sun
-  by the creator docs; Inference for the moon, whose page gives no
-  range). Their images are `SunTextureId` and `MoonTextureId`, by default
+  `SunAngularSize` and `MoonAngularSize` (degrees) are within 0 to 60
+  (Confirmed), and 0 hides that body alone (Confirmed for the sun by the
+  creator docs; Inference for the moon, whose page says nothing of it).
+  Their images are `SunTextureId` and `MoonTextureId`, by default
   the install's `content/sky/sun.jpg` and `moon.jpg` (128 × 128 JPEGs, a
   white disc with a glow, and the moon, on black).
 - They rise and set with the time of day (creator docs); the sun's disc
@@ -166,7 +188,7 @@ geometry colored per vertex; `Stars` and `AdvStars` draw points two pixels
 across, each its own color, the `Adv` one added over the sky. The stars'
 colors and the gradient's are data the CPU feeds them, not in the pack.
 `StarCount` sets how many there are, and only with `CelestialBodiesShown`
-on (Confirmed: creator docs; default 3,000).
+on (Confirmed: creator docs; 0 to 5,000, default 3,000, [measured](#the-skys-properties)).
 
 Rook (`night_sky` in `crates/rook-scene/src/lighting/sky.rs`,
 `shaders/sky/night.wgsl`, `vs_star` in `shaders/sky/sky.wgsl`):
@@ -184,7 +206,8 @@ Rook (`night_sky` in `crates/rook-scene/src/lighting/sky.rs`,
   field turns with the time of day about the axis the sun turns about
   (Inference), and doesn't turn with `SkyboxOrientation` (Confirmed:
   creator docs). The brightest is 1 light unit at night, faded in with the
-  gradient (Approximation). Rook draws at most 100,000.
+  gradient (Approximation). A file's `StarCount` over 5,000 draws 5,000
+  (Inference: a script's reads back as 5,000).
 
 To settle in Studio: the gradient's colors at midnight overhead, 10° up and
 at the horizon; when it shows against the tint between 18.0 and 18.3; the

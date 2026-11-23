@@ -5,6 +5,7 @@ Every release, newest first. How versions are numbered is in
 
 ## [Unreleased]
 
+- A Sky's `SunAngularSize` and `MoonAngularSize` keep within 0 to 60 and its `StarCount` within 0 to 5,000, and an Atmosphere's `Density` and `Offset` within 0 to 1 and its `Haze` and `Glare` within 0 to 10, as in Roblox: a script's value outside reads back at the nearer end. Rook read back whatever was set. See [the sky](docs/behavior/lighting/sky.md#the-skys-properties) and [Atmosphere](docs/behavior/lighting/atmosphere.md#its-properties).
 - Lighting's Atmosphere hazes the sky and adds glare around the sun, and fades parts, terrain and effects into the sky behind them with distance, in place of Lighting's fog. Rook ignored it and drew Lighting's fog. See [Atmosphere](docs/behavior/lighting/atmosphere.md).
 - The night sky shows a dark gradient with a glow along the horizon, and a Sky's `StarCount` stars, which turn with the time of day. Rook drew the night sky black. See [the sky](docs/behavior/lighting/sky.md#the-night-sky).
 - The sun and moon are drawn in the sky, rising and setting with the time of day, with a Sky's images, sizes and `CelestialBodiesShown`, and `SkyboxOrientation` turns the skybox. Rook drew neither and ignored the orientation. See [the sky](docs/behavior/lighting/sky.md#the-sun-and-moon).

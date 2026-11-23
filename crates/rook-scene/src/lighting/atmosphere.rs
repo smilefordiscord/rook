@@ -40,14 +40,16 @@ pub(super) fn atmosphere(dom: &Dom, lighting: InstanceId) -> Option<Atmosphere> 
         c.map(|v| if v.is_nan() { 0.0 } else { v.clamp(0.0, 1.0) })
     };
     let density = float("Density", 0.395).min(1.0);
-    let decay = color("Decay", [92.0 / 255.0, 60.0 / 255.0, 13.0 / 255.0]);
+    // Defaults: a new Atmosphere's (Confirmed: conformance case
+    // `lighting/sky_clamps`).
+    let decay = color("Decay", [92.0 / 255.0, 60.0 / 255.0, 14.0 / 255.0]);
     Some(Atmosphere {
         falloff: density.powi(3) / HALF_STUDS,
         blur: float("Offset", 0.0).min(1.0),
         haze: HAZE_PER_UNIT * float("Haze", 0.0).min(10.0),
         // The haze takes the color as Studio's shaders take a color: its
         // sRGB value squared.
-        color: color("Color", [199.0 / 255.0, 170.0 / 255.0, 107.0 / 255.0]).map(|c| c * c),
+        color: color("Color", [200.0 / 255.0, 170.0 / 255.0, 108.0 / 255.0]).map(|c| c * c),
         glare: float("Glare", 0.0).min(10.0),
         glare_falloff: decay.map(|c| GLARE_SHARPNESS / c.max(0.05)),
     })

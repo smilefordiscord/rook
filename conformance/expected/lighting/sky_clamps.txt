@@ -1,0 +1,21 @@
+-- studio 0.748.0.7481526
+-- signals: deferred
+Sky CelestialBodiesShown=true MoonAngularSize=11 SunAngularSize=21 StarCount=3000 SkyboxOrientation=0,0,0
+Sky SunTextureId=rbxasset://sky/sun.jpg MoonTextureId=rbxasset://sky/moon.jpg
+Sky SkyboxBk=rbxasset://textures/sky/sky512_bk.tex SkyboxDn=rbxasset://textures/sky/sky512_dn.tex SkyboxFt=rbxasset://textures/sky/sky512_ft.tex SkyboxLf=rbxasset://textures/sky/sky512_lf.tex SkyboxRt=rbxasset://textures/sky/sky512_rt.tex SkyboxUp=rbxasset://textures/sky/sky512_up.tex
+Sky SunTextureContent=Content{SourceType=Uri, Uri=rbxasset://sky/sun.jpg} MoonTextureContent=Content{SourceType=Uri, Uri=rbxasset://sky/moon.jpg} SkyboxBackContent=Content{SourceType=Uri, Uri=rbxasset://textures/sky/sky512_bk.tex} SkyboxUpContent=Content{SourceType=Uri, Uri=rbxasset://textures/sky/sky512_up.tex}
+Sky SunAngularSize 21 -1=0 0.5=0.5 2=2 70=60 1e+09=60 -1e+09=0 nan=nan inf=60 -inf=0
+Sky MoonAngularSize 11 -1=0 0.5=0.5 2=2 70=60 1e+09=60 -1e+09=0 nan=nan inf=60 -inf=0
+Sky StarCount 3000 -1=0 0=0 2.5=2 5000=5000 1e+05=5000 1e+06=5000 1e+09=5000 nan=0
+SkyboxOrientation 90,-45,10 90,-45,10
+SkyboxOrientation 400,-720,1e+09 400,-720,1e+09
+SkyboxOrientation nan,0,0 nan,0,0
+SkyboxBk set rbxassetid://1 Content{SourceType=Uri, Uri=rbxassetid://1}
+SunTextureId empty "" Content{SourceType=None}
+CelestialBodiesShown number ok true
+Atmosphere Density=0.395 Offset=0 Haze=0 Glare=0 Color=0.7843,0.6667,0.4235 Decay=0.3608,0.2353,0.0549
+Atmosphere Density 0.395 -1=0 0.5=0.5 2=1 11=1 1e+09=1 nan=nan inf=1
+Atmosphere Offset 0 -1=0 0.5=0.5 2=1 11=1 1e+09=1 nan=nan inf=1
+Atmosphere Haze 0 -1=0 0.5=0.5 2=2 11=10 1e+09=10 nan=nan inf=10
+Atmosphere Glare 0 -1=0 0.5=0.5 2=2 11=10 1e+09=10 nan=nan inf=10
+Atmosphere Color out of range 2,-1,0.5

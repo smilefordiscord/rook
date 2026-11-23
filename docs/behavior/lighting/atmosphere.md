@@ -1,12 +1,26 @@
 # Atmosphere
 
-Checked against Studio 0.745 on 2026-11-23, by its install's shaders and
-the creator docs only: nothing here is measured in Studio. The rules
-come from the creator docs (Atmosphere, the "Atmospheric effects" guide)
-and the form of the shaders in the install's `shaders_glsl3.pack`
-(`version-8d7a1009c17e4ff8`), read for facts as the
+Checked against Studio 0.748 on 2026-11-23. Only the
+[properties](#its-properties) as scripts see them are measured in Studio;
+the rest comes from the creator docs (Atmosphere, the "Atmospheric
+effects" guide) and the form of the shaders in the install's
+`shaders_glsl3.pack` (`version-8d7a1009c17e4ff8`), read for facts as the
 [clean-implementation policy](../../design/policies.md#clean-implementation)
 allows.
+
+## Its properties
+
+Measured in Studio 0.748 on 2026-11-23 (conformance case
+`lighting/sky_clamps`):
+
+- A new Atmosphere has Density 0.395, Offset 0, Haze 0, Glare 0, Color
+  (200, 170, 108) and Decay (92, 60, 14).
+- Density and Offset are kept within 0 to 1, Haze and Glare within 0 to
+  10: a value set outside reads back at the nearer end (`inf` reads the
+  top), and NaN stays NaN.
+- Color isn't kept within anything: (2, -1, 0.5) reads back as it is.
+
+Rook keeps the same ranges (`crates/rook-lua/src/api/properties/ranges.rs`).
 
 ## What the docs say
 
