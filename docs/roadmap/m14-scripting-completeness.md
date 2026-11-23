@@ -115,8 +115,10 @@ the target counts only errors Rook causes, checked against Studio.
        destination place when no server of it runs.
    - *So far*: every member in the scope works between places in one
      process, and the player switches places
-     ([teleports](../behavior/scripting/teleports.md)); nothing is
-     checked against a live game yet.
+     ([teleports](../behavior/scripting/teleports.md)); the argument
+     checks and refusals match Studio's playtest of an unpublished place,
+     which refuses every teleport, so nothing past them is checked
+     against a live game yet.
    - *Done when*: a two-place universe from the archive teleports a
      player both ways in `rook-player` with its data and GUI, every
      failure fires `TeleportInitFailed` with Studio's result and words,

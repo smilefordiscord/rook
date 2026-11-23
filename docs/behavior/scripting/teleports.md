@@ -1,18 +1,25 @@
 # Teleports
 
-Checked against Studio 0.748 on 2026-11-23, by its creator docs only; nothing here is measured in Studio.
+Checked against Studio 0.748 on 2026-11-23.
 
 How TeleportService moves players between the places of a game, and what
 they carry. Sources: creator-docs TeleportService, TeleportOptions,
 TeleportAsyncResult, `Enum.TeleportResult`, `Enum.TeleportState`,
-Player:GetJoinData and the "Teleport between places" guide. The design is
-M14 step 4's on the [roadmap](../../roadmap/m14-scripting-completeness.md).
+Player:GetJoinData and the "Teleport between places" guide, and Studio
+0.748's playtest of an unpublished place, on its server and its client
+(conformance cases `scripting/teleport_args` and
+`scripting/client_teleport`). What the playtest showed is marked
+Confirmed. The design is M14 step 4's on the
+[roadmap](../../roadmap/m14-scripting-completeness.md).
 
-Studio's Test mode teleports with `TeleportAsync` only: the destination
-opens as a new test server, `JobId` and `PrivateServerId` stay empty, and
-the legacy methods and `GetPlayerPlaceInstanceAsync` don't work. Rook runs
-places as a live game does, so it follows the docs' live behavior for all
-of them. Where the docs give no words or order, Rook's are marked
+Studio refuses to teleport from an unpublished place, so the playtest
+shows how each method takes its arguments and refuses, never a teleport
+that goes. Its Test mode of a published game teleports with
+`TeleportAsync` only: the destination opens as a new test server, `JobId`
+and `PrivateServerId` stay empty, and the legacy methods and
+`GetPlayerPlaceInstanceAsync` don't work. Rook runs places as a live game
+does, so past the checks it follows the docs' live behavior for all of
+them. Where neither gives the words or order, Rook's are marked
 Inference.
 
 ## The universe
@@ -41,16 +48,33 @@ game_id = 4410        # game.GameId; 0 if left out
 
 ## Teleporting
 
-- `TeleportAsync(placeId, players, options)` is server-only. It checks
-  its arguments before anything else, with the docs' names for each
-  failure as the error (Inference: the words): `Invalid placeId` (below
-  0), `Players empty`, `List of players instances is incorrect` (not a
-  table, or anything but Players in it), `TeleportOptions not of correct
-  type`, `TeleportAsync called from Client`, `Incompatible Parameters`
-  (more than one of `ReservedServerId`, `VipServerId`,
+- Every method casts its arguments first, last argument first (Confirmed
+  for `TeleportAsync`, whose call without arguments is `Argument 2 missing
+  or nil`; Inference for the others), as Roblox's engine methods cast:
+  a place id that isn't a number is `Unable to cast string to int64`, a
+  user id `Unable to cast string to User`, a missing one `Argument 1
+  missing or nil`. A players list must be an array (`{}` included):
+  anything else, a Player not in a table or a dictionary, is `Unable to
+  cast value to Objects`, and an item that isn't an Instance `Unable to
+  cast value to Object`. An options, player or loading-screen argument
+  that isn't an Instance is `Unable to cast value to Object`; nil is
+  none. A client is refused after the casts: a client's
+  `ReserveServerAsync("abc")` is the cast error.
+- `TeleportAsync(placeId, players, options)` is server-only: a client's
+  call is `TeleportUnknown must be called from a Server` (Confirmed). Then
+  options setting more than one of `ReservedServerId`, `VipServerId`,
   `ReservedServerAccessCode`, `ShouldReserveServer` and
-  `ServerInstanceId`), and Rook's `Cannot teleport more than 50 players at
-  once` (the limit is the docs').
+  `ServerInstanceId` raise `Can only specify one of ReservedServerId,
+  VipServerId, ReservedServerAccessCode, ShouldReserveServer, or
+  ServerInstanceId.`, and then a place id of 0 or below `Invalid
+  placeId.` (Confirmed, in that order: a Part as options, an empty list,
+  Workspace in it and 51 players all give `Invalid placeId.` for place
+  0). Unpublished, a place is 0, so a teleport to its own place raises
+  there. After the place id, with the docs' names for each failure
+  (Inference: their words and order): `TeleportOptions not of correct
+  type`, `Players empty`, `List of players instances is incorrect`
+  (anything but Players in it), and Rook's `Cannot teleport more than 50
+  players at once` (the limit is the docs').
 - It then yields until the session has routed the teleport, at the end of
   the server's frame, and returns a `TeleportAsyncResult` when options were
   given (its `PrivateServerId` for a reserved destination, and
@@ -58,13 +82,23 @@ game_id = 4410        # game.GameId; 0 if left out
   nothing without them (creator-docs). Inference: the call returns before
   the players leave.
 - The legacy methods return at once. `Teleport`, `TeleportToSpawnByName`
-  and `TeleportToPlaceInstance` move one player: on a client the local
-  player (the only one it may name), on a server the one given (another
-  value raises `<method>: player argument must be a Player object`,
-  Inference). `TeleportToPrivateServer` and `TeleportPartyAsync` are
-  server-only; `TeleportPartyAsync` waits and returns the destination's
-  `JobId`. A LocalScript's teleport goes to its server, which carries it
-  out as its own.
+  and `TeleportToPlaceInstance` move one player. On a server, a call
+  without a player returns doing nothing, before the place is checked
+  (Confirmed for `Teleport(0)`; Inference: it moves no one); then a place
+  id of 0 or below is `Invalid placeId.` (Confirmed), and a player that
+  isn't a Player `<method>: player argument must be a Player object`
+  (Inference). On a client they move the local player, the only one it
+  may name: a place id of 0 or below is `Cannot teleport to invalid place
+  id. Aborting teleport.` (Confirmed for `Teleport`, checked before the
+  player; Inference for the other two), and another player the same
+  `player argument` error. `TeleportToPrivateServer` and
+  `TeleportPartyAsync` are server-only (a client's are
+  `TeleportToPrivateServer can only be called from the server` and
+  `TeleportPartyAsync must be called from a Server`, Confirmed), check the
+  place id as `TeleportAsync` does (Confirmed), then their players.
+  `TeleportPartyAsync` waits and returns the destination's `JobId`. A
+  LocalScript's teleport goes to its server, which carries it out as its
+  own.
 - A player who leaves for another server leaves its server as any player
   leaves ([leaving](../characters/leaving.md)): `PlayerRemoving` with
   `Enum.PlayerExitReason.Unknown` (Inference: the enum names no teleport).
@@ -84,7 +118,8 @@ As Roblox's matchmaking chooses (creator-docs TeleportOptions):
 - `ShouldReserveServer`: a new reserved server, whose access code the
   result gives.
 - `ReserveServer` and `ReserveServerAsync` give an access code and the
-  `PrivateServerId`; nothing starts until a teleport uses the code. Rook's
+  `PrivateServerId`; nothing starts until a teleport uses the code.
+  Inference: they check the place id as a teleport does. Rook's
   codes name their place and server (Roblox's are opaque), so a code used
   for another place fails as `Unauthorized`.
 - `VipServerId`: Rook has no VIP servers; the teleport fails as
@@ -109,7 +144,8 @@ A teleport that can't go fires `TeleportService.TeleportInitFailed`
 player, on the server and on that player's client, and the players stay
 (creator-docs). The options are new ones that retry the same destination:
 the original routing field and teleport data. Results Rook gives:
-`GameNotFound` (a place not in the universe), `GameEnded`, `GameFull`,
+`GameNotFound` (a place above 0 not in the universe, as every one is
+without a `universe.toml`), `GameEnded`, `GameFull`,
 `Unauthorized`, `IsTeleporting` (the player is already in another teleport
 asked for in the same frame) and `Failure` (the player has no client).
 Inference: `TeleportAsync` itself returns then rather than raising, and
@@ -134,15 +170,30 @@ place id is the destination's, its spawn name the one asked for.
   for a group, `Members` (the group's user ids); `LaunchData` from the
   player's `--launch-data` on its first join. A client's own legacy
   teleport gives none of these. A client's `GetJoinData` is empty: join
-  data is the server's.
-- Teleport data (`TeleportOptions:SetTeleportData`, the legacy methods'
-  `teleportData`) is copied as remote arguments are; instances are
-  removed with an error in the output (creator-docs). The arriving client
-  reads it with `GetLocalPlayerTeleportData` (nil on a server).
-- `SetTeleportGui` takes a ScreenGui (creator-docs) or nil, which clears
-  it; anything else raises `Parameter 1 must be ScreenGui in
-  SetTeleportGui.` (Inference: the words Roblox uses for an object of the
-  wrong class).
+  data is the server's. Confirmed: the playtest player's join data is an
+  empty table on its server and its client, a new one each call.
+- `TeleportOptions:SetTeleportData` keeps a copy made as a bindable's
+  arguments are ([bindables](bindables.md), Confirmed): a value that
+  isn't a table is kept as it is, functions and Instances included; a
+  table is copied, keeping only an array's array part
+  (`{1, 2, x = 3}` reads `{1, 2}`); a boolean key raises `Invalid table
+  key type used` and a table that holds itself `tables cannot be cyclic`.
+  `GetTeleportData` returns a new copy each time, nil before any is set.
+  Nil, or nothing, is `Argument 1 missing or nil`. TeleportOptions'
+  defaults, and their properties' casts, are Studio's (Confirmed): empty
+  strings and `ShouldReserveServer` false, `ServerInstanceId = 5` reads
+  `"5"`, `ServerInstanceId = nil` raises.
+- The teleport sends the data (and the legacy methods' `teleportData`,
+  copied the same way) as remote arguments are: instances are removed
+  with an error in the output, as are functions (creator-docs). The
+  arriving client reads it with `GetLocalPlayerTeleportData` (nil on a
+  server and on a client that didn't arrive by teleport, Confirmed).
+- `SetTeleportGui` takes any Instance, whatever its class (a Part, a
+  Frame, a BillboardGui), on a server or a client, and nil, which clears
+  it (Confirmed: none raise; Inference: nil clears). A value that isn't an
+  Instance is `Unable to cast value to Object`, and nothing at all
+  `Argument 1 missing or nil` (Confirmed). The creator docs call it the
+  loading ScreenGui; whatever was set is what goes.
 - `SetTeleportGui`'s ScreenGui (or a legacy method's
   `customLoadingScreen` on a client) goes with the player: copied with its
   descendants, references outside it cleared (creator-docs), put in the new
@@ -152,7 +203,9 @@ place id is the destination's, its spawn name the one asked for.
   handler moved it. Inference: scripts inside it don't run, as the guide
   says of the start place's.
 - `SetTeleportSetting`'s values stay with the client across teleports;
-  `GetTeleportSetting` reads them (creator-docs).
+  `GetTeleportSetting` reads them (creator-docs), nil for a key never set.
+  Both work on a server too; a value is copied as teleport data is, and a
+  nil value is `Argument 2 missing or nil` (Confirmed).
 - `TeleportToSpawnByName`'s spawn name picks the arriving character's
   first SpawnLocation among those it may use; Inference: with none of
   that name, any of them.

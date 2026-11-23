@@ -114,11 +114,12 @@ impl Runtime {
                 };
                 retry_options(&mut w.dom, options, &failure.routing)
                     .map_err(mlua::Error::external)?;
-                if let Some(data) = &failure.data {
-                    w.teleports.options_data.insert(options, data.clone());
-                }
                 (service, options)
             };
+            if let Some(data) = &failure.data {
+                let data = from_net(lua, data)?;
+                (self.world_mut().teleports.options_data).insert(options, data);
+            }
             let args = [
                 LuaValue::UserData(push_instance(lua, player)?),
                 named_item(lua, "TeleportResult", failure.result.item())?,

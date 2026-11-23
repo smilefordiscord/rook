@@ -234,6 +234,9 @@ fn a_place_outside_the_universe_fails_and_the_player_stays() {
     );
 }
 
+/// Outside a universe the place is 0, as in an unpublished place, which
+/// Studio 0.748 refuses to teleport to with `Invalid placeId.`; any other
+/// place isn't found.
 #[test]
 fn a_session_outside_a_universe_finds_no_place() {
     let mut server = Server::new(&Options::default()).unwrap();
@@ -243,11 +246,12 @@ fn a_session_outside_a_universe_finds_no_place() {
         "Go",
         r#"
         local TeleportService = game:GetService("TeleportService")
-        TeleportService.TeleportInitFailed:Connect(function(p, result)
-            print("failed", result, game.PlaceId)
+        TeleportService.TeleportInitFailed:Connect(function(p, result, _, place)
+            print("failed", result, place)
         end)
         game.Players.PlayerAdded:Connect(function(p)
-            TeleportService:TeleportAsync(game.PlaceId, { p })
+            print(game.PlaceId, pcall(TeleportService.TeleportAsync, TeleportService, game.PlaceId, { p }))
+            TeleportService:TeleportAsync(1002, { p })
             print("returned")
         end)
         "#,
@@ -258,7 +262,11 @@ fn a_session_outside_a_universe_finds_no_place() {
     session.run_for(0.2);
     assert_eq!(
         lines(session.server()),
-        ["failed Enum.TeleportResult.GameNotFound 0", "returned"]
+        [
+            "0 false Invalid placeId.",
+            "failed Enum.TeleportResult.GameNotFound 1002",
+            "returned"
+        ]
     );
 }
 

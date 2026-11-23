@@ -6,7 +6,7 @@
 
 use std::collections::BTreeMap;
 
-use mlua::Thread;
+use mlua::{Thread, Value as LuaValue};
 use rook_dom::InstanceId;
 use rustc_hash::FxHashMap;
 
@@ -204,8 +204,9 @@ pub(crate) struct Teleports {
     /// Calls waiting on the session, by number.
     pub(crate) waiting: FxHashMap<u64, (Thread, Returns)>,
     pub(crate) next_call: u64,
-    /// `TeleportOptions:SetTeleportData`'s data, by options object.
-    pub(crate) options_data: FxHashMap<InstanceId, NetValue>,
+    /// `TeleportOptions:SetTeleportData`'s data, by options object: the
+    /// script's own copy, which keeps what a teleport drops (Studio 0.748).
+    pub(crate) options_data: FxHashMap<InstanceId, LuaValue>,
     /// Each player's join data (a server's).
     pub(crate) join_data: FxHashMap<InstanceId, JoinData>,
     /// `SetTeleportGui`'s GUI (a client's).

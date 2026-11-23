@@ -1,13 +1,16 @@
 //! TeleportService, TeleportOptions and `Player:GetJoinData`
-//! (docs/behavior/scripting/teleports.md). The methods check their
-//! arguments and queue a [`Request`]; the play session routes it
-//! (`crate::teleport`). Error words are the creator docs' names for each
-//! failure (Inference: Studio's text isn't measured).
+//! (docs/behavior/scripting/teleports.md). The methods cast their
+//! arguments as Roblox's reflection does, last first (measured on
+//! `TeleportAsync`), check them, and queue a [`Request`]; the play session
+//! routes it (`crate::teleport`). Messages measured in Studio 0.748 are
+//! marked so; the others are the creator docs' names for each failure
+//! (Inference).
 
 use mlua::{Function, Lua, MultiValue, Value as LuaValue};
 use rook_dom::InstanceId;
 
 use super::RawMethod;
+use super::instances::bindables::copy_values;
 use crate::NetValue;
 use crate::net::{from_net, to_net};
 use crate::runtime::ctx::args::Args;
@@ -41,31 +44,27 @@ fn is_client(lua: &Lua) -> bool {
     with_world(lua, |w| w.is_client)
 }
 
-fn server_only(lua: &Lua, method: &str) -> ApiResult<()> {
+/// A server-only method called on a client, after its arguments are cast
+/// (measured: a client's `ReserveServerAsync("abc")` is a cast error).
+fn server_only(lua: &Lua, message: &str) -> ApiResult<()> {
     if is_client(lua) {
-        return Err(ScriptError(format!(
-            "{method} can only be called from the server"
-        )));
+        return Err(ScriptError(message.into()));
     }
     Ok(())
 }
 
-/// A place id argument: below 0 is `Invalid placeId` (creator-docs).
-fn place_id(a: &Args, i: usize) -> ApiResult<i64> {
-    let id = a.number(i)? as i64;
-    if id < 0 {
-        return Err(ScriptError("Invalid placeId".into()));
+/// Confirmed (Studio 0.748): a place id of 0 or below, which no place has,
+/// is `Invalid placeId.` on a server.
+fn place_id(id: i64) -> ApiResult<i64> {
+    if id <= 0 {
+        return Err(ScriptError("Invalid placeId.".into()));
     }
     Ok(id)
 }
 
-/// The players of a group teleport (creator-docs TeleportAsync's errors).
-fn player_list(lua: &Lua, a: &Args, i: usize) -> ApiResult<Vec<InstanceId>> {
-    let incorrect = || ScriptError("List of players instances is incorrect".into());
-    let LuaValue::Table(_) = a.get(i) else {
-        return Err(incorrect());
-    };
-    let players = a.instances(i).map_err(|_| incorrect())?;
+/// The players of a group teleport, already cast (creator-docs
+/// TeleportAsync's errors; Inference: their words and order).
+fn group(lua: &Lua, players: Vec<InstanceId>) -> ApiResult<Vec<InstanceId>> {
     if players.is_empty() {
         return Err(ScriptError("Players empty".into()));
     }
@@ -75,43 +74,29 @@ fn player_list(lua: &Lua, a: &Args, i: usize) -> ApiResult<Vec<InstanceId>> {
         )));
     }
     if !with_world(lua, |w| players.iter().all(|&p| w.dom.is_a(p, "Player"))) {
-        return Err(incorrect());
+        return Err(ScriptError("List of players instances is incorrect".into()));
     }
     Ok(players)
 }
 
-/// The player a legacy method moves: on a client the local player (or
-/// nil for it), on a server the one given.
-fn one_player(lua: &Lua, a: &Args, i: usize, method: &str) -> ApiResult<InstanceId> {
-    let given = a.opt_instance(i)?;
-    let (client, local, is_player) = with_world(lua, |w| {
-        let local = w.dom.local_player();
-        (
-            w.is_client,
-            local,
-            given.is_some_and(|p| w.dom.is_a(p, "Player")),
-        )
-    });
-    match (client, given) {
-        (true, None) => local,
-        (true, Some(p)) if Some(p) == local => Some(p),
-        (false, Some(p)) if is_player => Some(p),
-        _ => None,
-    }
-    .ok_or_else(|| ScriptError(format!("{method}: player argument must be a Player object")))
+/// A copy of teleport data as `SetTeleportData` keeps it: copied as a
+/// bindable's arguments are (measured in Studio 0.748: functions and
+/// instances kept, a mixed table's array part only, a boolean key and a
+/// cycle raise).
+fn copied(lua: &Lua, v: &LuaValue) -> ApiResult<LuaValue> {
+    Ok(copy_values(lua, std::slice::from_ref(v))?
+        .pop()
+        .unwrap_or(LuaValue::Nil))
 }
 
-/// Teleport data as it crosses to the destination: copied as remote
-/// arguments are, with instances dropped and an error in the output
+/// Teleport data as it crosses to the destination: sent as remote
+/// arguments are, with instances removed and an error in the output
 /// (creator-docs TeleportOptions:SetTeleportData).
-fn carried(lua: &Lua, v: &LuaValue) -> Option<NetValue> {
-    if v.is_nil() {
-        return None;
-    }
-    let mut data = to_net(v, 0);
-    let before = data.clone();
-    data.map_instances(&|_| None);
-    if data != before {
+fn carried(lua: &Lua, data: &LuaValue) -> NetValue {
+    let mut sent = to_net(data, 0);
+    let before = sent.clone();
+    sent.map_instances(&|_| None);
+    if sent != before {
         with_world(lua, |w| {
             w.push_log(
                 MessageType::Error,
@@ -119,11 +104,19 @@ fn carried(lua: &Lua, v: &LuaValue) -> Option<NetValue> {
             );
         });
     }
-    Some(data)
+    sent
 }
 
-/// The routing a TeleportOptions sets; more than one field is
-/// `Incompatible Parameters` (creator-docs).
+/// A legacy method's `teleportData`, which may be nil.
+fn data_argument(lua: &Lua, v: &LuaValue) -> ApiResult<Option<NetValue>> {
+    if v.is_nil() {
+        return Ok(None);
+    }
+    Ok(Some(carried(lua, &copied(lua, v)?)))
+}
+
+/// The routing a TeleportOptions sets. Confirmed (Studio 0.748): more than
+/// one field raises, before the place id is checked.
 fn routing(lua: &Lua, options: InstanceId) -> ApiResult<Routing> {
     let set = with_world(lua, |w| {
         let text = |name| {
@@ -152,7 +145,11 @@ fn routing(lua: &Lua, options: InstanceId) -> ApiResult<Routing> {
     match <[Routing; 1]>::try_from(set) {
         Ok([one]) => Ok(one),
         Err(set) if set.is_empty() => Ok(Routing::Public),
-        Err(_) => Err(ScriptError("Incompatible Parameters".into())),
+        Err(_) => Err(ScriptError(
+            "Can only specify one of ReservedServerId, VipServerId, ReservedServerAccessCode, \
+             ShouldReserveServer, or ServerInstanceId."
+                .into(),
+        )),
     }
 }
 
@@ -170,43 +167,35 @@ fn queue_and_wait(lua: &Lua, mut request: TeleportRequest, returns: Returns) -> 
     Outcome::Yield
 }
 
-/// A legacy method's custom loading screen: a client's becomes its
-/// teleport GUI, as `SetTeleportGui` would make it.
-fn loading_screen(lua: &Lua, a: &Args, i: usize) -> ApiResult<()> {
-    if let Some(gui) = a.opt_instance(i)?
-        && is_client(lua)
-    {
-        with_world(lua, |w| w.teleports.gui = Some(gui));
-    }
-    Ok(())
-}
-
 /// `TeleportAsync(placeId, players, options)`: yields until the session
 /// has routed the teleport, then returns a `TeleportAsyncResult` if
-/// options were given (creator-docs).
+/// options were given (creator-docs). Confirmed (Studio 0.748): the casts,
+/// then the client's refusal, then the options' routing, then the place id.
 fn teleport_async(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
-    if is_client(lua) {
-        return Err(ScriptError("TeleportAsync called from Client".into()));
-    }
-    let place_id = place_id(a, 0)?;
-    let players = player_list(lua, a, 1)?;
-    let options = match a.get(2) {
-        LuaValue::Nil => None,
-        _ => Some(
-            a.opt_instance(2)
-                .ok()
-                .flatten()
-                .filter(|&o| with_world(lua, |w| w.dom.is_a(o, "TeleportOptions")))
-                .ok_or_else(|| ScriptError("TeleportOptions not of correct type".into()))?,
-        ),
+    let options = a.opt_instance(2)?;
+    let players = a.objects(1)?;
+    let place = a.int64(0, "int64")?;
+    server_only(lua, "TeleportUnknown must be called from a Server")?;
+    let options = options.map(|o| {
+        let is_options = with_world(lua, |w| w.dom.is_a(o, "TeleportOptions"));
+        (o, is_options)
+    });
+    let routing = match options {
+        Some((o, true)) => routing(lua, o)?,
+        _ => Routing::Public,
     };
-    let (routing, data) = match options {
-        Some(o) => (
-            routing(lua, o)?,
-            with_world(lua, |w| w.teleports.options_data.get(&o).cloned()),
-        ),
-        None => (Routing::Public, None),
+    let place_id = place_id(place)?;
+    let options = match options {
+        None => None,
+        Some((o, true)) => Some(o),
+        Some((_, false)) => {
+            return Err(ScriptError("TeleportOptions not of correct type".into()));
+        }
     };
+    let players = group(lua, players)?;
+    let data = options
+        .and_then(|o| with_world(lua, |w| w.teleports.options_data.get(&o).cloned()))
+        .map(|d| carried(lua, &d));
     let request = TeleportRequest {
         players,
         place_id,
@@ -224,39 +213,67 @@ fn teleport_async(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
     Ok(queue_and_wait(lua, request, returns))
 }
 
-/// Where a legacy method takes each argument.
-struct Slots {
-    player: usize,
-    spawn: Option<usize>,
-    data: usize,
-    gui: usize,
+/// A legacy single-player teleport, its arguments cast.
+struct Legacy {
+    method: &'static str,
+    place: i64,
+    player: Option<InstanceId>,
+    routing: Routing,
+    spawn_name: String,
+    data: Option<NetValue>,
+    /// `customLoadingScreen`.
+    gui: Option<InstanceId>,
 }
 
-/// The legacy single-player methods, which return at once.
-fn legacy(
-    lua: &Lua,
-    a: &Args,
-    method: &str,
-    (place_id, routing): (i64, Routing),
-    at: &Slots,
-) -> ApiResult<Outcome> {
-    let player = one_player(lua, a, at.player, method)?;
-    let spawn_name = match at.spawn {
-        Some(i) => a.opt_string(i)?.unwrap_or_default(),
-        None => String::new(),
+/// The legacy single-player methods, which return at once. On a client
+/// they move the local player, the only one it may name; on a server the
+/// one given (Inference: the words for anyone else).
+fn legacy(lua: &Lua, t: Legacy) -> ApiResult<Outcome> {
+    let client = is_client(lua);
+    let player = if client {
+        // Confirmed (Studio 0.748, `Teleport`): a client checks the place
+        // first, in words of its own.
+        if t.place <= 0 {
+            return Err(ScriptError(
+                "Cannot teleport to invalid place id. Aborting teleport.".into(),
+            ));
+        }
+        let local = with_world(lua, |w| w.dom.local_player());
+        match t.player {
+            None => local,
+            Some(p) => local.filter(|&l| l == p),
+        }
+    } else {
+        // Confirmed (Studio 0.748, `Teleport(0)`): a server's call without
+        // a player returns, before the place is checked. Inference: it
+        // moves no one.
+        let Some(given) = t.player else {
+            return Outcome::ret(lua, ());
+        };
+        place_id(t.place)?;
+        with_world(lua, |w| w.dom.is_a(given, "Player")).then_some(given)
     };
-    let data = carried(lua, a.get(at.data));
-    loading_screen(lua, a, at.gui)?;
+    let player = player.ok_or_else(|| {
+        ScriptError(format!(
+            "{}: player argument must be a Player object",
+            t.method
+        ))
+    })?;
+    // A client's loading screen becomes its teleport GUI, as
+    // `SetTeleportGui` would make it.
+    if client && let Some(gui) = t.gui {
+        with_world(lua, |w| w.teleports.gui = Some(gui));
+    }
     queue(
         lua,
         TeleportRequest {
             players: vec![player],
-            place_id,
-            routing,
-            data,
-            spawn_name,
+            place_id: t.place,
+            routing: t.routing,
+            data: t.data,
+            spawn_name: t.spawn_name,
             call: None,
-            from_server: !is_client(lua),
+            from_server: !client,
         },
     );
     Outcome::ret(lua, ())
@@ -264,60 +281,84 @@ fn legacy(
 
 /// `Teleport(placeId, player, teleportData, customLoadingScreen)`.
 fn teleport(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
-    let place = place_id(a, 0)?;
-    let at = Slots {
-        player: 1,
-        spawn: None,
-        data: 2,
-        gui: 3,
-    };
-    legacy(lua, a, "Teleport", (place, Routing::Public), &at)
+    let gui = a.opt_instance(3)?;
+    let data = data_argument(lua, a.get(2))?;
+    let player = a.opt_instance(1)?;
+    let place = a.int64(0, "int64")?;
+    legacy(
+        lua,
+        Legacy {
+            method: "Teleport",
+            place,
+            player,
+            routing: Routing::Public,
+            spawn_name: String::new(),
+            data,
+            gui,
+        },
+    )
 }
 
 /// `TeleportToSpawnByName(placeId, spawnName, player, teleportData,
 /// customLoadingScreen)`.
 fn teleport_to_spawn(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
-    let place = place_id(a, 0)?;
-    a.string(1)?;
-    let at = Slots {
-        player: 2,
-        spawn: Some(1),
-        data: 3,
-        gui: 4,
-    };
+    let gui = a.opt_instance(4)?;
+    let data = data_argument(lua, a.get(3))?;
+    let player = a.opt_instance(2)?;
+    let spawn_name = a.string(1)?;
+    let place = a.int64(0, "int64")?;
     legacy(
         lua,
-        a,
-        "TeleportToSpawnByName",
-        (place, Routing::Public),
-        &at,
+        Legacy {
+            method: "TeleportToSpawnByName",
+            place,
+            player,
+            routing: Routing::Public,
+            spawn_name,
+            data,
+            gui,
+        },
     )
 }
 
 /// `TeleportToPlaceInstance(placeId, instanceId, player, spawnName,
 /// teleportData, customLoadingScreen)`.
 fn teleport_to_instance(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
-    let place = place_id(a, 0)?;
+    let gui = a.opt_instance(5)?;
+    let data = data_argument(lua, a.get(4))?;
+    let spawn_name = a.opt_string(3)?.unwrap_or_default();
+    let player = a.opt_instance(2)?;
     let job = a.string(1)?;
-    let at = Slots {
-        player: 2,
-        spawn: Some(3),
-        data: 4,
-        gui: 5,
-    };
-    let method = "TeleportToPlaceInstance";
-    legacy(lua, a, method, (place, Routing::Instance(job)), &at)
+    let place = a.int64(0, "int64")?;
+    legacy(
+        lua,
+        Legacy {
+            method: "TeleportToPlaceInstance",
+            place,
+            player,
+            routing: Routing::Instance(job),
+            spawn_name,
+            data,
+            gui,
+        },
+    )
 }
 
 /// `TeleportToPrivateServer(placeId, reservedServerAccessCode, players,
 /// spawnName, teleportData, customLoadingScreen)`.
 fn teleport_to_private_server(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
-    server_only(lua, "TeleportToPrivateServer")?;
-    let place_id = place_id(a, 0)?;
-    let code = a.string(1)?;
-    let players = player_list(lua, a, 2)?;
+    a.opt_instance(5)?;
+    let data = data_argument(lua, a.get(4))?;
     let spawn_name = a.opt_string(3)?.unwrap_or_default();
-    let data = carried(lua, a.get(4));
+    let players = a.objects(2)?;
+    let code = a.string(1)?;
+    let place = a.int64(0, "int64")?;
+    server_only(
+        lua,
+        "TeleportToPrivateServer can only be called from the server",
+    )?;
+    let place_id = place_id(place)?;
+    let players = group(lua, players)?;
     queue(
         lua,
         TeleportRequest {
@@ -336,10 +377,13 @@ fn teleport_to_private_server(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<O
 /// `TeleportPartyAsync(placeId, players, teleportData,
 /// customLoadingScreen)`: the group to one server, returning its `JobId`.
 fn teleport_party(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
-    server_only(lua, "TeleportPartyAsync")?;
-    let place_id = place_id(a, 0)?;
-    let players = player_list(lua, a, 1)?;
-    let data = carried(lua, a.get(2));
+    a.opt_instance(3)?;
+    let data = data_argument(lua, a.get(2))?;
+    let players = a.objects(1)?;
+    let place = a.int64(0, "int64")?;
+    server_only(lua, "TeleportPartyAsync must be called from a Server")?;
+    let place_id = place_id(place)?;
+    let players = group(lua, players)?;
     let request = TeleportRequest {
         players,
         place_id,
@@ -355,10 +399,11 @@ fn teleport_party(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
 /// `ReserveServer(placeId)`: an access code and the reserved server's
 /// `PrivateServerId`. Nothing starts until a teleport uses the code.
 /// Inference: a place outside the universe is only found when the code is
-/// used.
+/// used, and the place id is checked as a teleport's is.
 fn reserve_server(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
-    server_only(lua, "ReserveServer")?;
-    let place_id = place_id(a, 0)?;
+    let place = a.int64(0, "int64")?;
+    server_only(lua, "ReserveServer can only be called from the server")?;
+    let place_id = place_id(place)?;
     let id = super::web::http::random_guid(lua)?.to_lowercase();
     let code = crate::teleport::access_code(place_id, &id);
     Outcome::ret(lua, (code, id))
@@ -367,8 +412,11 @@ fn reserve_server(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
 /// `GetPlayerPlaceInstanceAsync(userId)`: where the user plays, which the
 /// session answers; an error if they're nowhere (creator-docs).
 fn player_place_instance(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
-    server_only(lua, "GetPlayerPlaceInstanceAsync")?;
-    let user = a.number(0)? as i64;
+    let user = a.int64(0, "User")?;
+    server_only(
+        lua,
+        "GetPlayerPlaceInstanceAsync can only be called from the server",
+    )?;
     let helper: Function = lua.named_registry_value("rook.place_instance")?;
     Ok(Outcome::Call(
         helper,
@@ -388,17 +436,11 @@ fn wait_lookup(lua: &Lua, args: MultiValue) -> ApiResult<Outcome> {
     Ok(Outcome::Yield)
 }
 
-/// Confirmed (creator-docs SetTeleportGui): it takes "the loading
-/// ScreenGui". Inference: anything else raises in the words Roblox's
-/// methods use for an object of the wrong class (measured for
-/// `SetPartCollisionGroup`), and nil clears it.
+/// Confirmed (Studio 0.748): any Instance or nil, on a server or a client,
+/// whatever its class; only a value that isn't one doesn't cast. The
+/// creator docs say it takes "the loading ScreenGui"; nil clears it.
 fn set_teleport_gui(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
     let gui = a.object(0)?;
-    if gui.is_some_and(|g| !with_world(lua, |w| w.dom.is_a(g, "ScreenGui"))) {
-        return Err(ScriptError(
-            "Parameter 1 must be ScreenGui in SetTeleportGui.".into(),
-        ));
-    }
     with_world(lua, |w| w.teleports.gui = gui);
     Outcome::ret(lua, ())
 }
@@ -408,7 +450,7 @@ fn arriving_teleport_gui(lua: &Lua, _: InstanceId, _: &Args) -> ApiResult<Outcom
 }
 
 /// The local player's teleport data; nil on a server, which has no local
-/// player (Inference).
+/// player (Confirmed, Studio 0.748).
 fn local_player_teleport_data(lua: &Lua, _: InstanceId, _: &Args) -> ApiResult<Outcome> {
     let data = with_world(lua, |w| w.teleports.arrival.teleport_data.clone());
     match data {
@@ -417,13 +459,13 @@ fn local_player_teleport_data(lua: &Lua, _: InstanceId, _: &Args) -> ApiResult<O
     }
 }
 
+/// Confirmed (Studio 0.748): the value can't be nil, and works on a server
+/// too.
 fn set_teleport_setting(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
+    let value = copied(lua, a.variant(1)?)?;
     let key = a.string(0)?;
-    let value = carried(lua, a.get(1));
-    with_world(lua, |w| match value {
-        Some(v) => w.teleports.arrival.settings.insert(key, v),
-        None => w.teleports.arrival.settings.remove(&key),
-    });
+    let value = carried(lua, &value);
+    with_world(lua, |w| w.teleports.arrival.settings.insert(key, value));
     Outcome::ret(lua, ())
 }
 
@@ -433,18 +475,18 @@ fn teleport_setting(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
     Outcome::ret(lua, from_net(lua, &value.unwrap_or(NetValue::Nil))?)
 }
 
+/// Confirmed (Studio 0.748): the data can't be nil, and is copied when set
+/// and again each time it's read; a value that isn't a table is kept as
+/// it is.
 fn set_teleport_data(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> {
-    let data = carried(lua, a.get(0));
-    with_world(lua, |w| match data {
-        Some(d) => w.teleports.options_data.insert(this, d),
-        None => w.teleports.options_data.remove(&this),
-    });
+    let data = copied(lua, a.variant(0)?)?;
+    with_world(lua, |w| w.teleports.options_data.insert(this, data));
     Outcome::ret(lua, ())
 }
 
 fn teleport_data(lua: &Lua, this: InstanceId, _: &Args) -> ApiResult<Outcome> {
     let data = with_world(lua, |w| w.teleports.options_data.get(&this).cloned());
-    Outcome::ret(lua, from_net(lua, &data.unwrap_or(NetValue::Nil))?)
+    Outcome::ret(lua, copied(lua, &data.unwrap_or(LuaValue::Nil))?)
 }
 
 /// `Player:GetJoinData()`: the fields its join set (creator-docs). A
