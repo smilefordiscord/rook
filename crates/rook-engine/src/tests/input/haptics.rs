@@ -3,7 +3,6 @@ use crate::{GamepadKind, MotorSpeeds};
 use rook_types::{GamepadKey, VibrationMotor};
 
 const LARGE: usize = VibrationMotor::Large as usize;
-const SMALL: usize = VibrationMotor::Small as usize;
 
 /// A client whose LocalScript runs `source` with a pad that has a Large
 /// and a Small motor in Gamepad1 from its first line.
@@ -26,9 +25,10 @@ fn client_with_pad(source: &str) -> (Session, usize) {
 }
 
 /// Support follows the pad in the slot; `GetMotor` returns nothing until
-/// `SetMotor`, then the value as set; the speed a motor runs at is that
-/// value clamped to 0..1, and nothing for a motor the pad lacks or a slot
-/// without a pad.
+/// `SetMotor`, then the values as set, for any input type; the speed a
+/// motor runs at is the first value clamped to 0..1, and nothing for a
+/// value that isn't a number, a motor the pad lacks or a slot without a
+/// pad.
 #[test]
 fn set_motors_run_the_pads_motors() {
     let (session, index) = client_with_pad(
@@ -49,8 +49,9 @@ fn set_motors_run_the_pads_motors() {
         print(haptics:GetMotor(pad, motor.Large), haptics:GetMotor(pad, motor.Small),
             haptics:GetMotor(empty, motor.Large),
             select("#", haptics:GetMotor(Enum.UserInputType.Keyboard, motor.Large)))
-        print(pcall(haptics.SetMotor, haptics, pad, motor.Large))
+        print(pcall(haptics.SetMotor, haptics, pad, motor.LeftTrigger))
         print(pcall(haptics.IsMotorSupported, haptics, pad, Enum.Material.Plastic))
+        haptics:SetMotor(pad, motor.Small, "1")
         "##,
     );
     let client = session.client(index).unwrap();
@@ -60,14 +61,13 @@ fn set_motors_run_the_pads_motors() {
             "true false false",
             "true true false false",
             "0",
-            "0.75 2 1 0",
-            "false Argument 3 missing or nil",
+            "0.75 2 1 1",
+            "true",
             "false Unable to cast Material to VibrationMotor",
         ]
     );
     let mut expected = MotorSpeeds::default();
     expected[0][LARGE] = 0.75;
-    expected[0][SMALL] = 1.0;
     assert_eq!(client.motor_speeds(), expected);
 }
 

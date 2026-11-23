@@ -120,9 +120,10 @@ plumbing, which whichever lands first builds.
      which supersedes the service and needs its presets' waveforms; the
      trigger motors and a VR controller's hands, which neither gilrs nor
      the pads' compatible rumble reaches.
-   - *HapticService evidence*: creator docs only (HapticService,
-     `Enum.VibrationMotor`, the Gamepad input guide); no Studio
-     measurement yet ([motors](../behavior/input/gamepads.md#motors)).
+   - *HapticService evidence*: what scripts see, recorded in Studio
+     0.748 without a pad (conformance case `input/haptics`); what a pad
+     does, creator docs only (HapticService, `Enum.VibrationMotor`, the
+     Gamepad input guide) ([motors](../behavior/input/gamepads.md#motors)).
    - *HapticService design*: as engines drive rumble (SDL's
      `SDL_RumbleGamepad(low, high)`, Unity's `SetMotorSpeeds`, gilrs's
      force-feedback effects): the game keeps each motor's wanted speed

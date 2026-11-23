@@ -1,6 +1,6 @@
 # Gamepads
 
-Checked against Studio 0.747 on 2026-11-10.
+Checked against Studio 0.748 on 2026-11-23.
 
 [M19](../../roadmap/m19-input-and-platforms.md) step 1. Measured in
 Studio 0.747 on 2026-11-10 in a playtest client on Baseplate, with a
@@ -120,26 +120,42 @@ pad connected came from the edit DataModel.
 
 ## Motors
 
-Not measured in Studio: these follow the creator docs
-(HapticService, `Enum.VibrationMotor`, the gamepad input guide), with
-Rook's own choices marked Inference.
+What scripts see was measured in Studio 0.748 on 2026-11-23 on a
+playtest server with no pad (conformance case `input/haptics`); what a
+pad does follows the creator docs (HapticService, `Enum.VibrationMotor`,
+the gamepad input guide), with Rook's own choices marked Inference.
 
-- `HapticService:SetMotor(inputType, motor, values...)` sets how hard a
-  motor vibrates, from its tuple's first value, a number. `GetMotor`
-  returns the value last set, and nothing before `SetMotor`. Rook returns
-  it as given (Inference: not clamped), and a missing value fails as
-  "Argument 3 missing or nil" (Inference).
+- `Enum.VibrationMotor` is Large 0, Small 1, LeftTrigger 2,
+  RightTrigger 3, LeftHand 4 and RightHand 5.
+- The input type and motor are cast as every reflected method casts an
+  enum (Confirmed): an item, its name or its number; `"Pad"` is "Unable
+  to cast string to UserInputType", another enum's item "Unable to cast
+  KeyCode to UserInputType" (or `to VibrationMotor`), and nil or nothing
+  "Argument 1 missing or nil" (`Argument 2` for the motor).
+  UserInputService's gamepad methods cast theirs the same way
+  (Inference).
+- `HapticService:SetMotor(inputType, motor, values...)` keeps its whole
+  tuple for that input type and motor, whatever it holds, and never
+  fails on it (Confirmed). `GetMotor` returns the tuple as kept, and
+  nothing before `SetMotor`. Numbers are kept as single-precision floats
+  (0.6 reads 0.6000000238418579), not clamped (2.5, -1, NaN and infinity
+  read back); `true` reads 1 (Inference: `false` 0); a string, a table
+  and nil are kept as they are (`"0.3"` reads back a string); no value
+  at all reads back one nil. Keyboard, Touch and every other input type
+  keep their values too.
+- A motor runs at its tuple's first value (creator docs), a number;
+  anything else stills it (Inference).
 - The motor's output is scaled by the player's haptic intensity,
   `UserGameSettings.HapticStrength`, which only Roblox's own scripts can
   set. Rook runs a motor at the value clamped to 0 to 1, times the
   strength (Inference: a plain product).
 - Most pads have a large and a small motor. `IsVibrationSupported` and
-  `IsMotorSupported` are true for a `GamepadN` whose pad has the motor;
-  Rook answers false with no pad in the slot and for input types that
-  aren't pads (Inference).
+  `IsMotorSupported` are true for a `GamepadN` whose pad has the motor,
+  and false with no pad in the slot and for input types that aren't
+  pads (Confirmed with no pad, for every motor and input type, also
+  after `SetMotor`).
 - A slot keeps what was set while pads come and go, so a pad connecting
-  to it runs at it (Inference). Input types that aren't pads keep
-  nothing.
+  to it runs at it (Inference).
 - HapticService is deprecated in favor of `HapticEffect`, which Rook
   lacks.
 

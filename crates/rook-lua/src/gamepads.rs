@@ -37,10 +37,6 @@ pub struct Gamepad {
     /// list, which holds every slot until then (measured).
     pub not_navigation: bool,
     pub motors: Vec<VibrationMotor>,
-    /// What `HapticService:SetMotor` last set each motor to, by
-    /// [`VibrationMotor::index`], as the script gave it; None until set.
-    /// The slot keeps them while pads come and go (Inference).
-    pub motor_values: [Option<f64>; VibrationMotor::COUNT],
     /// Its InputObjects, by [`GamepadKey::index`], made on first use and
     /// reused by every event and `GetGamepadState`, as Studio's are.
     objects: [Option<InstanceId>; GamepadKey::COUNT],
