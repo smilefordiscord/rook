@@ -186,6 +186,7 @@ impl Renderer {
             particles: GpuParticles::default(),
             ribbons: GpuRibbons::default(),
             terrain: TerrainLook::default(),
+            clouds: GpuClouds::default(),
             time: 0.0,
             water_phase: 0.0,
             depth: None,

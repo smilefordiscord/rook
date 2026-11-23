@@ -109,4 +109,5 @@ To settle in Studio, on the Baseplate at noon and at dusk:
 - Reflections don't show the haze: Studio draws its reflection cube with
   the haze (its `AdvSky…Env` shaders), Rook's cube holds the sky without
   it.
-- Clouds (M13 step 1).
+- The haze over the clouds is drawn ([clouds](clouds.md)); the clouds
+  in reflections aren't.

@@ -814,3 +814,111 @@ fn an_atmosphere_fades_distant_parts_towards_its_color() {
         "{near_plain:?} against {near_hazed:?}"
     );
 }
+
+/// Frames of a plain sky with `clouds` over it, looking 45° up (all of it
+/// above the horizon), with `parts`.
+fn cloud_shots(
+    clouds: &[Option<Clouds>],
+    parts: &[PartInstance],
+    camera: &Camera,
+) -> Option<Vec<Vec<u8>>> {
+    let mut r = Renderer::headless().ok()?;
+    let mut shots = Vec::new();
+    for &clouds in clouds {
+        r.set_scene(&Scene {
+            parts: parts.to_vec(),
+            lighting: Lighting {
+                clouds,
+                ..Lighting::default()
+            },
+            ..Scene::default()
+        });
+        shots.push(r.render_to_image(64, 64, camera).unwrap());
+    }
+    Some(shots)
+}
+
+fn white_clouds(cover: f32) -> Clouds {
+    Clouds {
+        cover,
+        density: 0.7,
+        color: [1.0; 3],
+    }
+}
+
+fn up_45() -> Camera {
+    Camera::look_at(Vec3::ZERO, Vec3::new(0.0, 1.0, -1.0))
+}
+
+/// Cover 0 draws no cloud: the frame is the sky's alone.
+#[test]
+fn cover_zero_draws_no_clouds() {
+    let Some(shots) = cloud_shots(&[None, Some(white_clouds(0.0))], &[], &up_45()) else {
+        return;
+    };
+    assert!(shots[0] == shots[1]);
+}
+
+/// Cover 1 covers the whole sky above the horizon in gray-white cloud
+/// where the sky was blue, and leaves what's below the horizon alone.
+#[test]
+fn full_cover_covers_the_sky_above_the_horizon() {
+    let Some(shots) = cloud_shots(&[None, Some(white_clouds(1.0))], &[], &up_45()) else {
+        return;
+    };
+    let pixel =
+        |image: &[u8], i: usize| [image[i * 4], image[i * 4 + 1], image[i * 4 + 2]].map(i32::from);
+    for i in 0..64 * 64 {
+        let (sky, cloud) = (pixel(&shots[0], i), pixel(&shots[1], i));
+        assert!(sky[2] - sky[0] > 40, "a blue sky: {sky:?} at {i}");
+        assert!((cloud[2] - cloud[0]).abs() < 25, "cloud: {cloud:?} at {i}");
+    }
+    let level = Camera::look_at(Vec3::ZERO, Vec3::NEG_Z);
+    let Some(shots) = cloud_shots(&[None, Some(white_clouds(1.0))], &[], &level) else {
+        return;
+    };
+    let rows = |image: &[u8], from: usize, to: usize| image[from * 64 * 4..to * 64 * 4].to_vec();
+    assert_eq!(
+        rows(&shots[0], 34, 64),
+        rows(&shots[1], 34, 64),
+        "below the horizon"
+    );
+    assert_ne!(rows(&shots[0], 0, 30), rows(&shots[1], 0, 30), "above it");
+}
+
+/// Color tints the clouds: red clouds draw red, white ones gray.
+#[test]
+fn cloud_color_tints_them() {
+    let red = Clouds {
+        color: [1.0, 0.0, 0.0],
+        ..white_clouds(1.0)
+    };
+    let Some(shots) = cloud_shots(&[Some(white_clouds(1.0)), Some(red)], &[], &up_45()) else {
+        return;
+    };
+    let at = |image: &[u8]| {
+        image[(32 * 64 + 32) * 4..][..3]
+            .iter()
+            .map(|&c| i32::from(c))
+            .collect::<Vec<_>>()
+    };
+    let (white, red) = (at(&shots[0]), at(&shots[1]));
+    assert!((white[0] - white[1]).abs() < 15, "white: {white:?}");
+    assert!(red[0] > red[1] + 60 && red[0] > red[2] + 60, "red: {red:?}");
+}
+
+/// A part in front of the clouds covers them: its pixels are the same
+/// with clouds as without.
+#[test]
+fn a_part_in_front_hides_the_clouds() {
+    let camera = up_45();
+    let mut wall = part(PartShape::Block, 0.0, [0.8, 0.2, 0.2], 0.0);
+    wall.position = Vec3::new(0.0, 10.0, -10.0);
+    wall.size = Vec3::splat(6.0);
+    let Some(shots) = cloud_shots(&[None, Some(white_clouds(1.0))], &[wall], &camera) else {
+        return;
+    };
+    let at = |image: &[u8], x: usize, y: usize| image[(y * 64 + x) * 4..][..3].to_vec();
+    assert_eq!(at(&shots[0], 32, 32), at(&shots[1], 32, 32), "the part");
+    assert_ne!(at(&shots[0], 4, 4), at(&shots[1], 4, 4), "the sky");
+}

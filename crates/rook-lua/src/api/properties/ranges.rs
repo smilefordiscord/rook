@@ -21,6 +21,9 @@ const RANGES: &[(&str, &str, f64, f64)] = &[
     ("Atmosphere", "Offset", 0.0, 1.0),
     ("Atmosphere", "Haze", 0.0, 10.0),
     ("Atmosphere", "Glare", 0.0, 10.0),
+    // Conformance case `lighting/clouds_clamps`.
+    ("Clouds", "Cover", 0.0, 1.0),
+    ("Clouds", "Density", 0.0, 1.0),
 ];
 
 /// Store `value` within its range, if `name` has one on `id`'s class.

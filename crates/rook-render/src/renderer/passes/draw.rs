@@ -95,7 +95,14 @@ impl Renderer {
         let view_proj = camera.view_projection(aspect);
         let view = Frustum::of(view_proj);
         let margin = MOTION_STUDS.max(self.terrain.wave_size.abs());
-        self.write_globals(camera, (aspect, height), sun, shadow);
+        let kept = (self.clouds).light_kept(l.clouds.as_ref(), camera.position, sun);
+        self.write_globals(camera, (aspect, height), (sun, kept), shadow);
+        let clouds = self.clouds.prepare(
+            &self.device,
+            &self.queue,
+            ([&self.globals_layout, &self.main_layout], FRAME_FORMAT),
+            (l.clouds, camera, (width, height)),
+        );
 
         stage(&mut times.setup);
         // One command buffer for the whole frame, uploads' copies first.
@@ -151,6 +158,9 @@ impl Renderer {
         );
         stage(&mut times.lights);
         self.update_sky_cube(&mut encoder);
+        if clouds {
+            (self.clouds).record(&mut encoder, [&self.bind_group, &self.main_bind_group]);
+        }
         // A ViewportFrame can sit in a CanvasGroup: its picture first.
         self.record_viewports(&mut encoder, &mut viewport_runs, &starts[3..]);
         self.gui.record_groups(&self.queue, &mut encoder);
@@ -163,6 +173,7 @@ impl Renderer {
             &mut main_runs,
             starts[1],
             (&ribbon_runs, &particle_runs, &world_gui_runs),
+            clouds,
         );
         let highlighted = !mask_runs.runs.is_empty();
         if highlighted {
@@ -216,7 +227,7 @@ impl Renderer {
         &mut self,
         camera: &Camera,
         (aspect, height): (f32, u32),
-        sun: Vec3,
+        (sun, kept): (Vec3, f32),
         shadow: Option<ShadowView>,
     ) {
         let l = self.lighting;
@@ -259,7 +270,9 @@ impl Renderer {
         let row = |r: glam::Vec3| rgb(r.to_array(), 0.0);
         let globals = Globals {
             sun_dir: rgb(sun.to_array(), 0.0),
-            sun_color: rgb(l.sun_color, 0.0),
+            // What the clouds let through of the sun's light lights
+            // everything, the clouds too (`lighting/clouds/sun_cover.rs`).
+            sun_color: rgb(l.sun_color.map(|c| c * kept), 0.0),
             ambient: rgb(l.ambient, 0.0),
             outdoor_ambient: rgb(l.outdoor_ambient, 0.0),
             fog_color: rgb(l.fog_color, 0.0),
@@ -365,7 +378,8 @@ impl Renderer {
         self.record(&self.world, &mut pass, runs, start, |_, _| {});
     }
 
-    /// The sky, the parts, the effects and the world GUI into the frame.
+    /// The sky and its `clouds` (if any are drawn this frame), the parts,
+    /// the effects and the world GUI into the frame.
     fn main_pass(
         &self,
         encoder: &mut wgpu::CommandEncoder,
@@ -373,6 +387,7 @@ impl Renderer {
         runs: &mut Runs,
         start: usize,
         (ribbons, particles, world_gui): (&[RibbonRun], &[ParticleRun], &WorldRuns),
+        clouds: bool,
     ) {
         profiling::scope!("main pass");
         let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -412,6 +427,10 @@ impl Renderer {
         // any of them draws.
         pass.set_bind_group(2, self.group(&lone_image(None)), &[]);
         self.record_sky(&mut pass);
+        if clouds {
+            self.clouds.draw_over(&mut pass);
+            pass.set_bind_group(2, self.group(&lone_image(None)), &[]);
+        }
         let mut drawn = 0;
         self.record(&self.world, &mut pass, runs, start, |pass, canvases| {
             self.gui.record_world(pass, &world_gui[drawn..canvases]);

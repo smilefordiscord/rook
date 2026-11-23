@@ -14,12 +14,12 @@ mod surfaces;
 mod window_surface;
 
 pub use scene::{
-    AdornShape, Anchor, Atmosphere, Beam, Camera, Curve, Detile, Disc, DiscImage, DrawShape,
-    EffectSlots, Emitter, EmitterLook, EmitterShape, Fidelity, Flipbook, FlipbookMode, FloorWire,
-    Grow, Highlight, ImageHash, ImagePlacement, InOut, Layer, Light, LightShape, Lighting,
-    LocalLight, MapAlpha, MaterialMaps, MeshHash, NightSky, Orientation, PartInstance, RibbonLook,
-    SKYBOX_FACES, Scene, Sequence, Space, Spawn, Stars, TerrainColor, TerrainLook, TerrainVoxels,
-    TextureMode, Tonemapper, Trail, Viewport,
+    AdornShape, Anchor, Atmosphere, Beam, Camera, Clouds, Curve, Detile, Disc, DiscImage,
+    DrawShape, EffectSlots, Emitter, EmitterLook, EmitterShape, Fidelity, Flipbook, FlipbookMode,
+    FloorWire, Grow, Highlight, ImageHash, ImagePlacement, InOut, Layer, Light, LightShape,
+    Lighting, LocalLight, MapAlpha, MaterialMaps, MeshHash, NightSky, Orientation, PartInstance,
+    RibbonLook, SKYBOX_FACES, Scene, Sequence, Space, Spawn, Stars, TerrainColor, TerrainLook,
+    TerrainVoxels, TextureMode, Tonemapper, Trail, Viewport,
 };
 
 // Content hashes are 32 bytes: FxHash keeps lookups by them cheap.
@@ -40,6 +40,7 @@ use batch::*;
 use gpu::pool::{GpuMesh, MeshPool};
 use gpu::*;
 
+pub use lighting::clouds::{CloudNoise, Volume};
 pub use renderer::Renderer;
 pub use window_surface::WindowSurface;
 

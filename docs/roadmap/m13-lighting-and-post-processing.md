@@ -90,8 +90,20 @@ measured twice.
        Lighting, a Sky or an Atmosphere marks the lighting changed, and
        the scene reads the Lighting service again (a handful of
        properties, never the place). A sun or moon image arriving marks it
-       too. Per frame: two quads, `StarCount` tiny quads, and a few terms
+       too, and so does a Clouds in a Terrain, which the scene reads with
+       Lighting. Per frame: two quads, `StarCount` tiny quads, and a few terms
        in the sky and fog; nothing scales with the place.
+   - *So far*: all four parts are built in Studio's forms
+     ([sky](../behavior/lighting/sky.md),
+     [Atmosphere](../behavior/lighting/atmosphere.md),
+     [clouds](../behavior/lighting/clouds.md)). The clouds take all four
+     of Studio's passes, temporal reprojection included (its blend of up
+     to seven frames at where each cloud was), with the install's cloud
+     textures or Rook's own, and nothing drawn or made without Clouds.
+     Left: the Studio captures that set what the CPU feeds the shaders
+     (every Atmosphere and Clouds mapping, the sun and moon's brightness,
+     the night sky's colors), clouds' shadows on the ground, and the sky's
+     extras in reflections.
    - *Done when*: day, dusk and night captures of the Baseplate, with and
      without an Atmosphere and Clouds, match Studio at Automatic and at
      Level21 by the [Match Studio](README.md#match-studio) bar.

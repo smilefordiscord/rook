@@ -54,10 +54,15 @@ fn atmosphere_kept(world: vec3<f32>) -> f32 {
 }
 
 // What the Atmosphere fogs a surface at `world` towards, keeping `kept` of
-// it: the hazed sky behind it, from the reflection cube at level
-// max(blur, kept) × 5 (Studio's surface shaders read their cube so).
+// it: the hazed sky behind it.
 fn atmosphere_fog(world: vec3<f32>, kept: f32) -> vec3<f32> {
-    let d = normalize(world - g.camera_pos.xyz);
+    return atmosphere_fog_toward(normalize(world - g.camera_pos.xyz), kept);
+}
+
+// The hazed sky towards `d` that something keeping `kept` of itself is
+// fogged towards: from the reflection cube at level max(blur, kept) × 5
+// (Studio's surface and cloud shaders read their cube so).
+fn atmosphere_fog_toward(d: vec3<f32>, kept: f32) -> vec3<f32> {
     let level = max(g.atmosphere.y, kept) * 5.0;
     let sky = textureSampleLevel(sky_cube, image_sampler, sky_dir(d), level).rgb * g.sky_tint.rgb;
     return hazed(d, sky + night_sky(d));

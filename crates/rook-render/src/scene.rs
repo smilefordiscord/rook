@@ -23,7 +23,7 @@ pub use emitters::{
 };
 pub use lighting::{LightShape, Lighting, LocalLight, SKYBOX_FACES, Tonemapper};
 pub use ribbons::{Anchor, Beam, FloorWire, RibbonLook, TextureMode, Trail};
-pub use sky::{Atmosphere, Disc, DiscImage, NightSky, Stars};
+pub use sky::{Atmosphere, Clouds, Disc, DiscImage, NightSky, Stars};
 pub use terrain::{TerrainLook, TerrainVoxels};
 
 /// A mesh file, by the BLAKE3 hash of its bytes: parts that use the same

@@ -14,6 +14,7 @@ mod timing;
 use std::sync::Arc;
 
 use super::*;
+use crate::lighting::clouds::GpuClouds;
 use crate::lighting::local::GpuLights;
 use crate::lighting::sky::SkyCube;
 use draws::placement::Placement;
@@ -109,6 +110,8 @@ pub struct Renderer {
     /// Beams and Trails.
     ribbons: GpuRibbons,
     terrain: TerrainLook,
+    /// Terrain's Clouds, and how far the wind has carried them.
+    clouds: GpuClouds,
     /// Seconds on the clock grass sways by ([`Renderer::set_time`]).
     time: f32,
     /// How far water has moved: `WaterWaveSpeed` × seconds, summed as the

@@ -1,5 +1,6 @@
 mod atmosphere;
 mod celestial;
+mod clouds;
 mod local;
 mod sky;
 mod sun;
@@ -96,6 +97,7 @@ fn tonemapper(dom: &Dom, lighting: InstanceId) -> rook_render::Tonemapper {
 impl SceneCache {
     pub(super) fn lighting(&mut self, dom: &Dom) -> Lighting {
         let mut l = lighting(dom);
+        l.clouds = clouds::clouds(dom);
         let sky = sky_of(dom);
         self.sky(dom, sky, &mut l);
         if let Some(id) = dom.find_service("Lighting") {

@@ -203,7 +203,7 @@ impl SceneCache {
     }
 }
 
-fn workspace_terrain(dom: &Dom) -> Option<InstanceId> {
+pub(crate) fn workspace_terrain(dom: &Dom) -> Option<InstanceId> {
     dom.find_service("Workspace")
         .and_then(|ws| dom.find_first_child_of_class(ws, "Terrain"))
 }
