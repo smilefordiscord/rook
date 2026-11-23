@@ -219,6 +219,11 @@ pub(super) fn clear_all_children(lua: &Lua, this: InstanceId, _: &Args) -> ApiRe
 }
 
 pub(super) fn clone(lua: &Lua, this: InstanceId, _: &Args) -> ApiResult<Outcome> {
+    // Measured (Studio 0.748): a GetTextBoundsParams' clone is nil, though
+    // it's Archivable.
+    if with_world(lua, |w| w.dom.class_name(this) == "GetTextBoundsParams") {
+        return Outcome::ret(lua, mlua::Value::Nil);
+    }
     let copy = mutate(lua, |w| Ok(w.dom.clone_instance(this)))?;
     ret_instance(lua, copy)
 }

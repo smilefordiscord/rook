@@ -1,5 +1,5 @@
 //! Text objects' legacy views: `Font` of `FontFace` and `FontSize` of
-//! `TextSize`, and `TextSize`'s limits.
+//! `TextSize`, and `TextSize`'s limits; and GetTextBoundsParams' `Size`.
 
 use rook_types::{enum_of_font, font_from_enum, font_size_of, text_size_of};
 
@@ -49,4 +49,18 @@ pub(super) fn set(
         }
         _ => None,
     }
+}
+
+/// What a GetTextBoundsParams' `Size` keeps of `v`. Measured (Studio
+/// 0.748): anything that isn't a number, nil included, is 0; it's kept
+/// within 1 to 100 and cut to a whole number (1.5 is 1), and NaN is
+/// -2147483648.
+pub(crate) fn params_size(v: &mlua::Value) -> Value {
+    let n = crate::runtime::ctx::args::number_of(v).unwrap_or(0.0);
+    let size = if n.is_nan() {
+        f64::from(i32::MIN)
+    } else {
+        n.clamp(1.0, 100.0).trunc()
+    };
+    Value::Float32(size as f32)
 }

@@ -208,7 +208,7 @@ impl DataModel {
                 Some(r) => {
                     content.fonts.insert(loader.request(r), url);
                 }
-                None => self.runtime.world_mut().gui.font_arrived(&url, None),
+                None => self.runtime.deliver_font(&url, None),
             }
         }
         // Runs that must repeat exactly wait for fonts as for sounds.
@@ -227,7 +227,7 @@ impl DataModel {
                 sounds_done.push((r, outcome));
             } else if let Some(url) = content.fonts.remove(&ticket) {
                 let bytes = outcome.ok().map(|f| f.bytes);
-                self.runtime.world_mut().gui.font_arrived(&url, bytes);
+                self.runtime.deliver_font(&url, bytes);
             }
         }
         self.runtime.deliver_content(&results);

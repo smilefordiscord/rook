@@ -1,0 +1,46 @@
+-- studio 0.748.0.7481526
+-- signals: deferred
+defaults "" 20 0 false true nil
+default font rbxasset://fonts/families/SourceSansPro.json Enum.FontWeight.Regular Enum.FontStyle.Normal false
+default font equals true
+same font each read true
+Size 0 ok number 1
+Size -1 ok number 1
+Size 1.5 ok number 1
+Size 1000 ok number 100
+Size 1e9 ok number 100
+Size nan ok number -2147483648
+Size string number ok number 12
+Size string ok number 1
+Size nil ok number 1
+Width -5 ok number -5
+Width 2.5 ok number 2.5
+Width inf ok number inf
+Width string ok number 0
+Text number ok string 5
+Text nil error Unable to assign property Text. string expected, got nil
+Text table error Unable to assign property Text. string expected, got table
+RichText 1 ok boolean true
+RichText nil ok boolean false
+RichText string ok boolean true
+Font enum error Unable to assign property Font. Font expected, got EnumItem
+Font string error Unable to assign property Font. Font expected, got string
+Font nil error Unable to assign property Font. Font expected, got nil
+Font fromName ok Font rbxasset://fonts/families/Arial.json
+unknown member error Foo is not a valid member of GetTextBoundsParams "Instance"
+TextSize member error TextSize is not a valid member of GetTextBoundsParams "Instance"
+rich bad tag error Error parsing rich text
+bad font id error Request asset was not found
+GetTextSize agrees true
+GetTextSize wraps agrees true
+GetTextSize bad font name error Unable to cast string to Font
+GetTextSize no frame error Argument 4 missing or nil
+GetTextSize frame table error Unable to cast Array to Vector2
+GetTextSize no text error Argument 1 missing or nil
+GetTextSize no args error Argument 4 missing or nil
+number error Unable to cast value to Object
+table error Unable to cast value to Object
+TextLabel error Argument 1 is invalid: expected 'GetTextBoundsParams' instance type
+Font error Unable to cast value to Object
+dot call error Expected ':' not '.' calling member function GetTextBoundsAsync
+cloned params nil

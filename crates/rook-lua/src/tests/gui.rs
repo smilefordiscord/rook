@@ -2,3 +2,4 @@
 
 mod core_scripts;
 mod objects;
+mod text;

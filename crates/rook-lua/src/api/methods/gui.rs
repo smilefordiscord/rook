@@ -5,7 +5,7 @@ use crate::api::methods::{RawMethod, first, mutate, ret_instances, true_};
 mod path;
 pub(crate) mod screen;
 mod styles;
-mod text;
+pub(crate) mod text;
 pub(crate) mod text_chat;
 pub(crate) mod textbox;
 

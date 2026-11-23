@@ -209,6 +209,24 @@ impl Fonts {
         picked
     }
 
+    /// Whether `font`'s own face, not the default family's, could be had,
+    /// once nothing it needs is on its way: an install file that isn't
+    /// there and an asset that failed fail differently. With no default
+    /// family either (no install to read), no font is to blame.
+    pub(crate) fn own_face(&mut self, font: &Font) -> Result<(), super::TextFailure> {
+        let legacy = font.family.ends_with(LEGACY_FAMILY);
+        if self.pick_in(&font.family, font, legacy).is_some()
+            || self.pick_in(FALLBACK_FAMILY, font, false).is_none()
+        {
+            return Ok(());
+        }
+        Err(if is_local(&font.family) {
+            super::TextFailure::MissingFile
+        } else {
+            super::TextFailure::MissingAsset
+        })
+    }
+
     fn pick_in(&mut self, family: &str, font: &Font, legacy: bool) -> Option<FaceId> {
         let url = stand_in(family);
         let listed = self.family(&url)?;
