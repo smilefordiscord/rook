@@ -296,3 +296,33 @@ fn the_menu_blocks_clicks_to_the_game() {
     let said = lines(session.client(index).unwrap());
     assert_eq!(said, ["clicked", "opened true", "closed false", "clicked"]);
 }
+
+/// The open menu shows its own cursor over one a game hid, with
+/// `MouseIconEnabled` or a blank `MouseIcon` (RoStrike), as Roblox's does,
+/// and the game's comes back once it's closed.
+#[test]
+fn open_menu_shows_a_hidden_cursor() {
+    let (mut session, index) = menu_session();
+    let blank = "rbxassetid://1";
+    let look = |session: &Session| session.client(index).unwrap().cursor_look();
+    let set = |session: &Session, name: &str, value: rook_types::Value| {
+        let client = session.client(index).unwrap();
+        let mut w = client.runtime.world_mut();
+        let uis = w.dom.find_service("UserInputService").unwrap();
+        w.dom.set_property_by_name(uis, name, value).unwrap();
+    };
+    set(&session, "MouseIconEnabled", rook_types::Value::Bool(false));
+    assert!(matches!(look(&session), crate::CursorLook::Hidden));
+    press(&mut session, index, "Escape");
+    assert!(!matches!(look(&session), crate::CursorLook::Hidden));
+    press(&mut session, index, "Escape");
+    assert!(matches!(look(&session), crate::CursorLook::Hidden));
+
+    set(&session, "MouseIconEnabled", rook_types::Value::Bool(true));
+    set(&session, "MouseIconContent", rook_types::Value::ContentId(blank.into()));
+    assert!(matches!(look(&session), crate::CursorLook::Image(url) if url == blank));
+    press(&mut session, index, "Escape");
+    assert!(matches!(look(&session), crate::CursorLook::Image(url) if url != blank));
+    press(&mut session, index, "Escape");
+    assert!(matches!(look(&session), crate::CursorLook::Image(url) if url == blank));
+}

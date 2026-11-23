@@ -105,6 +105,10 @@ shows its default and warns, rather than stopping the menu.
   menu does, and W, A, S, D, Space and the arrow keys are kept from the
   game's ContextActionService bindings (a core action at priority 3000
   that sinks them). UserInputService still hears them, as in Roblox.
+- While the menu is open its own cursor shows, whatever the game set:
+  `MouseIconEnabled` off or a `MouseIcon` (often a blank image, to hide
+  it) are the game's again once it closes (Roblox's menu forces the
+  cursor shown).
 
 ## What games see
 

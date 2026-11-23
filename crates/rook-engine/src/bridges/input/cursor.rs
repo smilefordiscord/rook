@@ -42,23 +42,32 @@ impl DataModel {
     /// What the cursor shows: none with `UserInputService.MouseIconEnabled`
     /// off, else `UserInputService.MouseIcon`, else a held Tool's Mouse's
     /// `Icon`, else the PlayerMouse's (Inference: UserInputService's wins
-    /// when both are set). Else
+    /// when both are set). The open menu skips the game's say: its own
+    /// cursor shows over it, as Roblox's menu forces it shown
+    /// (`OverrideMouseIconBehavior` ForceShow), so a game that hides the
+    /// cursor with a blank icon still gets one there. Else
     /// Roblox's hand over a GUI button, the ClickDetector hand over a
     /// ClickDetector (Observed live), an I-beam over a TextBox
     /// (Inference), or Roblox's arrow (docs/behavior/gui/input.md#the-cursor).
     pub fn cursor_look(&self) -> CursorLook {
         let w = self.runtime.world();
-        let uis = w.dom.find_service("UserInputService");
-        if uis.is_some_and(|u| w.dom.bool_property(u, "MouseIconEnabled") == Some(false)) {
-            return CursorLook::Hidden;
-        }
-        let mice = (w.input.tool_mice.iter().map(|&(_, m)| m)).chain(w.input.mouse_object);
-        let icons = (uis
-            .and_then(|u| w.dom.content_property(u, "MouseIconContent"))
-            .into_iter())
-        .chain(mice.filter_map(|m| w.dom.content_property(m, "IconContent")));
-        if let Some(url) = icons.into_iter().find(|url| !url.is_empty()) {
-            return CursorLook::icon(url);
+        let menu_open = w
+            .dom
+            .find_service("GuiService")
+            .is_some_and(|g| w.dom.bool_property(g, "MenuIsOpen") == Some(true));
+        if !menu_open {
+            let uis = w.dom.find_service("UserInputService");
+            if uis.is_some_and(|u| w.dom.bool_property(u, "MouseIconEnabled") == Some(false)) {
+                return CursorLook::Hidden;
+            }
+            let mice = (w.input.tool_mice.iter().map(|&(_, m)| m)).chain(w.input.mouse_object);
+            let icons = (uis
+                .and_then(|u| w.dom.content_property(u, "MouseIconContent"))
+                .into_iter())
+            .chain(mice.filter_map(|m| w.dom.content_property(m, "IconContent")));
+            if let Some(url) = icons.into_iter().find(|url| !url.is_empty()) {
+                return CursorLook::icon(url);
+            }
         }
         let image = match self.hovered_press_target() {
             Some(id) if w.dom.is_a(id, "TextBox") => IBEAM,
