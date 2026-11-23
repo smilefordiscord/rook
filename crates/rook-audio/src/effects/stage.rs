@@ -14,6 +14,8 @@ pub(super) enum Stage {
     Echo(echo::Echo),
     Compressor(compressor::Compressor),
     Fader(f32),
+    Flange(flange::Flanger),
+    Tremolo(tremolo::State),
 }
 
 impl Stage {
@@ -44,6 +46,12 @@ impl Stage {
                 effect.compressor().expect("a compressor"),
             )),
             Effect::Fader { volume } => Self::Fader(volume),
+            Effect::Flange {
+                delay,
+                mix,
+                rate: r,
+            } => Self::Flange(flange::Flanger::new(rate, delay, mix, r)),
+            Effect::Tremolo(t) => Self::Tremolo(tremolo::State::new(rate, t)),
         }
     }
 
@@ -81,6 +89,8 @@ impl Stage {
                 None => return false,
             },
             (Self::Fader(v), Effect::Fader { volume }) => *v = volume,
+            (Self::Flange(f), Effect::Flange { delay, mix, rate }) => f.set(delay, mix, rate),
+            (Self::Tremolo(s), Effect::Tremolo(t)) => s.set(t),
             _ => return false,
         }
         true
@@ -101,6 +111,8 @@ impl Stage {
                     *s *= v;
                 }
             }
+            Self::Flange(f) => f.process(frames),
+            Self::Tremolo(s) => s.process(frames),
         }
     }
 
@@ -112,6 +124,7 @@ impl Stage {
             Self::PitchShift(p) => p.latency(),
             Self::Chorus(c) => c.latency(),
             Self::Echo(e) => e.tail(),
+            Self::Flange(f) => f.latency(),
             _ => 0,
         }
     }

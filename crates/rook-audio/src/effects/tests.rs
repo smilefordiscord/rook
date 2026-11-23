@@ -39,3 +39,26 @@ fn keeps_state_across_settings() {
     chain.sync(&[DIST]);
     assert!(matches!(chain.stages[0], Stage::Distortion(_)));
 }
+
+/// A script's new setting reaches a running effect without restarting
+/// it: a tremolo half a cycle in carries on from its trough.
+#[test]
+fn new_effects_take_settings_in_place() {
+    let mut chain = Chain::new(crate::SAMPLE_RATE);
+    chain.sync(&[Effect::Tremolo(Tremolo::default())]);
+    let mut frames = vec![[1.0, 1.0]; crate::SAMPLE_RATE as usize / 10];
+    chain.process(&mut frames);
+    chain.sync(&[Effect::Tremolo(Tremolo {
+        depth: 0.5,
+        ..Tremolo::default()
+    })]);
+    let mut next = [[1.0, 1.0]];
+    chain.process(&mut next);
+    assert!((next[0][0] - 0.5).abs() < 0.01, "{:?}", next[0]);
+    let flange = |delay, mix, rate| Effect::Flange { delay, mix, rate };
+    let mut stage = Stage::new(&flange(0.01, 0.5, 1.0), crate::SAMPLE_RATE as f32);
+    assert!(
+        stage.set(&flange(0.02, 0.8, 2.0)),
+        "a flange is taken in place"
+    );
+}
