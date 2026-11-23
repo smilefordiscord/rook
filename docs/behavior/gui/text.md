@@ -159,9 +159,12 @@ top bar's buttons and a ScreenGui at DisplayOrder -1000 alike.
 TextService measures text as a TextLabel lays it out, its `TextBounds`
 for the same text, font and size (Inference: creator-docs give only the
 members' signatures). Measured in Studio 0.748 on 2026-11-23 by the
-conformance case `scripting/text_service`: what's marked Confirmed is
-from it; its bounds for 18 built-in fonts differ from Rook's by the
-glyph advances under [Widths](#widths), so Rook doesn't pass it whole.
+conformance cases `scripting/text_service` and
+`scripting/text_service_widths`: what's marked Confirmed is from them.
+The second holds the bounds themselves, for 18 built-in fonts and more;
+they differ from Rook's by the glyph advances under [Widths](#widths), so
+it has no expectation file, and Studio's output is kept in it as a
+comment.
 
 - **`GetTextSize(text, size, font, frameSize)`** takes an `Enum.Font`
   and answers at once, in whatever fonts have loaded. Confirmed: it
@@ -201,3 +204,9 @@ glyph advances under [Widths](#widths), so Rook doesn't pass it whole.
 
 `TextTruncate`, `TextDirection`, `OpenTypeFeatures`, localization, and
 fonts' own fallbacks for characters a face lacks (emoji, CJK).
+
+TextService's bounds as Studio measures them, in conformance case
+`scripting/text_service_widths`: the built-in fonts' glyph widths, the
+emoji fallback's width, a carriage return's width, and `GetTextSize`'s
+width at size 0 or less. The case has no expectation file; Studio's
+output is kept in it as a comment.
