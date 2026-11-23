@@ -91,9 +91,12 @@ fn copied(lua: &Lua, v: &LuaValue) -> ApiResult<LuaValue> {
 
 /// Teleport data as it crosses to the destination: sent as remote
 /// arguments are, with instances removed and an error in the output
-/// (creator-docs TeleportOptions:SetTeleportData).
-fn carried(lua: &Lua, data: &LuaValue) -> NetValue {
-    let mut sent = to_net(data, 0);
+/// (creator-docs TeleportOptions:SetTeleportData). Fails as a remote's
+/// arguments do on a table that can't be sent.
+fn carried(lua: &Lua, data: &LuaValue) -> ApiResult<NetValue> {
+    let mut sent = to_net(lua, std::slice::from_ref(data))?
+        .pop()
+        .unwrap_or(NetValue::Nil);
     let before = sent.clone();
     sent.map_instances(&|_| None);
     if sent != before {
@@ -104,7 +107,7 @@ fn carried(lua: &Lua, data: &LuaValue) -> NetValue {
             );
         });
     }
-    sent
+    Ok(sent)
 }
 
 /// A legacy method's `teleportData`, which may be nil.
@@ -112,7 +115,7 @@ fn data_argument(lua: &Lua, v: &LuaValue) -> ApiResult<Option<NetValue>> {
     if v.is_nil() {
         return Ok(None);
     }
-    Ok(Some(carried(lua, &copied(lua, v)?)))
+    Ok(Some(carried(lua, &copied(lua, v)?)?))
 }
 
 /// The routing a TeleportOptions sets. Confirmed (Studio 0.748): more than
@@ -195,7 +198,8 @@ fn teleport_async(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
     let players = group(lua, players)?;
     let data = options
         .and_then(|o| with_world(lua, |w| w.teleports.options_data.get(&o).cloned()))
-        .map(|d| carried(lua, &d));
+        .map(|d| carried(lua, &d))
+        .transpose()?;
     let request = TeleportRequest {
         players,
         place_id,
@@ -464,7 +468,7 @@ fn local_player_teleport_data(lua: &Lua, _: InstanceId, _: &Args) -> ApiResult<O
 fn set_teleport_setting(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
     let value = copied(lua, a.variant(1)?)?;
     let key = a.string(0)?;
-    let value = carried(lua, &value);
+    let value = carried(lua, &value)?;
     with_world(lua, |w| w.teleports.arrival.settings.insert(key, value));
     Outcome::ret(lua, ())
 }
