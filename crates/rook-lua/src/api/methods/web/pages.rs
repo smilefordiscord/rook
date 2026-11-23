@@ -1,14 +1,15 @@
-//! Pages objects for the members that list in pages:
-//! `Pages:GetCurrentPage`, `AdvanceToNextPageAsync` and `IsFinished`
-//! (creator-docs Pages). Each object keeps its current page and where the
-//! next one comes from, fetched when the script advances.
+//! Pages objects for the members that list in pages, other than data
+//! stores': `Pages:GetCurrentPage`, `AdvanceToNextPageAsync` and
+//! `IsFinished` (creator-docs Pages). Each object keeps its current page
+//! and where the next one comes from, fetched when the script advances.
+//! The methods are registered with the data stores' pages, which hand
+//! these here.
 
 use mlua::Lua;
 use rook_dom::InstanceId;
 use rook_types::Value;
 use serde_json::{Value as Json, json};
 
-use super::RawMethod;
 use super::http::from_json;
 use crate::api::instance::push_instance;
 use crate::api::methods::mutate;
@@ -16,14 +17,6 @@ use crate::memory_stores::Time;
 use crate::runtime::ctx::args::Args;
 use crate::runtime::ctx::{ApiResult, Outcome, ScriptError, with_world};
 use crate::runtime::world::World;
-
-pub(super) fn native(owner: &str, name: &str) -> Option<RawMethod> {
-    Some(match (owner, name) {
-        ("Pages", "GetCurrentPage") => current_page,
-        ("Pages", "AdvanceToNextPageAsync") => advance,
-        _ => return None,
-    })
-}
 
 /// Where a page comes from.
 #[derive(Debug, Clone, PartialEq)]
@@ -84,17 +77,23 @@ pub(crate) fn create(lua: &Lua, class: &str, source: Source) -> ApiResult<Outcom
     Outcome::ret(lua, push_instance(lua, id)?)
 }
 
-fn current_page(lua: &Lua, this: InstanceId, _: &Args) -> ApiResult<Outcome> {
+pub(crate) fn current_page(lua: &Lua, this: InstanceId, _: &Args) -> ApiResult<Outcome> {
     let page = with_world(lua, |w| w.pages.get(&this).map(|p| p.current.clone()));
+    let Some(page) = page else {
+        let class = with_world(lua, |w| w.dom.class_name(this).to_owned());
+        return Err(ScriptError(format!(
+            "{class}:GetCurrentPage is not implemented in Rook yet"
+        )));
+    };
     let list = lua.create_table()?;
-    for entry in page.unwrap_or_default() {
+    for entry in page {
         list.raw_push(from_json(lua, &entry)?)?;
     }
     Outcome::ret(lua, list)
 }
 
 /// The error past the last page is Inference.
-fn advance(lua: &Lua, this: InstanceId, _: &Args) -> ApiResult<Outcome> {
+pub(crate) fn advance(lua: &Lua, this: InstanceId, _: &Args) -> ApiResult<Outcome> {
     let next = with_world(lua, |w| w.pages.get_mut(&this).and_then(|p| p.next.take()));
     let Some(source) = next else {
         return Err(ScriptError("No pages to advance to".into()));

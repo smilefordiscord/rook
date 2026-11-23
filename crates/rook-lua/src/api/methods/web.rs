@@ -28,7 +28,6 @@ pub(super) fn native(owner: &str, name: &str) -> Option<RawMethod> {
             filtering::native,
             memory_stores::native,
             messaging::native,
-            pages::native,
         ],
         owner,
         name,

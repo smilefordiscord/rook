@@ -118,8 +118,8 @@ struct Request {
 }
 
 /// A request's arguments checked, and what it spends; `None` for a read
-/// the cache answers. Advancing pages is a request of the method they came
-/// from.
+/// the cache answers, or pages that aren't a data store's. Advancing pages
+/// is a request of the method they came from.
 fn request(
     lua: &Lua,
     method: &'static str,
@@ -128,7 +128,9 @@ fn request(
 ) -> ApiResult<Option<Request>> {
     let (endpoint, standard, key, count) = match method {
         "AdvanceToNextPageAsync" => {
-            let (listing, finished) = pages::listing_of(lua, this)?;
+            let Some((listing, finished)) = pages::listing_of(lua, this) else {
+                return Ok(None);
+            };
             if finished {
                 return Err(StoreError::NoMorePages.into());
             }
