@@ -822,3 +822,74 @@ fn nan_sizes_read_as_nothing_and_settle() {
         .collect();
     assert_eq!(moved, Vec::<&str>::new());
 }
+
+/// What doesn't move anything lays nothing out: an image arriving (only
+/// drawn again, `IsLoaded` turning true), a ZIndex, a ScreenGui's
+/// `DisplayOrder`, or what input alone goes by (`ElasticBehavior`,
+/// `ClearTextOnFocus`).
+#[test]
+fn changes_that_move_nothing_lay_nothing_out() {
+    use rook_types::Content;
+    use rook_types::counters::{Counter, take_local};
+    const URL: &str = "rbxasset://textures/test.png";
+    let (mut dom, b) = boxed();
+    let screen = dom.parent(b).unwrap();
+    let image = child(
+        &mut dom,
+        "ImageLabel",
+        b,
+        &[("ImageContent", Value::Content(Content::from_uri(URL)))],
+    );
+    let scroller = child(&mut dom, "ScrollingFrame", b, &[]);
+    let typed = child(&mut dom, "TextBox", b, &[]);
+    let mut gui = laid_out(&mut dom);
+    drawn(&mut gui, &dom);
+    assert!(gui.take_image_requests().iter().any(|u| u == URL));
+    let arrived = crate::GuiImage {
+        hash: [1; 32],
+        width: 64,
+        height: 48,
+    };
+    gui.image_arrived(URL, Some(arrived));
+    set(&mut dom, image, "ZIndex", Value::Int32(4));
+    set(&mut dom, screen, "DisplayOrder", Value::Int32(3));
+    set_enum(&mut dom, scroller, "ElasticBehavior", "Never");
+    set(&mut dom, typed, "ClearTextOnFocus", Value::Bool(false));
+    take_local();
+    gui.sync(&mut dom);
+    assert_eq!(take_local()[Counter::GuiNodesLaidOut], 0);
+    assert_eq!(dom.bool_property(image, "IsLoaded"), Some(true));
+    let fresh = drawn(&mut laid_out(&mut dom), &dom);
+    assert_eq!(drawn(&mut gui, &dom), fresh);
+}
+
+/// GUI built a piece at a time (a frame parented in, then what it holds,
+/// in one go) lays out from the nearest object above already laid out,
+/// not its whole ScreenGui, and lands where a fresh layout puts it.
+#[test]
+fn gui_built_in_pieces_lays_out_from_what_holds_it() {
+    use rook_types::counters::{Counter, take_local};
+    let (mut dom, b) = boxed();
+    let screen = dom.parent(b).unwrap();
+    for _ in 0..20 {
+        frame(&mut dom, screen, udim2(0.0, 10, 0.0, 10));
+    }
+    let mut gui = laid_out(&mut dom);
+    let page = frame(&mut dom, b, udim2(0.5, 0, 0.5, 0));
+    set(&mut dom, page, "Position", udim2(0.0, 20, 0.0, 30));
+    let row = frame(&mut dom, page, udim2(1.0, 0, 0.0, 40));
+    let label = child(
+        &mut dom,
+        "TextLabel",
+        row,
+        &[("Size", udim2(0.5, 0, 1.0, 0))],
+    );
+    take_local();
+    gui.sync(&mut dom);
+    // The box, the page, its row and the row's label.
+    assert_eq!(take_local()[Counter::GuiNodesLaidOut], 4);
+    let moved = [page, row, label].map(|id| rect(&dom, id, b));
+    laid_out(&mut dom);
+    assert_eq!([page, row, label].map(|id| rect(&dom, id, b)), moved);
+    near(moved[2], ([20.0, 30.0], [100.0, 40.0]));
+}

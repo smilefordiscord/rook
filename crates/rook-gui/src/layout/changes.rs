@@ -146,7 +146,6 @@ impl Layout {
             };
             if !self.placed.contains_key(&id)
                 || !self.placed.contains_key(&parent)
-                || dom.class_name(parent) == "ScrollingFrame"
                 || arranger(dom, parent).is_some()
                 || dom
                     .enum_item_property(parent, "AutomaticSize")
@@ -160,6 +159,12 @@ impl Layout {
                 .is_some_and(|l| dom.class_name(l) == "UITableLayout");
             if table {
                 return false;
+            }
+            // A ScrollingFrame places what it holds on its canvas, which
+            // grows to hold it only when automatic.
+            if dom.class_name(parent) == "ScrollingFrame" {
+                return self.scrolls.contains_key(&parent)
+                    && dom.enum_item_property(parent, "AutomaticCanvasSize") == Some("None");
             }
             // A ScrollingFrame's automatic canvas reaches what all its
             // GUI holds, up to the next ScrollingFrame in.

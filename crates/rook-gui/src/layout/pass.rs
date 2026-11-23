@@ -223,7 +223,10 @@ impl<'a> Pass<'a> {
         let Some(&at) = self.out.placed.get(&parent) else {
             return;
         };
-        let inner = padding::inner(dom, parent, at.local);
+        let inner = match self.out.scrolls.get(&parent) {
+            Some(scroll) => scrolling::inner(dom, parent, scroll),
+            None => padding::inner(dom, parent, at.local),
+        };
         self.place_children(at, &[id], inner, None);
     }
 

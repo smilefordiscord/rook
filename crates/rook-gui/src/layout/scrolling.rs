@@ -5,7 +5,8 @@
 use glam::Vec2;
 use rook_dom::{Dom, InstanceId};
 
-use super::{Pass, Placed, arranger, gui_children, padding, resolve, visible};
+use super::{Layout, Pass, Placed, arranger, gui_children, padding, resolve, turn, visible};
+use crate::world;
 
 /// A ScrollingFrame as laid out, in its own pixels (before UIScales).
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -85,6 +86,47 @@ impl Scroll {
     }
 }
 
+impl Layout {
+    /// Move what ScrollingFrame `id`'s canvas holds to its
+    /// `CanvasPosition` as it is now, kept within the canvas. Its canvas
+    /// and window are as they were, so everything in it moves by the same
+    /// amount and nothing in it is laid out again. Returns what moved, or
+    /// `None` where it must be laid out again instead (it isn't laid out,
+    /// or something in it is NaN).
+    pub(crate) fn scroll(&mut self, dom: &Dom, id: InstanceId) -> Option<Vec<InstanceId>> {
+        let at = *self.placed.get(&id)?;
+        let scroll = self.scrolls.get_mut(&id)?;
+        let requested = dom
+            .vector2_property(id, "CanvasPosition")
+            .map_or(Vec2::ZERO, |v| v.0);
+        if requested.is_nan() || scroll.window.is_nan() || !at.center.is_finite() {
+            return None;
+        }
+        let before = scroll.origin();
+        // As [`Settings::scroll`] keeps it.
+        scroll.position = requested.clamp(Vec2::ZERO, scroll.reach());
+        let by = scroll.origin() - before;
+        let mut moved = Vec::new();
+        if by == Vec2::ZERO {
+            return Some(moved);
+        }
+        let by = turn(at.rotation, by * at.scale);
+        // World GUIs inside are trees of their own, laid out on their part.
+        let held = |d: InstanceId| {
+            (dom.children(d).iter().copied()).filter(|&c| !world::is_world_gui(dom, c))
+        };
+        let mut stack: Vec<InstanceId> = held(id).collect();
+        while let Some(d) = stack.pop() {
+            if let Some(placed) = self.placed.get_mut(&d) {
+                placed.center += by;
+                moved.push(d);
+            }
+            stack.extend(held(d));
+        }
+        Some(moved)
+    }
+}
+
 /// Lay out a ScrollingFrame placed `at` (its `CanvasSize` scales with
 /// `area`, its parent's) and what its canvas holds.
 pub(super) fn lay_out(pass: &mut Pass<'_>, id: InstanceId, at: Placed, area: Vec2) {
@@ -117,9 +159,15 @@ fn place(pass: &mut Pass<'_>, id: InstanceId, at: Placed, kids: &[InstanceId], s
         return;
     }
     let dom = pass.dom;
+    pass.place_children(at, kids, inner(dom, id, scroll), arranger(dom, id));
+}
+
+/// The area ScrollingFrame `id` places its children in: its canvas
+/// inside the padding, where it's scrolled to.
+pub(super) fn inner(dom: &Dom, id: InstanceId, scroll: &Scroll) -> padding::Inner {
     let mut inner = padding::inner(dom, id, scroll.canvas);
     inner.origin += scroll.origin();
-    pass.place_children(at, kids, inner, arranger(dom, id));
+    inner
 }
 
 /// The far corner of what `id`'s visible descendants cover, from its

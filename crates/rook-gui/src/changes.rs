@@ -18,6 +18,13 @@ pub(crate) struct Watch {
     /// `Workspace.CurrentCamera`, which camera's it is.
     viewport: Option<PropertyId>,
     current_camera: Option<PropertyId>,
+    /// `ScrollingFrame.CanvasPosition`: what the canvas holds moves, all
+    /// of it by the same amount.
+    canvas_position: Option<PropertyId>,
+    /// Properties that change the order things draw and take input in
+    /// (`ZIndex`, a ScreenGui's `DisplayOrder` and `ZIndexBehavior`), which
+    /// layout never reads: the tree stacks again.
+    stacking: Vec<PropertyId>,
     /// Properties that change only the drawing, which layout never
     /// reads: colors and transparencies scripts tween, the UI components
     /// drawn on a quad, and what input sets (`GuiState`, for
@@ -56,6 +63,12 @@ pub(crate) enum Touch {
     Text,
     /// Where the changed object and what it holds are.
     Place,
+    /// Where the changed ScrollingFrame's canvas is: what it holds moves
+    /// as one.
+    Scroll,
+    /// The order the changed object's tree stacks in: it stacks again,
+    /// laid out as it was.
+    Stack,
     /// What the changed object holds or shows, or a UI component's
     /// property: where things are from the nearest object whose place
     /// doesn't depend on it, and how it looks.
@@ -83,6 +96,15 @@ impl Watch {
             message: class("Message"),
             viewport: property("Camera", "ViewportSize"),
             current_camera: property("Workspace", "CurrentCamera"),
+            canvas_position: property("ScrollingFrame", "CanvasPosition"),
+            stacking: [
+                ("GuiObject", "ZIndex"),
+                ("LayerCollector", "ZIndexBehavior"),
+                ("ScreenGui", "DisplayOrder"),
+            ]
+            .into_iter()
+            .filter_map(|(owner, name)| property(owner, name))
+            .collect(),
             looks: [
                 ("GuiObject", "BackgroundColor3"),
                 ("GuiObject", "BackgroundTransparency"),
@@ -130,6 +152,14 @@ impl Watch {
             .collect(),
             inert: [
                 ("Instance", "Archivable"),
+                // What input and focus go by, read as they are.
+                ("ScrollingFrame", "ElasticBehavior"),
+                ("ScrollingFrame", "ScrollingEnabled"),
+                ("TextBox", "ClearTextOnFocus"),
+                ("TextBox", "MultiLine"),
+                ("TextBox", "TextEditable"),
+                ("LayerCollector", "ResetOnSpawn"),
+                ("ScreenGui", "ClipToDeviceSafeArea"),
                 ("GuiObject", "Active"),
                 ("GuiObject", "Draggable"),
                 ("GuiObject", "Selectable"),
@@ -183,8 +213,12 @@ impl Watch {
                 ("ImageButton", "ImageContent"),
                 ("TextBox", "PlaceholderText"),
                 ("ScrollingFrame", "CanvasSize"),
-                ("ScrollingFrame", "CanvasPosition"),
                 ("ScrollingFrame", "AutomaticCanvasSize"),
+                ("ScrollingFrame", "ScrollBarThickness"),
+                ("ScrollingFrame", "ScrollingDirection"),
+                ("ScrollingFrame", "VerticalScrollBarInset"),
+                ("ScrollingFrame", "HorizontalScrollBarInset"),
+                ("ScrollingFrame", "VerticalScrollBarPosition"),
             ]
             .into_iter()
             .chain(
@@ -226,6 +260,10 @@ impl Watch {
             Change::Property { property, .. } if self.places.contains(property) => Touch::Place,
             Change::Property { property, .. } if Some(*property) == self.parent => Touch::Nothing,
             Change::Property { id, .. } if !self.is_gui(dom, *id) => Touch::Nothing,
+            Change::Property { property, .. } if Some(*property) == self.canvas_position => {
+                Touch::Scroll
+            }
+            Change::Property { property, .. } if self.stacking.contains(property) => Touch::Stack,
             Change::Property { property, .. } if self.contents.contains(property) => Touch::Content,
             Change::Property { id, .. } if self.is_component(dom, *id) => Touch::Content,
             Change::Property { .. } => Touch::Layout,
@@ -338,11 +376,13 @@ impl Gui {
                         subtree: subtree.clone(),
                     }),
                     (Touch::Layout, Change::Property { id, .. }) => _ = self.changed.insert(*id),
+                    (Touch::Stack, Change::Property { id, .. }) => _ = self.stacked.insert(*id),
                     (Touch::Place, Change::Property { id, .. }) => _ = self.shifted.insert(*id),
                     (Touch::Content, Change::Property { id, .. }) => {
                         self.shifted.insert(*id);
                         self.restyled.insert(*id);
                     }
+                    (Touch::Scroll, Change::Property { id, .. }) => _ = self.scrolled.insert(*id),
                     (Touch::Look, Change::Property { id, .. }) => _ = self.restyled.insert(*id),
                     (Touch::Text, Change::Property { id, .. }) => _ = self.retexted.insert(*id),
                     _ => {}
@@ -400,7 +440,13 @@ impl Gui {
             let Some(&root) = subtree.first() else {
                 continue;
             };
-            match dom.parent(root).filter(|&p| placed(p)) {
+            // Joining GUI not laid out yet (built a piece at a time, a
+            // frame parented in and then what it holds), it lays out from
+            // the nearest object above that is, which holds it all.
+            let host = std::iter::successors(dom.parent(root), |&p| dom.parent(p))
+                .take_while(|&p| dom.is_a(p, "GuiObject") || dom.class_name(p) == "Folder")
+                .find(|&p| placed(p));
+            match host {
                 Some(p) => _ = self.shifted.insert(p),
                 None => trees.extend(layout::top_of(dom, root).filter(|&top| {
                     layout::on_screen(dom, top) || client && self.in_world.contains(&top)

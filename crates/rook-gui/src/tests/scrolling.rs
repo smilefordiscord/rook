@@ -167,3 +167,137 @@ fn automatic_canvas_size_with_a_list() {
     laid_out(&mut dom);
     near(sizes(&dom, f), ([188.0, 100.0], [200.0, 320.0]));
 }
+
+/// Every GUI object's `AbsolutePosition` under `top`.
+fn positions(dom: &Dom, top: InstanceId) -> Vec<(InstanceId, Vec2)> {
+    (dom.descendants(top).into_iter())
+        .filter(|&d| dom.is_a(d, "GuiObject"))
+        .map(|d| (d, vec2_of(dom, d, "AbsolutePosition")))
+        .collect()
+}
+
+/// A moved canvas moves what it holds as it was laid out: everything ends
+/// where laying it all out again puts it, drawn there too, inside turned
+/// and scaled frames, a UI layout and a ScrollingFrame within.
+#[test]
+fn a_moved_canvas_lands_where_a_fresh_layout_puts_it() {
+    let (mut dom, held) = boxed();
+    set(&mut dom, held, "Rotation", Value::Float32(15.0));
+    child(&mut dom, "UIScale", held, &[("Scale", Value::Float32(1.5))]);
+    let f = child(
+        &mut dom,
+        "ScrollingFrame",
+        held,
+        &[
+            ("Size", udim2(0.0, 200, 0.0, 100)),
+            ("Position", udim2(0.0, 10, 0.0, 10)),
+            canvas(300, 600),
+        ],
+    );
+    child(&mut dom, "UIListLayout", f, &[]);
+    for _ in 0..5 {
+        let row = frame(&mut dom, f, udim2(1.0, 0, 0.0, 50));
+        child(
+            &mut dom,
+            "TextLabel",
+            row,
+            &[("Size", udim2(0.5, 0, 1.0, 0))],
+        );
+    }
+    let inner = child(
+        &mut dom,
+        "ScrollingFrame",
+        f,
+        &[("Size", udim2(1.0, 0, 0.0, 80)), canvas(0, 400)],
+    );
+    let deep = frame(&mut dom, inner, udim2(0.0, 40, 0.0, 40));
+    set(&mut dom, deep, "Position", udim2(0.0, 5, 0.0, 300));
+    let mut gui = laid_out(&mut dom);
+    // Whole pixels, a fraction, past the end, the inner one alone, and
+    // both at once.
+    let moves: &[&[(InstanceId, [f32; 2])]] = &[
+        &[(f, [0.0, 120.0])],
+        &[(f, [30.5, 47.4])],
+        &[(f, [9000.0, 9000.0])],
+        &[(inner, [0.0, 250.0])],
+        &[(f, [12.0, 3.0]), (inner, [0.0, 10.0])],
+    ];
+    for &step in moves {
+        for &(id, [x, y]) in step {
+            set(&mut dom, id, "CanvasPosition", v2(x, y));
+        }
+        gui.sync(&mut dom);
+        let moved = (positions(&dom, held), drawn(&mut gui, &dom));
+        let mut fresh = laid_out(&mut dom);
+        let again = (positions(&dom, held), drawn(&mut fresh, &dom));
+        for ((id, got), (_, want)) in moved.0.iter().zip(&again.0) {
+            assert!(
+                got.abs_diff_eq(*want, 1e-3),
+                "{step:?}: {id:?} at {got}, fresh {want}"
+            );
+        }
+        assert_eq!(moved.1.len(), again.1.len(), "{step:?}");
+        for (got, want) in moved.1.iter().zip(&again.1) {
+            // Moved rather than placed under a turn: within rounding.
+            assert!(got.center.abs_diff_eq(want.center, 1e-3), "{step:?}");
+            let got = rook_types::GuiQuad {
+                center: want.center,
+                ..got.clone()
+            };
+            assert_eq!(&got, want, "{step:?}");
+        }
+    }
+    // Kept within the canvas, as a script's write is (a 187 × 87 window:
+    // its 1-pixel border parts the bars from it).
+    set(&mut dom, f, "CanvasPosition", v2(9000.0, 9000.0));
+    gui.sync(&mut dom);
+    near(
+        (vec2_of(&dom, f, "CanvasPosition"), Vec2::ZERO),
+        ([113.0, 513.0], [0.0, 0.0]),
+    );
+}
+
+/// What a canvas holds that moves or restacks (a list that recycles its
+/// rows) is placed again alone and drawn in its new order: where laying
+/// it all out again puts it, in a scrolled canvas.
+#[test]
+fn a_canvas_child_moved_or_restacked_lands_where_a_fresh_layout_puts_it() {
+    let (mut dom, held) = boxed();
+    let f = child(
+        &mut dom,
+        "ScrollingFrame",
+        held,
+        &[
+            ("Size", udim2(0.0, 200, 0.0, 100)),
+            ("Position", udim2(0.0, 10, 0.0, 10)),
+            canvas(0, 600),
+            ("CanvasPosition", v2(0.0, 140.0)),
+        ],
+    );
+    let tiles: Vec<InstanceId> = (0..4)
+        .map(|i| {
+            let tile = frame(&mut dom, f, udim2(0.5, 0, 0.0, 60));
+            set(&mut dom, tile, "Position", udim2(0.0, 0, 0.0, 70 * i));
+            frame(&mut dom, tile, udim2(0.5, 0, 0.5, 0));
+            tile
+        })
+        .collect();
+    let mut gui = laid_out(&mut dom);
+    // The top tile recycled to the bottom; another drawn over the rest.
+    set(&mut dom, tiles[0], "Position", udim2(0.0, 0, 0.0, 280));
+    set(&mut dom, tiles[1], "ZIndex", Value::Int32(5));
+    set(&mut dom, tiles[2], "Size", udim2(1.0, 0, 0.0, 30));
+    gui.sync(&mut dom);
+    let moved = (positions(&dom, held), drawn(&mut gui, &dom));
+    let mut fresh = laid_out(&mut dom);
+    let again = (positions(&dom, held), drawn(&mut fresh, &dom));
+    assert_eq!(moved.0, again.0);
+    assert_eq!(moved.1, again.1);
+    near(rect(&dom, tiles[0], f), ([0.0, 140.0], [100.0, 60.0]));
+    // A ZIndex alone stacks again, nothing laid out.
+    set(&mut dom, tiles[3], "ZIndex", Value::Int32(7));
+    gui.sync(&mut dom);
+    let restacked = drawn(&mut gui, &dom);
+    assert_ne!(restacked, moved.1);
+    assert_eq!(restacked, drawn(&mut laid_out(&mut dom), &dom));
+}

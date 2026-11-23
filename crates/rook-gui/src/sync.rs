@@ -50,8 +50,19 @@ impl Gui {
                 .restyle_texts(dom, &retexted, (&mut self.fonts, &self.turning));
             self.restyled.extend(retexted);
         }
+        // Images that arrived: `IsLoaded`, and drawn again.
+        let loaded: Vec<InstanceId> = (std::mem::take(&mut self.loaded).into_iter())
+            .filter(|&id| dom.get(id).is_some())
+            .collect();
+        self.write_ids(dom, &loaded);
+        self.restyled.extend(loaded);
         let restyled: Vec<InstanceId> = std::mem::take(&mut self.restyled).into_iter().collect();
         self.repaint(dom, &restyled, false);
+        // Trees laid out above already stack again.
+        let stacked: Vec<InstanceId> = (tops(dom, std::mem::take(&mut self.stacked)).into_iter())
+            .filter(|top| relaid.binary_search(top).is_err())
+            .collect();
+        self.redraw(dom, &stacked);
         self.resize_world(dom, None);
     }
 
@@ -121,6 +132,8 @@ impl Gui {
         self.moved.clear();
         self.changed.clear();
         self.shifted.clear();
+        self.scrolled.clear();
+        self.stacked.clear();
         let kept: FxHashSet<InstanceId> = kept.into_iter().collect();
         self.pending
             .retain(|tree, _| tree.is_some_and(|t| kept.contains(&t)));
@@ -154,6 +167,10 @@ impl Gui {
             let tree = layout::top_of(dom, id);
             self.pending.entry(tree).or_default().shifted.push(id);
         }
+        for id in std::mem::take(&mut self.scrolled) {
+            let tree = layout::top_of(dom, id);
+            self.pending.entry(tree).or_default().scrolled.push(id);
+        }
     }
 
     /// Lay out again what `pending` names: trees whole where they must
@@ -168,6 +185,7 @@ impl Gui {
         for ids in [
             &mut pending.changed,
             &mut pending.shifted,
+            &mut pending.scrolled,
             &mut pending.joined,
         ] {
             ids.retain(|&id| dom.get(id).is_some());
@@ -202,11 +220,29 @@ impl Gui {
             self.repaint(dom, &messages, false);
         }
         // Those in a tree just laid out are already in place.
-        let shifted: Vec<InstanceId> = (shifted.into_iter())
-            .filter(|&id| {
-                layout::top_of(dom, id).is_some_and(|top| relaid.binary_search(&top).is_err())
-            })
+        let in_place = |dom: &Dom, id: InstanceId| {
+            layout::top_of(dom, id).is_some_and(|top| relaid.binary_search(&top).is_err())
+        };
+        let mut shifted: Vec<InstanceId> = (shifted.into_iter())
+            .filter(|&id| in_place(dom, id))
             .collect();
+        let scrolled: Vec<InstanceId> = (pending.scrolled.into_iter())
+            .filter(|&id| in_place(dom, id))
+            .collect();
+        // A canvas that moved moves what it holds as it was laid out: one
+        // placed again below (or inside one) is laid out from there anyway.
+        for id in scrolled {
+            match self.layout.scroll(dom, id) {
+                Some(moved) => {
+                    self.write_ids(dom, &[id]);
+                    self.write_positions(dom, &moved);
+                    self.repaint(dom, &[id], true);
+                }
+                None => shifted.push(id),
+            }
+        }
+        shifted.sort_unstable();
+        shifted.dedup();
         if !shifted.is_empty() {
             profiling::scope!("Gui::layout objects");
             (self.layout).place_again(dom, &shifted, (&mut self.fonts, &self.turning));
@@ -290,6 +326,23 @@ impl Gui {
             .flat_map(|&id| std::iter::once(id).chain(dom.descendants(id)))
             .collect();
         self.write_ids(dom, &ids);
+    }
+
+    /// Write `AbsolutePosition` alone for `ids`, which moved as they were
+    /// laid out (see [`Gui::write_ids`]).
+    fn write_positions(&mut self, dom: &mut Dom, ids: &[InstanceId]) {
+        for &id in ids {
+            let Some(placed) = self.layout.placed.get(&id) else {
+                continue;
+            };
+            let at = placed.top_left();
+            // A NaN one reads as nowhere, wherever it moves.
+            if at.is_nan() || placed.size().is_nan() {
+                continue;
+            }
+            let _ = dom.set_property_by_name(id, "AbsolutePosition", Value::Vector2(Vector2(at)));
+        }
+        self.cursor = dom.journal().end();
     }
 
     pub(crate) fn write_ids(&mut self, dom: &mut Dom, ids: &[InstanceId]) {

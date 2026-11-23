@@ -12,7 +12,10 @@ only along edges.
 
 Code: `rook-gui`'s `layout/scrolling.rs` (canvas, window, bars, position)
 and `draw/objects/scrolling.rs` (the bars); scripts' `CanvasPosition` writes go
-through `Gui::set_canvas_position`.
+through `Gui::set_canvas_position`. A `CanvasPosition` change alone moves
+what the canvas holds as it was laid out (`Layout::scroll`), writing only
+their `AbsolutePosition`s, rather than laying the canvas out again: a long
+list scrolls at the cost of moving it.
 
 Defaults from `Instance.new`: `CanvasSize` {0, 0}, {2, 0},
 `ScrollBarThickness` 12, ScrollingDirection XY, both insets None,

@@ -71,6 +71,8 @@ struct Pending {
     changed: Vec<InstanceId>,
     /// Objects placed again (see [`Gui::shifted`]).
     shifted: Vec<InstanceId>,
+    /// ScrollingFrames whose canvas moved (see [`Gui::scrolled`]).
+    scrolled: Vec<InstanceId>,
     /// The tree itself, joined by GUI that moved in: laid out again whole.
     joined: Vec<InstanceId>,
 }
@@ -79,6 +81,7 @@ impl Pending {
     fn merge(mut self, other: Self) -> Self {
         self.changed.extend(other.changed);
         self.shifted.extend(other.shifted);
+        self.scrolled.extend(other.scrolled);
         self.joined.extend(other.joined);
         self
     }
@@ -100,6 +103,14 @@ pub struct Gui {
     /// placed again with what it holds, or its tree laid out again when
     /// its parent depends on where its children are.
     shifted: FxHashSet<InstanceId>,
+    /// ScrollingFrames whose `CanvasPosition` changed since the last
+    /// layout: what their canvas holds moves, laid out as it was.
+    scrolled: FxHashSet<InstanceId>,
+    /// Objects whose `ZIndex` changed since they were drawn: their trees
+    /// stack again.
+    stacked: FxHashSet<InstanceId>,
+    /// Objects showing an image that arrived since they were drawn.
+    loaded: FxHashSet<InstanceId>,
     /// Objects whose look alone changed since they were drawn; their trees
     /// draw again.
     restyled: FxHashSet<InstanceId>,
@@ -181,6 +192,9 @@ impl Default for Gui {
             moved: Vec::new(),
             changed: FxHashSet::default(),
             shifted: FxHashSet::default(),
+            scrolled: FxHashSet::default(),
+            stacked: FxHashSet::default(),
+            loaded: FxHashSet::default(),
             restyled: FxHashSet::default(),
             retexted: FxHashSet::default(),
             pending: FxHashMap::default(),
@@ -266,9 +280,10 @@ impl Gui {
     }
 
     /// A requested image loaded (`None`: it can't be had). What shows it
-    /// draws again, and its `IsLoaded` turns true.
+    /// draws again, and its `IsLoaded` turns true; nothing lays out again,
+    /// as no object's size or place depends on its image.
     pub fn image_arrived(&mut self, url: &str, image: Option<GuiImage>) {
-        self.changed.extend(self.images.arrived(url, image));
+        self.loaded.extend(self.images.arrived(url, image));
     }
 
     /// The image at `url` if it has loaded, asking for it the first time
@@ -291,6 +306,9 @@ impl Gui {
         self.images.forget(id);
         self.changed.remove(&id);
         self.shifted.remove(&id);
+        self.scrolled.remove(&id);
+        self.stacked.remove(&id);
+        self.loaded.remove(&id);
         self.restyled.remove(&id);
         self.retexted.remove(&id);
         // What's filed under it is freed with it (the rest is filtered
