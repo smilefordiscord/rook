@@ -1,6 +1,6 @@
 # HTTP requests
 
-Checked against Studio 0.748 on 2026-11-22, from its creator docs only: no rule here is measured in Studio yet.
+Checked against Studio 0.748 on 2026-11-23.
 
 How HttpService's `GetAsync`, `PostAsync` and `RequestAsync` send a
 script's requests to any site (`rook_lua`'s `api::methods::web::http`).
@@ -8,45 +8,105 @@ The engine sends them through the host's network
 (`rook_platform::network`), each on a thread of its own, while the
 calling script waits, as for Roblox's web APIs ([web
 endpoints](../../design/web-endpoints.md)). Where they may go is checked
-there too ([where a request may go](#where-a-request-may-go)). Sources are the creator docs'
+there too ([where a request may go](#where-a-request-may-go)). Sources are
+`conformance/cases/scripting/http_requests.luau` and `client_http.luau`,
+recorded in Studio 0.748 in a place with HTTP off, so they measure what
+is refused before a request would go out; the rest comes from the creator
+docs'
 [HttpService](https://create.roblox.com/docs/reference/engine/classes/HttpService),
 [In-game HTTP requests](https://create.roblox.com/docs/cloud-services/http-service),
 `Enum.HttpError` and `Enum.HttpCompression`.
 
-## When a request is sent
+## The order of the checks
 
-- Only a server sends one. A client's call raises `Http requests can only
-  be executed by game server`. *Confirmed* that only servers send them
-  (creator docs); *Inference:* the message, as players report it.
-- Only when the place's saved `HttpService.HttpEnabled` is on, which
-  Studio's **Allow HTTP Requests** game setting turns on. Off, a call
-  raises `Http requests are not enabled. Enable via game settings`.
-  *Confirmed* that it's off by default and that game scripts can't
-  change it (its write security is `LocalUserSecurity`); *Inference:*
-  the message.
-- The URL must be `http` or `https` (*Confirmed*, creator docs
-  `RequestAsync`); any other, or none, raises `HttpError: InvalidUrl`
-  (*Inference*).
-- A URL on Roblox's own web domains (`roblox.com` and its subdomains)
-  raises `HttpService is not allowed to access ROBLOX resources`
-  (*Inference:* the rule and message as players report them). Roblox lets
-  a subset of Open Cloud's endpoints on `apis.roblox.com` through with a
-  Secret API key; Rook has no Secrets, so those are refused too
-  ([stubs](../../guide/stubs.md)).
-- A server sends at most 500 requests a minute (*Confirmed*, creator
-  docs `RequestAsync`); the next raises `Number of requests exceeded
-  limit` until the oldest is a minute old. *Inference:* the minute is
-  the last 60 seconds of game time, and the message is the one the
-  creator docs give for the Open Cloud limit, without "Open Cloud".
+*Confirmed* (measured): a call is checked in this order, and the first
+check that fails raises.
 
-The calling thread waits for the answer, as every web call does in Rook,
-while the frame loop carries on: no host's frame (the player's, a
-server's, a headless run's) ever waits for one, so a slow or silent
-server holds up only the script that asked. The answer resumes it on the
-first frame after it arrives.
+1. The arguments' casts: a missing or nil URL (or `PostAsync`'s missing
+   `data`) raises `Argument <n> missing or nil`, a `nocache` or
+   `compress` that isn't a boolean `Unable to cast string to bool`, a
+   `content_type` that isn't an `Enum.HttpContentType` item, its number
+   or its name `Unable to cast string to HttpContentType` (`Unable to
+   cast Material to HttpContentType` for another enum's item), and
+   `RequestAsync`'s options that aren't a table without a first item
+   `Unable to cast string to Dictionary` (`Unable to cast Array to
+   Dictionary` for a list).
+2. Only a server sends requests: a client's call raises `Http requests
+   can only be executed by game server`, even for a URL on Roblox's
+   domains.
+3. The URL, the options and the headers ([below](#what-is-checked)).
+4. Roblox's own web domains ([where a request may go](#where-a-request-may-go)).
+5. The place's saved `HttpService.HttpEnabled`, which Studio's **Allow
+   HTTP Requests** game setting turns on. Off, a call raises `Http
+   requests are not enabled. Enable via game settings`. *Confirmed* that
+   it's off by default and that game scripts can't change it (its write
+   security is `LocalUserSecurity`), and that every check above comes
+   first. *Inference:* the message, as players report it: Studio's MCP,
+   which records the cases, runs them as its Assistant, whose own HTTP
+   permission (`Assistant HTTP permissions are not configured`) is what
+   the recording shows at this point.
+6. A server sends at most 500 requests a minute (*Confirmed*, creator
+   docs `RequestAsync`); the next raises `Number of requests exceeded
+   limit` until the oldest is a minute old. *Inference:* the minute is
+   the last 60 seconds of game time, the message is the one the creator
+   docs give for the Open Cloud limit, without "Open Cloud", and the
+   limit comes after HttpEnabled.
+
+## What is checked
+
+All *Confirmed* (measured), with the messages as given.
+
+- The URL is a string (Roblox also takes a Secret, which Rook doesn't
+  have): a number, table or boolean raises `Invalid URL type, URL should
+  be a string or secret.`; an empty one `Empty URL`; one that doesn't
+  start `http://` or `https://`, in any case, `URL must be http` (`ftp:`,
+  `file:`, no scheme at all). Anything else passes here, `http://` alone
+  and a space in the host included, and is the network's to parse.
+- `GetAsync` and `PostAsync`'s `headers` must be a table without a first
+  item, or raise `headers value must be a dictionary!`; `RequestAsync`'s
+  `Headers` likewise, or `Invalid request options, Headers should be a
+  table`.
+- Each header's value must be a string: `Header <name> must have its
+  value be a string or secret!`. `User-Agent`, `Roblox-Id` and
+  `Content-Length`, in any case, raise `Header "<name>" is not allowed!`,
+  and so does `Content-Type` for `PostAsync`, whose `content_type` sets
+  it. A space in a name raises `Header "<name>" has unallowed character "
+  "`, a line break (`\n`, `\r`) in a value `Header <name> has unallowed
+  character <c> in value <value>`. An empty name passes. *Inference:* the
+  other characters outside HTTP's token set in a name raise as a space
+  does, and a NUL in a value as a line break does.
+- `PostAsync`'s `data` passes as a number or even a table, not only a
+  string. *Approximation:* Rook sends a number as Luau writes it and
+  anything but a string or number as no body, as what Roblox sends isn't
+  measured.
+- `RequestAsync`'s options take only `Url`, `Method`, `Headers`, `Body`,
+  `Compress` and `Timeout`; any other key, a lowercase `url` included,
+  raises `Unrecognized request option <key>`, found before a missing
+  `Url`, which raises `Invalid request options`.
+- `Method` is any HTTP token in any case (`get`, `PATCH`, `FOO`, even
+  empty); one with a space raises `Invalid Http Method <method>`, and one
+  that isn't a string `Invalid request options, Method should be a
+  string`.
+- `Body` must be a string, or raise `Invalid request options, Body should
+  be a string`. Any `Body`, even an empty one, with `Method` `GET` or
+  `HEAD` written in capitals raises `Invalid request options, Body should
+  be empty for 'GET' or 'HEAD' method`; `get` passes. *Inference:* a
+  `Body` without a `Method` raises as with `GET`.
+- `Compress` passes whatever it is.
+- `Timeout` must be a number, or raise `Timeout value must be an
+  integer.`, above 0 and at most 120, or raise `Timeout value must be
+  greater than 0 and no greater than 120 seconds.`
 
 ## Where a request may go
 
+- Not to Roblox's own web domains (`roblox.com` and its subdomains, in
+  any case, whatever the path or query holds): a URL there raises
+  `HttpService is not allowed to access that Roblox resource`, and one on
+  `apis.roblox.com` without an `x-api-key` header `Header "x-api-key"
+  must be provided for Roblox resources!` (*Confirmed*, measured). Roblox
+  lets a subset of Open Cloud's endpoints there through with a Secret API
+  key; Rook has no Secrets, so those raise the first message
+  ([stubs](../../guide/stubs.md)).
 - Only to addresses on the public internet. A host whose name resolves
   only to addresses off it raises `HttpError: ConnectFail`: unspecified
   (`0.0.0.0`, `::`), loopback (`localhost`, `127.0.0.1`, `::1`), private
@@ -55,16 +115,19 @@ first frame after it arrives.
   `100.64.0.0/10`), multicast, broadcast, and the other ranges IANA keeps
   off the internet (documentation, benchmarking, reserved). An IPv4
   address inside IPv6 (`::ffff:127.0.0.1`, NAT64, 6to4) counts as
-  itself. *Inference:* Roblox's game servers reach only the internet,
-  so connecting to any of these fails; the creator docs don't say.
+  itself. *Confirmed* (measured) that local addresses and names that
+  don't resolve pass every check before HttpEnabled; *Inference:*
+  Roblox's game servers reach only the internet, so connecting to any of
+  these fails; the creator docs don't say.
 - The check is on the addresses a name resolves to, not on the name,
   and the connection is made only to an address that passed, so a name
   that resolves to a local address, or changes what it resolves to
   between a check and the connection, can't get round it. A name with
   both kinds connects to its public ones.
 - Every redirect is checked as the first URL is: one to Roblox's web
-  domains raises `HttpService is not allowed to access ROBLOX resources`,
-  one to a local address `HttpError: ConnectFail` (*Inference*).
+  domains raises `HttpService is not allowed to access that Roblox
+  resource`, one to a local address `HttpError: ConnectFail`
+  (*Inference*).
 - Requests go straight to the host, never through a proxy the
   environment names, which would resolve the name out of the check's
   sight.
@@ -84,26 +147,18 @@ first frame after it arrives.
   (`ApplicationJson` by default): `application/json`,
   `application/x-www-form-urlencoded` for `ApplicationUrlEncoded`,
   `application/xml`, `text/plain` and `text/xml` for the others
-  (*Confirmed*, creator docs `RequestAsync`). A header in `headers`
-  replaces it.
+  (*Confirmed*, creator docs `RequestAsync`).
 - `RequestAsync(options)` sends `options.Method` (any case, `GET` when
   left out) to `options.Url`, with `options.Headers` and `options.Body`.
-  A `Body` with `GET` or `HEAD` raises `<method> requests can't have a
-  Body` (*Confirmed* that those take none; *Inference:* that it raises,
-  and the message). `Timeout` is in seconds, above 0 and at most the
-  default limit, or it raises `Timeout must be greater than 0 and at
-  most 60` (*Confirmed* range; *Inference:* the message).
-  *Approximation:* the default limit is 60 seconds, Rook's own, as
+  *Approximation:* Rook sends the method in capitals, and an empty one as
+  `GET`. `Timeout` is the most the request may take, in seconds.
+  *Approximation:* without one the limit is 60 seconds, Rook's own, as
   Roblox's isn't documented.
 - `compress` true, or `Compress = Enum.HttpCompression.Gzip`, sends the
   body gzipped (*Confirmed*) with `Content-Encoding: gzip`
   (*Inference*).
-- `User-Agent` and `Roblox-Id` are Roblox's own and `Content-Length`
-  comes from the body (*Confirmed*, creator docs `RequestAsync`), so a
-  script's values for them are dropped (*Inference:* rather than
-  raised). *Approximation:* Rook sends its own `User-Agent`
-  (`Rook/<version>`) and no `Roblox-Id`, as its places have no id on
-  Roblox.
+- *Approximation:* Rook sends its own `User-Agent` (`Rook/<version>`) and
+  no `Roblox-Id`, as its places have no id on Roblox.
 - Redirects are followed, up to 10 (*Approximation:* Roblox's count isn't
   documented), each checked ([where a request may go](#where-a-request-may-go)).
   Answers come decompressed; one over 16 MiB raises `HttpError:
@@ -147,9 +202,12 @@ first frame after it arrives.
 
 ## Not yet
 
-Every message tagged *Inference* above, and whether Roblox raises for a
-locked header or a `Body` with `GET`, wait for a Studio check of a place
-with HTTP enabled. So do how `nocache` caches, whether a server reached
-with HTTP/1.1 gives its own reason phrase or header case, and the
-creator docs' port rule (none below 1024 but 80 and 443, nor 1194),
-which Rook doesn't apply.
+The recording had HTTP off, so everything past HttpEnabled waits for a
+Studio check of a place with HTTP enabled: its message, every message
+tagged *Inference* above, what a request that passed the checks does
+(local addresses, answers, statuses, redirects, `HttpError` items, the
+limit per minute), how `nocache` caches, what `PostAsync` sends for a
+table, how a lowercase method or an empty one is sent, Roblox's default
+time limit, whether a server reached with HTTP/1.1 gives its own reason
+phrase or header case, and the creator docs' port rule (none below 1024
+but 80 and 443, nor 1194), which Rook doesn't apply.

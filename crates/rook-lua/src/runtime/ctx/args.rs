@@ -216,6 +216,22 @@ impl Args {
             .ok_or_else(|| self.cast_error(i, enum_name))
     }
 
+    /// A `Dictionary` parameter: a table without a first item, an empty
+    /// one included. Measured on `HttpService:RequestAsync`: nil is
+    /// `Argument 1 missing or nil`, a string `Unable to cast string to
+    /// Dictionary`, a list `Unable to cast Array to Dictionary`.
+    pub(crate) fn dictionary(&self, i: usize) -> ApiResult<mlua::Table> {
+        match self.get(i) {
+            LuaValue::Nil => Err(self.missing(i)),
+            LuaValue::Table(t) if t.raw_get::<LuaValue>(1)?.is_nil() => Ok(t.clone()),
+            LuaValue::Table(_) => Err(ScriptError("Unable to cast Array to Dictionary".into())),
+            v => Err(ScriptError(format!(
+                "Unable to cast {} to Dictionary",
+                cast_name(v)
+            ))),
+        }
+    }
+
     pub(crate) fn string(&self, i: usize) -> ApiResult<String> {
         self.opt_string(i)?.ok_or_else(|| self.missing(i))
     }
@@ -233,6 +249,20 @@ impl Args {
     /// Lua truthiness, as Roblox uses for optional boolean arguments.
     pub(crate) fn truthy(&self, i: usize) -> bool {
         !matches!(self.get(i), LuaValue::Nil | LuaValue::Boolean(false))
+    }
+
+    /// A `bool` parameter as Roblox casts it: `default` when nil or left
+    /// out, a boolean as itself, anything else `Unable to cast string to
+    /// bool` (measured on `HttpService:GenerateGUID("x")`).
+    pub(crate) fn bool_or(&self, i: usize, default: bool) -> ApiResult<bool> {
+        match self.get(i) {
+            LuaValue::Nil => Ok(default),
+            LuaValue::Boolean(b) => Ok(*b),
+            v => Err(ScriptError(format!(
+                "Unable to cast {} to bool",
+                cast_name(v)
+            ))),
+        }
     }
 
     /// An `Object` parameter as Roblox casts it: a missing argument errors,

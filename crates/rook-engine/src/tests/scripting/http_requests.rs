@@ -54,7 +54,7 @@ fn requests_reach_the_host_and_answer() {
             Method = "PUT",
             Body = string.rep("rook ", 50),
             Compress = Enum.HttpCompression.Gzip,
-            Headers = { ["X-Key"] = "k", ["User-Agent"] = "me" },
+            Headers = { ["X-Key"] = "k" },
         })
         print(r.Success, r.StatusCode, r.StatusMessage, r.Headers["x-answer"], r.Body)
         print(pcall(http.GetAsync, http, BASE .. "/missing"))
@@ -91,7 +91,10 @@ fn requests_reach_the_host_and_answer() {
     );
     assert_eq!(put.header("content-encoding"), Some("gzip"));
     assert_eq!(put.header("x-key"), Some("k"));
-    assert_ne!(put.header("user-agent"), Some("me"));
+    assert!(
+        put.header("user-agent")
+            .is_some_and(|ua| ua.starts_with("Rook/"))
+    );
     // Gzip's magic number, and smaller than the 250 bytes it holds.
     assert_eq!(put.body[..2], [0x1f, 0x8b]);
     assert!(put.body.len() < 250);
@@ -208,7 +211,7 @@ fn redirects_are_checked_like_the_first_request() {
     assert_eq!(
         out,
         [
-            "false HttpService is not allowed to access ROBLOX resources",
+            "false HttpService is not allowed to access that Roblox resource",
             "true landed",
             "done",
         ]
@@ -226,7 +229,8 @@ fn oversized_answers_and_bad_headers_raise() {
         local http = game:GetService("HttpService")
         print(pcall(http.GetAsync, http, BASE .. "/big"))
         print(pcall(http.RequestAsync, http, { Url = BASE, Headers = { ["Bad Name"] = "x" } }))
-        print(pcall(http.RequestAsync, http, { Url = BASE, Headers = { ["X-Value"] = "a" .. string.char(10) .. "b" } }))
+        local ok, e = pcall(http.RequestAsync, http, { Url = BASE, Headers = { ["X-Value"] = "a" .. string.char(10) .. "b" } })
+        print(ok, (e:gsub(string.char(10), "|")))
         print("done")
     "#
     .replace("BASE", &format!("{base:?}"));
@@ -237,8 +241,8 @@ fn oversized_answers_and_bad_headers_raise() {
         out,
         [
             "false HttpError: OutOfMemory",
-            "false HttpError: Unknown",
-            "false HttpError: Unknown",
+            "false Header \"Bad Name\" has unallowed character \" \"",
+            "false Header X-Value has unallowed character | in value a|b",
             "done",
         ]
     );

@@ -1,5 +1,5 @@
 //! The desktop's [`Network`]: HTTPS through ureq (rustls, gzip),
-//! [`TIMEOUT`] per request at most, following up to 10 redirects. Each
+//! [`TIMEOUT`] per request unless it sets its own, following up to 10 redirects. Each
 //! [`Reach`] has an agent of its own, as ureq resolves names per agent:
 //! the scripts' agents resolve through [`Checked`], which every hop's
 //! connection goes through, so a redirect is checked like the first

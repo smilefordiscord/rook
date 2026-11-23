@@ -23,14 +23,14 @@ pub struct Request<'a> {
     pub body: &'a [u8],
     /// A longer answer fails with [`NetworkError::TooLarge`].
     pub max_bytes: u64,
-    /// How long the whole request may take, when shorter than the
-    /// network's own limit.
+    /// How long the whole request may take, in place of the network's
+    /// own limit.
     pub timeout: Option<Duration>,
     pub reach: Reach,
 }
 
-/// How long a request may take at most; [`Request::timeout`] may only
-/// shorten it.
+/// How long a request may take unless its [`Request::timeout`] says
+/// otherwise.
 pub const TIMEOUT: Duration = Duration::from_secs(60);
 
 /// Which hosts a request may reach. The network checks every hop,

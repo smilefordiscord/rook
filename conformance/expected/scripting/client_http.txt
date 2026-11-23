@@ -1,0 +1,10 @@
+-- studio 0.748.0.7481526
+-- signals: deferred
+HttpEnabled false
+GetAsync error Http requests can only be executed by game server
+GetAsync no args error Argument 1 missing or nil
+PostAsync error Http requests can only be executed by game server
+RequestAsync error Http requests can only be executed by game server
+RequestAsync string error Unable to cast string to Dictionary
+GetAsync roblox.com error Http requests can only be executed by game server
+JSONEncode ok [1,2]
