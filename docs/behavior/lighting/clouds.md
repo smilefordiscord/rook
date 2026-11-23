@@ -1,8 +1,9 @@
 # Clouds
 
 Checked against Studio 0.748 on 2026-11-23. Only the
-[properties](#its-properties) as scripts see them are measured in Studio;
-the rest comes from the creator docs (Clouds, the "Dynamic clouds" and
+[properties](#its-properties) as scripts see them are measured in Studio,
+and the look compared with Studio screenshots
+([against Studio](#against-studio)); the rest comes from the creator docs (Clouds, the "Dynamic clouds" and
 "Global wind" guides), the form of the cloud shaders in the install's
 `shaders_glsl3.pack` and the textures beside them in `content/sky/`
 (`version-8d7a1009c17e4ff8`), read for facts as the
@@ -75,9 +76,16 @@ Four passes, each in the pack:
 - **Over the sky.** Through the tent again, in the frame's encoding with
   their cover squared, the thinnest (cover 0.12 or less) left out, behind
   everything in the scene.
+- **The sun's cover** (`CloudsSunCoverFS`). Into a single texel: the
+  shadow map's cloud per step over the point where the sun's ray from the
+  camera leaves the layer, averaged over the middle and 27 taps on two
+  rings around it, kept as `max(0, 1 − k × average²)`. A one-texel target
+  is something the CPU reads back, so the sun's light Studio lights with
+  is scaled by it (Inference).
 
-What the CPU feeds them (the step count, the detail's strength and size,
-the drift and its clock, the ambient cubes) isn't in the pack.
+What the CPU feeds them (the cover threshold made from Cover, the step
+count, the detail's strength and size, the drift and its clock, the
+ambient cubes, the sun cover's `k` and ring radius) isn't in the pack.
 
 ## How Rook does it
 
@@ -92,6 +100,17 @@ moon and before the parts. Without Clouds, or at Cover 0, nothing is made
 or drawn (Inference: the field is a distance, never below 0, so nothing is
 below Cover 0).
 
+- **Cover.** The shaders' threshold is Cover squared (Approximation). The
+  field's values put it there: in Studio 0.748 screenshots Cover 0.5
+  shows no cloud from the ground and 0.9 an overcast; the creator docs'
+  pictures show a few clouds at 0.65 and a mostly covered sky at 0.8.
+  Cover itself as the threshold covered a third of the sky at 0.5.
+- **The sun's cover.** Worked out on the CPU each frame
+  (`lighting/clouds/sun_cover.rs`) from the field alone, without the
+  detail and the flow, over rings 0.5 km across; it scales the sun's (or
+  moon's) light for everything the renderer lights, the clouds included.
+  `k` is 20 (Approximation: set so the ground under Cover 0.9, Density
+  0.7 at noon lands within a few levels of Studio's screenshot).
 - **Textures.** The install's three, loaded at startup. Without them,
   Rook's own, made once the first time clouds are drawn: a field of
   tiling cells and value noise whose values are spread as the install's
@@ -115,6 +134,25 @@ below Cover 0).
 Against the frame without clouds, a 1920 × 1080 frame of the test place
 took about 0.5 ms longer to draw and read back.
 
+## Against Studio
+
+Compared with Studio 0.748 screenshots on 2026-11-23 (the Baseplate with
+a red tower, Cover 0.5 and 0.9 at Density 0.7, ClockTime 14 and 17.7;
+the cameras differ, so looks rather than pixels):
+
+- Cover 0.5: Studio shows only the skybox's own painted clouds, at noon
+  and at dusk. Rook filled most of the sky with thick clouds; with Cover
+  squared it shows a few small ones low down.
+- Cover 0.9 at noon: both overcast. The ground under it went from
+  (120, 134, 151) to (99, 117, 137) in Studio; Rook's didn't change until
+  the sun's cover, and now lands at (101, 122, 142). Studio's overcast is
+  a gray-lavender (156, 170, 193); Rook's is lighter and greener
+  (166, 193, 206): the light around (Rook's sky colors standing for
+  Studio's ambient cubes) is the likely cause, not settled.
+- At dusk the few clouds Rook draws at Cover 0.5 are cream, lit by the
+  sun's yellow light; Studio's dusk shot has no cloud of its own to
+  compare.
+
 To settle in Studio, on the Baseplate at noon, dusk and midnight, with and
 without an Atmosphere:
 
@@ -125,10 +163,13 @@ without an Atmosphere:
   wind (the drift's speed and whether the clouds change shape without
   wind);
 - Cover 0 (whether any cloud shows);
-- whether clouds shade the ground (Studio's pack has a cloud shadow
-  shader) and whether any of this changes at Level21.
+- the ground under Cover 0.5 to 1 at several Densities and sun heights
+  (the sun cover's `k`, and whether it follows the shadow map's form);
+- whether any of this changes at Level21.
 
 ## Not done
 
-- Clouds' shadows on the ground.
+- Clouds' shadows on the ground place by place: the sun's cover dims the
+  whole world at once, as Studio's single texel does; Studio's pack also
+  has a cloud shadow shader for the ground, not read yet.
 - Clouds in reflections: Rook's reflection cube holds the sky without them.

@@ -83,8 +83,8 @@ pub struct Atmosphere {
 /// (docs/behavior/lighting/clouds.md).
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Clouds {
-    /// `Cover`, 0 to 1: how much of the cloud field's range counts as
-    /// cloud. 0 draws none.
+    /// The cover threshold, 0 to 1: the field is cloud wherever it's
+    /// below this (`rook-scene` makes it from `Cover`). 0 draws none.
     pub cover: f32,
     /// `Density`, 0 to 1: how much light the cloud stops.
     pub density: f32,

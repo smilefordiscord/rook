@@ -26,7 +26,13 @@ pub(super) fn clouds(dom: &Dom) -> Option<Clouds> {
         .color3_property(id, "Color")
         .map_or([1.0; 3], Color3::to_array);
     Some(Clouds {
-        cover: float("Cover", 0.5),
+        // The shaders' threshold is Cover squared (Approximation: Studio's
+        // CPU side feeds it and the pack doesn't show how; in Studio 0.748
+        // screenshots Cover 0.5 shows no cloud from the ground and 0.9 an
+        // overcast, and the creator docs' Cover 0.65 a few clouds and 0.8
+        // a mostly covered sky, which the field's values put at about the
+        // squares).
+        cover: float("Cover", 0.5).powi(2),
         density: float("Density", 0.7),
         // As Studio's shaders take a color: its sRGB value squared.
         color: color.map(|c| unit(c).powi(2)),
@@ -67,7 +73,7 @@ mod tests {
         cache.apply(&dom, &lighting());
         let c = cache.scene.lighting.clouds.expect("Clouds");
         assert!(
-            (c.cover - 0.5).abs() < 1e-6 && (c.density - 0.7).abs() < 1e-6,
+            (c.cover - 0.25).abs() < 1e-6 && (c.density - 0.7).abs() < 1e-6,
             "{c:?}"
         );
         assert_eq!(c.color, [1.0; 3]);
@@ -79,7 +85,7 @@ mod tests {
             .unwrap();
         cache.apply(&dom, &lighting());
         let c = cache.scene.lighting.clouds.unwrap();
-        assert!((c.cover - 0.9).abs() < 1e-6 && (c.density - 0.25).abs() < 1e-6);
+        assert!((c.cover - 0.81).abs() < 1e-6 && (c.density - 0.25).abs() < 1e-6);
         assert_eq!(c.color, [0.25, 1.0, 0.0]);
         dom.set_property_by_name(clouds, "Enabled", Value::Bool(false))
             .unwrap();

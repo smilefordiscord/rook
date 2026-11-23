@@ -10,6 +10,7 @@
 
 mod noise;
 mod pipelines;
+mod sun_cover;
 mod targets;
 
 use std::sync::Arc;
@@ -50,6 +51,12 @@ const DETAIL: [f32; 2] = [0.12, 1.0];
 /// Above this height (studs) the clouds thin out, gone 1,000 studs higher
 /// (Studio's shaders).
 const THIN_ABOVE: f32 = 6000.0;
+
+/// How much of their density clouds keep seen from `height` (studs): all
+/// up to `THIN_ABOVE`, none 1,000 studs higher.
+fn thinned(height: f32) -> f32 {
+    (1.0 + 0.001 * (THIN_ABOVE - height)).clamp(0.0, 1.0)
+}
 
 /// Cloud textures: a field low where there's cloud, the detail noise that
 /// adds to it, and the flow both are pushed along. The install's
@@ -242,6 +249,18 @@ impl GpuClouds {
         true
     }
 
+    /// The share of the light from `light` (a unit direction towards the
+    /// sun or moon) the clouds let through to a camera at `camera`
+    /// (`sun_cover.rs`): 1 without clouds.
+    pub(crate) fn light_kept(&self, clouds: Option<&Clouds>, camera: Vec3, light: Vec3) -> f32 {
+        let Some(clouds) = clouds else {
+            return 1.0;
+        };
+        let noise = self.given.as_deref().unwrap_or_else(|| noise::rooks_own());
+        let density = clouds.density.clamp(0.0, 1.0) * thinned(camera.y);
+        sun_cover::light_kept(noise, clouds, camera, light, (self.drift, density))
+    }
+
     /// Ready this frame's clouds, `clouds` as `camera` sees them in a
     /// `width` × `height` frame: the GPU objects made if they aren't yet,
     /// the targets sized and what the shaders read written. Returns
@@ -292,7 +311,7 @@ impl GpuClouds {
         let aspect = width as f32 / height.max(1) as f32;
         let view_proj = camera.view_projection(aspect);
         let last = drawing.last.filter(|l| l.clouds == clouds);
-        let thin = (1.0 + 0.001 * (THIN_ABOVE - camera.position.y)).clamp(0.0, 1.0);
+        let thin = thinned(camera.position.y);
         let [r, g, b] = clouds.color;
         let params = Params {
             shape: [

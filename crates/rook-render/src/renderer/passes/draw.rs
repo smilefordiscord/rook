@@ -95,7 +95,8 @@ impl Renderer {
         let view_proj = camera.view_projection(aspect);
         let view = Frustum::of(view_proj);
         let margin = MOTION_STUDS.max(self.terrain.wave_size.abs());
-        self.write_globals(camera, (aspect, height), sun, shadow);
+        let kept = (self.clouds).light_kept(l.clouds.as_ref(), camera.position, sun);
+        self.write_globals(camera, (aspect, height), (sun, kept), shadow);
         let clouds = self.clouds.prepare(
             &self.device,
             &self.queue,
@@ -226,7 +227,7 @@ impl Renderer {
         &mut self,
         camera: &Camera,
         (aspect, height): (f32, u32),
-        sun: Vec3,
+        (sun, kept): (Vec3, f32),
         shadow: Option<ShadowView>,
     ) {
         let l = self.lighting;
@@ -269,7 +270,9 @@ impl Renderer {
         let row = |r: glam::Vec3| rgb(r.to_array(), 0.0);
         let globals = Globals {
             sun_dir: rgb(sun.to_array(), 0.0),
-            sun_color: rgb(l.sun_color, 0.0),
+            // What the clouds let through of the sun's light lights
+            // everything, the clouds too (`lighting/clouds/sun_cover.rs`).
+            sun_color: rgb(l.sun_color.map(|c| c * kept), 0.0),
             ambient: rgb(l.ambient, 0.0),
             outdoor_ambient: rgb(l.outdoor_ambient, 0.0),
             fog_color: rgb(l.fog_color, 0.0),
