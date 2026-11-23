@@ -237,6 +237,9 @@ pub struct World {
     pub web: crate::api::methods::web::requests::WebRequests,
     /// What each TextFilterResult holds.
     pub(crate) filter_results: FxHashMap<InstanceId, crate::api::methods::web::filtering::Filtered>,
+    /// Badges awarded in this session, as (user, badge), when no badges
+    /// endpoint keeps them.
+    pub(crate) badges_awarded: FxHashSet<(i64, i64)>,
     /// MemoryStoreService's sorted maps, queues and hash maps.
     pub(crate) memory_stores: crate::memory_stores::MemoryStores,
     /// What each Pages object holds.
@@ -365,6 +368,7 @@ impl World {
             assets: Default::default(),
             web: Default::default(),
             filter_results: FxHashMap::default(),
+            badges_awarded: FxHashSet::default(),
             memory_stores: Default::default(),
             pages: FxHashMap::default(),
             physics: rook_physics::Physics::new(),

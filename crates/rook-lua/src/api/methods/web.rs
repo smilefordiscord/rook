@@ -1,16 +1,20 @@
-//! Members Roblox answers from its servers: HttpService, users, text
-//! filtering, DataStores, MemoryStores and MessagingService, through [`requests`] where Rook
+//! Members Roblox answers from its servers: HttpService, users, groups,
+//! badges, join and teleport data, text filtering, DataStores,
+//! MemoryStores and MessagingService, through [`requests`] where Rook
 //! has an endpoint.
 
 use crate::api::methods::{RawMethod, first};
 
+mod badges;
 pub(crate) mod data_stores;
 pub(crate) mod filtering;
+mod groups;
 pub(crate) mod http;
 pub(crate) mod memory_stores;
 pub(crate) mod messaging;
 pub(crate) mod pages;
 pub(crate) mod requests;
+mod teleport;
 mod users;
 
 pub(super) fn native(owner: &str, name: &str) -> Option<RawMethod> {
@@ -19,6 +23,9 @@ pub(super) fn native(owner: &str, name: &str) -> Option<RawMethod> {
             data_stores::native,
             http::native,
             users::native,
+            groups::native,
+            badges::native,
+            teleport::native,
             filtering::native,
             memory_stores::native,
             messaging::native,

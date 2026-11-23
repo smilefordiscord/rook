@@ -84,10 +84,12 @@
     - [Timestepping](behavior/physics/timestepping.md): which assemblies Roblox steps at 240, 120 or 60 Hz
     - [NaN and infinite values](behavior/physics/nan-and-infinite-values.md): what parts make of them
   - Scripting
+    - [Badges and groups](behavior/scripting/badges-and-groups.md): awarding and checking badges, group roles and GroupService's lookups
     - [Bindables](behavior/scripting/bindables.md): the copies arguments arrive as
     - [Content](behavior/scripting/content.md): the `Content` datatype and its constructors
     - [Datatype errors](behavior/scripting/datatype-errors.md): their messages in `pcall`
     - [Faces, Axes and PhysicalProperties](behavior/scripting/faces-and-axes.md): their `typeof` and printing
+    - [Join data](behavior/scripting/join-data.md): `GetJoinData` and teleport data for a player who joined directly
     - [JSON](behavior/scripting/json.md): which tables `JSONEncode` writes as arrays
     - [Member lookup](behavior/scripting/member-lookup.md): lowercase first letters, and what a child of that name beats
     - [Memory stores](behavior/scripting/memory-stores.md): MemoryStoreService's sorted maps, queues and hash maps within one session

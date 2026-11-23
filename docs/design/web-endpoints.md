@@ -38,8 +38,11 @@ Members with an endpoint path send the request shown and return what Roblox woul
 | `Players:GetNameFromUserIdAsync(id)` | `users` | `GET /v1/users/{id}`, reading `name` | The session's player with that id, else an error |
 | `UserService:GetUserInfosByUserIdsAsync(ids)` | `users` | `POST /v1/users` `{"userIds": ids, "excludeBannedUsers": false}`, reading `data[]` (`id`, `name`, `displayName`, `hasVerifiedBadge`) | The session's players among `ids` |
 | `Player:IsFriendsWith(id)` | `friends` | `GET /v1/users/{player}/friends/statuses?userIds={id}`, true when a status is `Friends` | `false` |
-| `Player:GetRankInGroup`, `GetRoleInGroup`, `IsInGroup` | `groups` | `GET /v2/users/{player}/groups/roles`, reading the entry whose `group.id` matches (`role.rank`, `role.name`) | `0`, `"Guest"`, `false` |
-| `BadgeService:UserHasBadgeAsync(user, badge)` | `badges` | `GET /v1/users/{user}/badges/awarded-dates?badgeIds={badge}`, true when `data` isn't empty | `false` |
+| `Player:GetRankInGroup`, `GetRoleInGroup`, `IsInGroup` (and their `Async` names); `GroupService:GetRolesInGroupAsync(user, group)` | `groups` | `GET /v2/users/{player}/groups/roles`, reading the entry whose `group.id` matches (`role.id`, `role.rank`, `role.name`) | `0`, `"Guest"`, `false`; `{IsMember = false, Roles = {}}` |
+| `GroupService:GetGroupsAsync(user)` | `groups` | `GET /v1/users/{user}/groups/roles`, reading each `data` entry's `group` (`id`, `name`), `role` (`rank`, `name`) and `isPrimaryGroup` | An empty array |
+| `GroupService:GetGroupInfoAsync(group)` | `groups` | `GET /v1/groups/{group}`, reading `name`, `description` and `owner` (`userId`, `username`), then `GET /v1/groups/{group}/roles`, reading `roles[]` (`name`, `rank`) ([badges and groups](../behavior/scripting/badges-and-groups.md)) | Raises: no group exists |
+| `BadgeService:UserHasBadgeAsync(user, badge)` (and `UserHasBadge`), `CheckUserBadgesAsync(user, badges)` | `badges` | `GET /v1/users/{user}/badges/awarded-dates?badgeIds={badge,...}`, reading each `data` entry's `badgeId` | The badges the session awarded the user |
+| `BadgeService:AwardBadgeAsync(user, badge)` (and `AwardBadge`) | `badges` | `POST /v1/users/{user}/badges/{badge}/award` `{}`, answering `{"awarded": true}` or false. Roblox awards from its game servers with no public API, so this request is Rook's | Awards it for the run, true unless the user already has it; false for a user not in the session |
 | `MarketplaceService:UserOwnsGamePassAsync(user, pass)` | `inventory` | `GET /v1/users/{user}/items/GamePass/{pass}`, true when `data` isn't empty | `false` |
 | `Players:GetUserThumbnailAsync(id, type, size)` | `thumbnails` | The batch request above for the `rbxthumb://` it returns, ready when the state is `Completed` ([thumbnails](../behavior/content/thumbnails.md#playersgetuserthumbnailasync)) | The `rbxthumb://` URL, not ready |
 | `MarketplaceService:PlayerOwnsAsset(player, asset)` | `inventory` | `GET /v1/users/{player}/items/Asset/{asset}`, true when `data` isn't empty | `false` |
@@ -57,10 +60,11 @@ These answer locally only, with no endpoint path yet:
 | DataStores (`DataStoreService`, `GlobalDataStore`, ordered stores) | Roblox's game servers | Kept in memory for the run |
 | MemoryStoreService | Roblox's game servers | Kept in memory for the session ([memory stores](../behavior/scripting/memory-stores.md)) |
 | MessagingService | Roblox's game servers | Delivered to the session's own subscribers ([messaging](../behavior/scripting/messaging.md)) |
+| `Player:GetJoinData`, `TeleportService:GetLocalPlayerTeleportData` | Roblox's game servers | An empty table and nil: everyone joined directly ([join data](../behavior/scripting/join-data.md)) |
 | `LocalizationService:GetTranslatorForPlayerAsync` and cloud tables | `localizationtables` | The place's own LocalizationTables |
 | TextChatService messages | `textfilter` | Delivered unfiltered |
 
-These aren't implemented yet and raise "not implemented in Rook yet" (Roblox's CoreScripts get nil): `Players:GetFriendsAsync` (`friends`), `Players:GetCharacterAppearanceInfoAsync` and AvatarEditorService (`avatar`), GroupService (`groups`), `BadgeService:GetBadgeInfoAsync` and `AwardBadge` (`badges`), `MarketplaceService:GetProductInfo` (`economy`), and AssetService (`games`, `develop`). Each gets a local answer and an endpoint path when it's implemented, listed here.
+These aren't implemented yet and raise "not implemented in Rook yet" (Roblox's CoreScripts get nil): `Players:GetFriendsAsync` (`friends`), `Players:GetCharacterAppearanceInfoAsync` and AvatarEditorService (`avatar`), `GroupService:GetAlliesAsync`, `GetEnemiesAsync` and `PromptJoinAsync` (`groups`), `BadgeService:GetBadgeInfoAsync` (`badges`), `MarketplaceService:GetProductInfo` (`economy`), and AssetService (`games`, `develop`). Each gets a local answer and an endpoint path when it's implemented, listed here.
 
 ## What a server of your own needs
 

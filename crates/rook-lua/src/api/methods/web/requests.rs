@@ -55,13 +55,23 @@ pub type WebAnswer = Result<Response, String>;
 /// it raises.
 pub(crate) type Decode = Box<dyn FnOnce(&Lua, WebAnswer) -> Result<MultiValue, String>>;
 
+/// Turns an answer into the next request a member sends, and what
+/// decodes that one's answer, or the error it raises.
+pub(crate) type Then = Box<dyn FnOnce(&Lua, WebAnswer) -> Result<(WebRequest, Decode), String>>;
+
+/// What is done with a request's answer.
+enum Step {
+    Decode(Decode),
+    Then(Then),
+}
+
 /// Web requests scripts are waiting on, and where they go.
 #[derive(Default)]
 pub struct WebRequests {
     pub endpoints: Arc<Endpoints>,
     /// Requests to send, by request id, since the engine last took them.
     pub(crate) outbox: Vec<(u64, WebRequest)>,
-    waiting: FxHashMap<u64, (Option<Thread>, Decode)>,
+    waiting: FxHashMap<u64, (Option<Thread>, Step)>,
     next: u64,
 }
 
@@ -89,13 +99,31 @@ pub(crate) fn rewrite(lua: &Lua, url: &str) -> Option<String> {
 /// Send `request` and return what `decode` makes of the answer; the
 /// calling thread waits meanwhile, and a decode error is raised.
 pub(crate) fn call(lua: &Lua, request: WebRequest, decode: Decode) -> ApiResult<Outcome> {
-    let id = with_world(lua, |w| {
-        let web = &mut w.web;
-        web.next += 1;
-        web.outbox.push((web.next, request));
-        web.waiting.insert(web.next, (None, decode));
-        web.next
-    });
+    wait_on(lua, request, Step::Decode(decode))
+}
+
+/// [`call`] for a member that needs two requests: `then` makes the second
+/// from the first's answer, and the thread waits for both.
+pub(crate) fn call_then(lua: &Lua, request: WebRequest, then: Then) -> ApiResult<Outcome> {
+    wait_on(lua, request, Step::Then(then))
+}
+
+/// Queue `request` for `step`, with `waiter` waiting on it; its id.
+fn queue(
+    w: &mut crate::runtime::world::World,
+    request: WebRequest,
+    waiter: Option<Thread>,
+    step: Step,
+) -> u64 {
+    let web = &mut w.web;
+    web.next += 1;
+    web.outbox.push((web.next, request));
+    web.waiting.insert(web.next, (waiter, step));
+    web.next
+}
+
+fn wait_on(lua: &Lua, request: WebRequest, step: Step) -> ApiResult<Outcome> {
+    let id = with_world(lua, |w| queue(w, request, None, step));
     let helper: Function = lua.named_registry_value("rook.web_wait")?;
     Ok(Outcome::Call(
         helper,
@@ -106,12 +134,7 @@ pub(crate) fn call(lua: &Lua, request: WebRequest, decode: Decode) -> ApiResult<
 /// Send `request` for Rook itself: no script waits, and `decode` runs on
 /// the answer for what it does to the World.
 pub(crate) fn send(lua: &Lua, request: WebRequest, decode: Decode) {
-    with_world(lua, |w| {
-        let web = &mut w.web;
-        web.next += 1;
-        web.outbox.push((web.next, request));
-        web.waiting.insert(web.next, (None, decode));
-    });
+    with_world(lua, |w| queue(w, request, None, Step::Decode(decode)));
 }
 
 /// The JSON body of a 2xx answer, or the error a member raises for it.
@@ -139,8 +162,24 @@ fn wait(lua: &Lua, args: MultiValue) -> ApiResult<Outcome> {
 /// Resume the thread waiting on `request` with `(true, results)` or
 /// `(false, error)`; a request of Rook's own ([`send`]) is only decoded.
 pub(crate) fn deliver(lua: &Lua, request: u64, answer: WebAnswer) {
-    let Some((thread, decode)) = with_world(lua, |w| w.web.waiting.remove(&request)) else {
+    let Some((thread, step)) = with_world(lua, |w| w.web.waiting.remove(&request)) else {
         return;
+    };
+    let decode = match step {
+        Step::Decode(decode) => decode,
+        Step::Then(then) => {
+            match then(lua, answer) {
+                Ok((next, decode)) => {
+                    with_world(lua, |w| queue(w, next, thread, Step::Decode(decode)));
+                }
+                Err(msg) => {
+                    if let Some(thread) = thread {
+                        crate::runtime::threads::resume(lua, &thread, (false, msg));
+                    }
+                }
+            }
+            return;
+        }
     };
     let Some(thread) = thread else {
         let _ = decode(lua, answer);
