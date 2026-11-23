@@ -1,7 +1,8 @@
 use super::*;
 
 impl Renderer {
-    /// Render offscreen and return tightly packed RGBA8 (sRGB) pixels.
+    /// Render offscreen and return tightly packed RGBA8 (sRGB) pixels,
+    /// whatever format the renderer draws in.
     pub fn render_to_image(
         &mut self,
         width: u32,
@@ -70,6 +71,16 @@ impl Renderer {
         for y in 0..height {
             let start = (y * row) as usize;
             out.extend_from_slice(&data[start..start + (width * 4) as usize]);
+        }
+        // A window's renderer draws in the surface's format, often BGRA;
+        // what's returned is RGBA whatever it drew in.
+        if matches!(
+            self.color_format,
+            wgpu::TextureFormat::Bgra8Unorm | wgpu::TextureFormat::Bgra8UnormSrgb
+        ) {
+            for px in out.as_chunks_mut::<4>().0 {
+                px.swap(0, 2);
+            }
         }
         Ok(out)
     }
