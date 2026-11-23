@@ -38,13 +38,16 @@ own connection; the server sees it leave with reason `Unknown`.
   (creator-docs). Rook parents it to nil whatever that property says.
 - The other clients see the Player and its character go, as any removal
   replicates.
+- Inference: `LoadCharacter` on a player that left raises `LoadCharacter
+  can only be called when Player is in the world` and spawns nothing.
 
 ## The kicked client
 
 - Its connection ends: it gets nothing more from the server and sends
   nothing more.
 - Rook stops running the place there: scripts, physics and the clock stop,
-  and the world stays drawn as it was. Inference: a Roblox client may keep
+  and the world stays drawn as it was. Hovering and resizing the window
+  fire nothing; the prompt is centered on the window's new size. Inference: a Roblox client may keep
   running its LocalScripts and sounds after a kick; unchecked.
 
 ## The disconnect prompt

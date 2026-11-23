@@ -176,10 +176,22 @@ pub(super) fn take_damage(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Ou
 }
 
 /// `Player:LoadCharacter()`: the server spawns the player a new character.
+/// A player that left (kicked, or out of Players) gets none, so a respawn
+/// a script waited to make doesn't build a character no one plays
+/// (Inference: the message is the one players report).
 pub(super) fn load_character(lua: &Lua, this: InstanceId, _: &Args) -> ApiResult<Outcome> {
     if with_world(lua, |w| w.is_client) {
         return Err(ScriptError(
             "LoadCharacter can only be called by the backend server".into(),
+        ));
+    }
+    let in_players = with_world(lua, |w| {
+        let parent = w.dom.parent(this);
+        parent.is_some() && parent == w.dom.find_service("Players")
+    });
+    if !in_players {
+        return Err(ScriptError(
+            "LoadCharacter can only be called when Player is in the world".into(),
         ));
     }
     spawn_character(lua, this)?;

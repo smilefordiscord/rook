@@ -64,3 +64,27 @@ fn removing_a_player_fires_player_removing_first() {
     );
     assert_eq!(rt.world().dom.parent(player), None);
 }
+
+/// A player that left gets no character: a script respawning it after a
+/// wait would otherwise build one for a player no longer there.
+#[test]
+fn a_player_that_left_loads_no_character() {
+    let (rt, player) = with_player();
+    rt.run_source(
+        "Workspace.Script",
+        r#"local a = game.Players.A
+        a.AncestryChanged:Wait()
+        print(pcall(a.LoadCharacter, a))
+        print(a.Character, #workspace:GetChildren())"#,
+        None,
+    )
+    .unwrap();
+    rt.remove_player(player, ExitReason::CreatorKick);
+    assert_eq!(
+        finish(&rt, 1),
+        [
+            "false LoadCharacter can only be called when Player is in the world",
+            "nil 0"
+        ]
+    );
+}
