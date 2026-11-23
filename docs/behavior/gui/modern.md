@@ -204,18 +204,17 @@ draws is still to be compared, under [Open questions](#open-questions).
   `GetControlPoints` and `GetControlPoint`; indexes start at 1. Each of
   the four setters fires `ControlPointChanged`; its other properties
   don't.
-- Measured: `GetMaxControlPoints()` is 100. `SetControlPoints` with more
-  keeps the first 100 and raises `Path2D:SetControlPoints() only supports
+- `GetMaxControlPoints()` is 100 (Confirmed, creator-docs). Inference:
+  `SetControlPoints` with more keeps the first 100 and raises `Path2D:SetControlPoints() only supports
   100 control points.`; `InsertControlPoint` on a full path raises the
   same with its own name. An index outside the points raises
   `Path2D:GetControlPoint() at index 5 access out of bounds` (with the
   method's name and the index), and anything but a Path2DControlPoint in
   the array `Variant cast failed`.
-- Measured: `InsertControlPoint` on a path with no parent raises
-  `Attempting to use Path2D with invalid parent`. Rook inserts the point
-  (Approximation).
+- Inference: `InsertControlPoint` on a path with no parent raises
+  `Attempting to use Path2D with invalid parent`. Rook inserts the point.
 - Files save the points in `PropertiesSerialize`, a binary blob whose
-  layout isn't documented; Rook doesn't read it yet, so a path saved in a
+  layout isn't documented; Rook doesn't read it, so a path saved in a
   place starts with no points.
 
 ### Queries

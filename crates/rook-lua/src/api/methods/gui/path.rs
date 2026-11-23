@@ -1,7 +1,7 @@
 //! Path2D's methods (docs/behavior/gui/modern.md#path2d): its control
 //! points, which live in the GUI ([`rook_gui::Gui::path_points`]), and
 //! where its curve runs as laid out now ([`rook_gui::PathCurve`]). The cap
-//! and the setters' errors were measured in Studio.
+//! is creator-docs'; the setters' errors are Inference.
 
 use mlua::{Lua, Value as LuaValue};
 use rook_dom::InstanceId;
@@ -15,7 +15,7 @@ use crate::runtime::signal::SignalKey;
 use crate::runtime::threads::fire;
 use crate::types::{LPath2DControlPoint, LRect, LUDim2, LVector2};
 
-/// Measured: `GetMaxControlPoints()` is 100 (Confirmed: creator-docs too).
+/// Confirmed: creator-docs `GetMaxControlPoints`, 100.
 const MAX_POINTS: usize = 100;
 
 pub(crate) fn native(owner: &str, name: &str) -> Option<RawMethod> {
@@ -74,7 +74,7 @@ fn store(lua: &Lua, this: InstanceId, points: Vec<PathPoint>) {
     fire(lua, &SignalKey::event(this, "ControlPointChanged"), &[]);
 }
 
-/// Measured: `Path2D:GetControlPoint() at index 5 access out of bounds`.
+/// Inference: `Path2D:GetControlPoint() at index 5 access out of bounds`.
 fn out_of_bounds(member: &str, index: f64) -> ScriptError {
     ScriptError(format!(
         "Path2D:{member}() at index {} access out of bounds",
@@ -106,7 +106,7 @@ fn get_points(lua: &Lua, this: InstanceId, _: &Args) -> ApiResult<Outcome> {
     Outcome::ret(lua, t)
 }
 
-/// Measured: past the cap the first 100 are kept and it raises; anything
+/// Inference: past the cap the first 100 are kept and it raises; anything
 /// but a point in the array is `Variant cast failed`.
 fn set_points(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> {
     let LuaValue::Table(list) = a.get(0) else {
@@ -136,8 +136,8 @@ fn get_point(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> {
     Outcome::ret(lua, from_point(&list[i]))
 }
 
-/// Approximation: Studio refuses this on a path with no parent ("Attempting
-/// to use Path2D with invalid parent"); Rook inserts wherever it is.
+/// Rook inserts wherever the path is. Inference: Studio refuses this on a
+/// path with no parent ("Attempting to use Path2D with invalid parent").
 fn insert_point(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> {
     let mut list = points(lua, this);
     let i = index(a, "InsertControlPoint", list.len() + 1)?;

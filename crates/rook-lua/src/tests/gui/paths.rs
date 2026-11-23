@@ -1,7 +1,7 @@
 use crate::tests::*;
 
-/// Measured in Studio: the cap is 100, an over-cap set keeps the first 100
-/// and raises, and indexes outside the points raise.
+/// The cap is 100 (creator-docs); an over-cap set keeping the first 100
+/// and raising, and indexes outside the points raising, are Inference.
 #[test]
 fn path2d_control_points() {
     expect(
