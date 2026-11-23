@@ -79,7 +79,9 @@ items each frame.
 ## Queues
 
 - `GetQueue(name, invisibilityTimeout)`, 30 seconds by default
-  (Confirmed: creator-docs).
+  (Confirmed: creator-docs). The docs give it no range: whole seconds, a
+  fraction cut off, as its `int` type takes it, and a negative one hides
+  nothing (Inference).
 - `AddAsync(value, expiration, priority)`: items are read highest
   priority first, then in the order they were added; `priority` is 0 by
   default (Confirmed).
@@ -120,7 +122,12 @@ the documented ones, such as `InvalidExpirationTime: The field
 'expiration' time must be between 0 and 3,888,000.` and
 `ItemValueSizeTooLarge: Value size exceeds limit (32 KB).`, and words
 its own for the limits the docs give no description for: an empty or
-too long key, a count out of range (Inference).
+too long key, a count out of range, and a NaN or infinite
+`invisibilityTimeout` or `waitTimeout` (`InvalidRequest: The field
+'waitTimeout' must be a finite number.`), which would otherwise hide
+nothing or wait forever (Inference). An expiration that isn't a number
+in its range, NaN and infinity included, raises
+`InvalidExpirationTime`.
 
 ## What Rook lacks
 

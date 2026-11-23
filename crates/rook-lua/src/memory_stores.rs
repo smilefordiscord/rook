@@ -68,6 +68,11 @@ pub(crate) enum MemoryStoreError {
     SortKeyTooLong,
     #[error("InvalidRequest: The field 'count' must be between 1 and {0}.")]
     Count(i64),
+    /// A NaN or infinite duration, for a field the creator docs give no
+    /// range (Inference: the wording is Rook's, in the documented
+    /// `InvalidRequest` form).
+    #[error("InvalidRequest: The field '{0}' must be a finite number.")]
+    NotFinite(&'static str),
     #[error("ItemValueSizeTooLarge: Value size exceeds limit (32 KB).")]
     ValueTooLarge,
     #[error("DataStructureItemsOverLimit: Exceeds data structure level item count limit (1M).")]
@@ -155,6 +160,24 @@ pub(crate) fn expiration(seconds: f64) -> Result<f64, MemoryStoreError> {
         return Err(MemoryStoreError::Expiration);
     }
     Ok(whole)
+}
+
+/// A queue's invisibility timeout (`GetQueue`'s second argument), in
+/// whole seconds as Roblox's `int` takes it; a negative one hides nothing.
+pub(crate) fn invisibility(seconds: f64) -> Result<f64, MemoryStoreError> {
+    if !seconds.is_finite() {
+        return Err(MemoryStoreError::NotFinite("invisibilityTimeout"));
+    }
+    Ok(seconds.trunc().max(0.0))
+}
+
+/// `ReadAsync`'s `waitTimeout`, checked to be a number of seconds: a NaN
+/// one would never run out, and -1 already means forever.
+pub(crate) fn wait_timeout(seconds: f64) -> Result<f64, MemoryStoreError> {
+    if !seconds.is_finite() {
+        return Err(MemoryStoreError::NotFinite("waitTimeout"));
+    }
+    Ok(seconds)
 }
 
 /// A sorted map's or hash map's key, checked.

@@ -103,6 +103,7 @@ pub(super) fn luau_source(owner: &str, name: &str) -> Option<&'static str> {
                 if waitTimeout == nil then
                     waitTimeout = -1
                 end
+                ms.wait_timeout(waitTimeout)
                 local items, id = ms.read(self, count, allOrNothing)
                 local waited = 0
                 while items == nil do
@@ -134,6 +135,14 @@ pub(crate) fn install(lua: &Lua) -> mlua::Result<()> {
         api_fn(lua, |lua, args| {
             let a = Args::new(args, "UpdateAsync");
             stores::expiration(a.number(2)?)?;
+            Outcome::ret(lua, ())
+        })?,
+    )?;
+    ms.set(
+        "wait_timeout",
+        api_fn(lua, |lua, args| {
+            let a = Args::new(args, "ReadAsync");
+            stores::wait_timeout(a.number(0)?)?;
             Outcome::ret(lua, ())
         })?,
     )?;
@@ -176,7 +185,7 @@ fn get_sorted_map(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
 
 fn get_queue(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
     let name = a.string(0)?;
-    let invisibility = a.number_or(1, 30.0)?.trunc().max(0.0);
+    let invisibility = stores::invisibility(a.number_or(1, 30.0)?)?;
     object(
         lua,
         "MemoryStoreQueue",

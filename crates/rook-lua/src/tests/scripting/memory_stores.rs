@@ -202,6 +202,8 @@ fn hash_map_lists_items_in_pages() {
     );
 }
 
+/// NaN and infinite durations raise too: a NaN invisibility timeout once
+/// hid nothing, and a NaN or infinite `waitTimeout` waited forever.
 #[test]
 fn arguments_are_checked_against_roblox_limits() {
     expect(
@@ -219,6 +221,13 @@ fn arguments_are_checked_against_roblox_limits() {
         try(function() mss:GetQueue("Q"):ReadAsync(101) end)
         try(function() mss:GetHashMap("H"):ListItemsAsync(0) end)
         try(function() map:SetAsync("k", nil, 10) end)
+        try(function() map:SetAsync("k", 1, 0 / 0) end)
+        try(function() mss:GetQueue("Q"):AddAsync(1, math.huge) end)
+        try(function() mss:GetHashMap("H"):SetAsync("k", 1, -math.huge) end)
+        try(function() mss:GetQueue("Q", 0 / 0) end)
+        try(function() mss:GetQueue("Q", math.huge) end)
+        try(function() mss:GetQueue("Q"):ReadAsync(1, false, 0 / 0) end)
+        try(function() mss:GetQueue("Q"):ReadAsync(1, false, math.huge) end)
         "#,
         0,
         &[
@@ -232,6 +241,13 @@ fn arguments_are_checked_against_roblox_limits() {
             "InvalidRequest: The field 'count' must be between 1 and 100.",
             "InvalidRequest: The field 'count' must be between 1 and 200.",
             "Argument 2 missing or nil",
+            "InvalidExpirationTime: The field 'expiration' time must be between 0 and 3,888,000.",
+            "InvalidExpirationTime: The field 'expiration' time must be between 0 and 3,888,000.",
+            "InvalidExpirationTime: The field 'expiration' time must be between 0 and 3,888,000.",
+            "InvalidRequest: The field 'invisibilityTimeout' must be a finite number.",
+            "InvalidRequest: The field 'invisibilityTimeout' must be a finite number.",
+            "InvalidRequest: The field 'waitTimeout' must be a finite number.",
+            "InvalidRequest: The field 'waitTimeout' must be a finite number.",
         ],
     );
 }
