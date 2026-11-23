@@ -28,7 +28,7 @@ pub use images::GuiImage;
 pub use input::hits::WorldHit;
 pub use input::scrolling::BarDrag;
 pub use layout::GUI_INSET;
-pub use text::TextQuery;
+pub use text::{TextFailure, TextQuery};
 
 use changes::Watch;
 use layout::{Layout, Turning};
@@ -231,9 +231,13 @@ impl Gui {
         self.fresh.clear();
     }
 
-    /// How big `text` is in `font` at `size` pixels, wrapped to `frame`'s
-    /// width: `TextService:GetTextSize` (creator-docs), measured as a
-    /// TextLabel would lay it out.
+    /// How big `text` is in `font` at `size` pixels in `frame`:
+    /// `TextService:GetTextSize` (creator-docs), measured as a TextLabel
+    /// would lay it out. Measured (Studio 0.748): it wraps at the frame's
+    /// width unless that's 0; its width is its widest line's, but lines
+    /// below the frame's bottom don't count to its height, the first
+    /// always does (a frame 5 tall is one line tall, as wide as all of
+    /// them).
     pub fn text_size(
         &mut self,
         text: &str,
@@ -241,21 +245,33 @@ impl Gui {
         size: f32,
         frame: Vec2,
     ) -> Vec2 {
-        let source = text::Source::plain(text, font, size);
-        text::lay_out(&mut self.fonts, &source, frame, Some(Some(frame.x))).bounds
+        let mut source = text::Source::plain(text, font, size);
+        source.wrapped = frame.x > 0.0;
+        let all = Vec2::new(frame.x, f32::MAX);
+        let width = text::lay_out(&mut self.fonts, &source, all, None).bounds.x;
+        let height = text::lay_out(&mut self.fonts, &source, frame, None)
+            .bounds
+            .y;
+        Vec2::new(width, height)
     }
 
     /// How big `query`'s text is: `TextService:GetTextBoundsAsync`
-    /// (creator-docs), measured as a TextLabel would lay it out. `None`
-    /// while a font it needs is on its way ([`Gui::take_font_requests`]):
-    /// ask again once one arrives.
-    pub fn text_bounds(&mut self, query: &TextQuery) -> Option<Vec2> {
+    /// (creator-docs), measured as a TextLabel would lay it out, or why it
+    /// can't be. `None` while a font it needs is on its way
+    /// ([`Gui::take_font_requests`]): ask again once one arrives.
+    pub fn text_bounds(&mut self, query: &TextQuery) -> Option<Result<Vec2, TextFailure>> {
         let mut source = text::Source::plain(&query.text, query.font.clone(), query.size);
         source.rich = query.rich;
+        if query.rich && !text::rich_parses(&source) {
+            return Some(Err(TextFailure::RichText));
+        }
         let area = Vec2::new(query.width.unwrap_or(f32::MAX), f32::MAX);
         self.fonts.take_waited();
         let block = text::lay_out(&mut self.fonts, &source, area, Some(query.width));
-        (!self.fonts.take_waited()).then_some(block.bounds)
+        if self.fonts.take_waited() {
+            return None;
+        }
+        Some(self.fonts.own_face(&query.font).map(|()| block.bounds))
     }
 
     /// Fonts by asset id (`rbxassetid://...`) text is waiting for, each

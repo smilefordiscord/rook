@@ -16,6 +16,7 @@ mod part;
 pub(crate) mod selection;
 mod sound;
 mod text;
+pub(crate) use text::params_size;
 mod views;
 
 use crate::runtime::world::World;

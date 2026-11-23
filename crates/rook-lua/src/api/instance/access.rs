@@ -134,7 +134,11 @@ pub(crate) fn write_property(
     let prop = db
         .find_canonical_property(class, name)
         .ok_or_else(|| format!("{name} is not a property"))?;
-    let converted = from_lua(lua, value, prop.ty)?;
+    let params = with_world(lua, |w| w.dom.class_name(id) == "GetTextBoundsParams");
+    let converted = match name {
+        "Size" if params => properties::params_size(value),
+        _ => from_lua(lua, value, prop.ty)?,
+    };
     if let Some(e) = with_world(lua, |w| {
         properties::wrong_ref_class(w, id, name, &converted)
     }) {

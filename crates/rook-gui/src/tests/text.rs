@@ -34,19 +34,13 @@ fn text_bounds_measure_as_a_label_lays_out() {
         return;
     };
     let hello = "Hello, world!";
-    assert_eq!(
-        gui.text_bounds(&query(hello, None, false)),
-        Some(Vec2::new(107.0, 24.0))
-    );
-    let wrapped = gui.text_bounds(&query(hello, Some(60.0), false)).unwrap();
+    let mut bounds = |q: TextQuery| gui.text_bounds(&q).unwrap().unwrap();
+    assert_eq!(bounds(query(hello, None, false)), Vec2::new(107.0, 24.0));
+    let wrapped = bounds(query(hello, Some(60.0), false));
     assert!(wrapped.x <= 60.0 && wrapped.y == 48.0, "{wrapped}");
-    assert_eq!(
-        gui.text_bounds(&query("A\nB", None, false)).unwrap().y,
-        48.0
-    );
-    let bold = gui.text_bounds(&query("<b>Hello</b>, world!", None, true));
-    let raw = gui.text_bounds(&query("<b>Hello</b>, world!", None, false));
-    let (bold, raw) = (bold.unwrap().x, raw.unwrap().x);
+    assert_eq!(bounds(query("A\nB", None, false)).y, 48.0);
+    let bold = bounds(query("<b>Hello</b>, world!", None, true)).x;
+    let raw = bounds(query("<b>Hello</b>, world!", None, false)).x;
     assert!(bold > 107.0 && bold < raw, "{bold} vs {raw}");
 }
 
@@ -66,4 +60,29 @@ fn text_bounds_wait_for_their_font() {
     assert_eq!(gui.text_bounds(&q), None);
     gui.font_arrived(&requests[0], None);
     assert!(gui.text_bounds(&q).is_some());
+}
+
+/// Studio 0.748: markup that doesn't parse, and a font whose own face
+/// can't be had, raise rather than measure.
+#[test]
+fn text_bounds_fail_for_bad_markup_and_missing_fonts() {
+    let Some(mut gui) = installed() else {
+        eprintln!("skipped: no Roblox install found");
+        return;
+    };
+    let bad = query("<b>Hello", None, true);
+    assert_eq!(gui.text_bounds(&bad), Some(Err(TextFailure::RichText)));
+    let mut missing = query("Hello", None, false);
+    missing.font.family = "rbxasset://fonts/families/NoSuchFont.json".into();
+    assert_eq!(
+        gui.text_bounds(&missing),
+        Some(Err(TextFailure::MissingFile))
+    );
+    missing.font.family = "rbxassetid://1".into();
+    assert_eq!(gui.text_bounds(&missing), None);
+    gui.font_arrived("rbxassetid://1", None);
+    assert_eq!(
+        gui.text_bounds(&missing),
+        Some(Err(TextFailure::MissingAsset))
+    );
 }

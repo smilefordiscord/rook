@@ -1,6 +1,6 @@
 # GUI text
 
-Checked against Studio 0.743 on 2026-10-21.
+Checked against Studio 0.748 on 2026-11-23.
 
 [M8](../../roadmap/m8-gui.md) step 2. TextLabel is in 550 archive files, TextButton in 456;
 Hint in 145 and Message in 26. Measured in Studio 0.743 on 2026-10-21,
@@ -158,26 +158,44 @@ top bar's buttons and a ScreenGui at DisplayOrder -1000 alike.
 
 TextService measures text as a TextLabel lays it out, its `TextBounds`
 for the same text, font and size (Inference: creator-docs give only the
-members' signatures).
+members' signatures). Measured in Studio 0.748 on 2026-11-23 by the
+conformance case `scripting/text_service`: what's marked Confirmed is
+from it; its bounds for 18 built-in fonts differ from Rook's by the
+glyph advances under [Widths](#widths), so Rook doesn't pass it whole.
 
-- **`GetTextSize(text, size, font, frameSize)`** takes an `Enum.Font` and
-  wraps at the frame's width. It answers at once, in whatever fonts have
-  loaded.
+- **`GetTextSize(text, size, font, frameSize)`** takes an `Enum.Font`
+  and answers at once, in whatever fonts have loaded. Confirmed: it
+  wraps at the frame's width, except that a frame 0 wide doesn't wrap,
+  and lines below the frame's bottom don't count, as in a TextLabel (a
+  frame 5 tall reports one line); `size` is an `int` (1.5 is 2) and a
+  size of 0 or less is 0 tall; it agrees with `GetTextBoundsAsync`. Its
+  arguments are cast from the last to the first, so with none it raises
+  `Argument 4 missing or nil`; a font name that's no item is `Unable to
+  cast string to Font`, a table frame `Unable to cast Array to Vector2`.
 - **`GetTextBoundsAsync(params)`** takes a GetTextBoundsParams: `Text` in
   `Font` (a `FontFace`) at `Size` pixels, wrapped at `Width`, read as rich
   text when `RichText` is on (creator-docs TextService,
   GetTextBoundsParams). It yields (creator-docs) and returns once the
-  fonts its text needs have loaded, which may be at once; a font that
-  fails to load measures in Source Sans, as text objects draw it. The
-  params are read when it's called.
-- A new GetTextBoundsParams is named `Instance` with `Size` 20 (measured,
-  [property defaults](../property-defaults.md)); its `Font` reads Source
-  Sans Pro, regular and upright (Inference).
-- Inference, which the conformance case `gui/text_bounds` checks against
-  Studio: a `Width` of 0 or less doesn't wrap; nil, a missing
-  argument and an instance of another class all raise `Argument 1
-  missing or nil`, and a value that isn't an instance `Unable to cast
-  value to Object`; a font that fails to load doesn't raise.
+  fonts its text needs have loaded, which may be at once. The params are
+  read when it's called, and a destroyed one still measures (Confirmed).
+- Confirmed: markup that doesn't parse raises `Error parsing rich text`,
+  and a font whose own face can't be had raises rather than measuring in
+  Source Sans as text objects draw it: `Temp read failed.` for an
+  install file that isn't there, `Request asset was not found` for an
+  asset. Rook raises them only when it can read Source Sans, so without
+  an install text measures as it draws.
+- Confirmed: nil and a missing argument raise `Argument 1 missing or
+  nil`, an instance of another class `Argument 1 is invalid: expected
+  'GetTextBoundsParams' instance type`, and a value that isn't an
+  instance `Unable to cast value to Object`. Inference: a `Width` of 0
+  or less doesn't wrap.
+- **GetTextBoundsParams**: a new one is named `Instance`, with `Text`
+  empty, `Size` 20, `Width` 0 and `Font` Source Sans Pro, regular and
+  upright (Confirmed, [property defaults](../property-defaults.md)).
+  `Size` takes anything, a non-number (nil too) as 0, and keeps it
+  within 1 to 100 cut to a whole number (1.5 is 1), NaN as -2147483648
+  (Confirmed); the other properties take what other instances' do.
+  `Clone` gives nil, though it's Archivable (Confirmed).
 
 ## Not yet
 

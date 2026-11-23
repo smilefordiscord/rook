@@ -73,6 +73,18 @@ pub struct TextQuery {
     pub rich: bool,
 }
 
+/// Why `TextService:GetTextBoundsAsync` can't measure some text
+/// (measured in Studio 0.748, where each raises).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TextFailure {
+    /// `RichText` is on and the markup doesn't parse.
+    RichText,
+    /// The font's face is an install file that isn't there.
+    MissingFile,
+    /// The font's face is an asset that couldn't be had.
+    MissingAsset,
+}
+
 pub(crate) fn is_text(dom: &Dom, id: InstanceId) -> bool {
     matches!(dom.class_name(id), "TextLabel" | "TextButton" | "TextBox")
 }
@@ -124,6 +136,11 @@ pub(crate) struct CaretLine {
     pub(crate) bottom: f32,
     /// Each place: the character after it, and its x.
     pub(crate) stops: Vec<(usize, f32)>,
+}
+
+/// Whether `source`'s markup parses, so it isn't shown as written.
+pub(crate) fn rich_parses(source: &Source) -> bool {
+    rich::parse(&source.text, &source.style).is_some()
 }
 
 /// Lay `source` out in a `size` area. `wrap` overrides where it wraps

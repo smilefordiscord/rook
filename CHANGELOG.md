@@ -6,6 +6,7 @@ Every release, newest first. How versions are numbered is in
 ## [Unreleased]
 
 - `TextService:GetTextBoundsAsync` measures a GetTextBoundsParams' text as a TextLabel lays it out, waiting for its font to load. Rook raised an error saying it wasn't implemented, and a new GetTextBoundsParams' `Font` read nil. See [GUI text](docs/behavior/gui/text.md#measuring-text).
+- `TextService:GetTextSize` casts its arguments, wraps and counts lines in its frame as in Roblox, and a method called with another class's instance as `self` raises Roblox's error for a `.` call. Rook raised Lua-style argument errors, wrapped text in a frame with no width at every letter, and ran the method on the wrong instance. See [GUI text](docs/behavior/gui/text.md#measuring-text).
 - A member's argument that doesn't cast names a table as `Array` or `Dictionary` in its error, and an EnumItem as its enum, as in Roblox. Rook named either by its type in some members' errors.
 - A member function called with an instance of another class in place of `self` raises `Expected ':' not '.'`, as in Roblox. Rook ran the member on whatever instance it was given. See [member lookup](docs/behavior/scripting/member-lookup.md#calling-a-member-function).
 - Light, shadows and the sky's light follow the camera to where it moves on a busy or slow machine. Rook could keep lighting only where the camera had been, for as long as the machine stayed busy. See [local lights](docs/behavior/lighting/local-lights.md).

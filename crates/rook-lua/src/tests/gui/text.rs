@@ -46,7 +46,7 @@ fn get_text_bounds_answers_at_once_when_its_fonts_are_loaded() {
             "true",
             "false Argument 1 missing or nil",
             "false Argument 1 missing or nil",
-            "false Argument 1 missing or nil",
+            "false Argument 1 is invalid: expected 'GetTextBoundsParams' instance type",
             "false Unable to cast value to Object",
         ],
     );
@@ -76,4 +76,37 @@ fn get_text_bounds_waits_for_its_font() {
     rt.deliver_font(&requests[0], None);
     assert_eq!(finish(&rt, 1), ["measured Vector2"]);
     assert!(rt.world().text_bounds_waiting.is_empty());
+}
+
+/// Studio 0.748: `Size` takes anything, kept within 1 to 100 and cut to a
+/// whole number; a GetTextBoundsParams doesn't clone; GetTextSize casts
+/// its arguments from the last.
+#[test]
+fn get_text_bounds_params_size_and_clone() {
+    expect(
+        r#"
+        local p = Instance.new("GetTextBoundsParams")
+        local sizes = {}
+        for _, v in { 0, 1.5, 1000, 0 / 0, "x", "12" } do
+            p.Size = v
+            table.insert(sizes, tostring(p.Size))
+        end
+        p.Size = nil
+        table.insert(sizes, tostring(p.Size))
+        print(table.concat(sizes, " "))
+        print(p:Clone())
+        local TextService = game:GetService("TextService")
+        print(pcall(TextService.GetTextSize, TextService))
+        print(pcall(TextService.GetTextSize, TextService, "Hi", 14, "Nope", Vector2.zero))
+        print(pcall(TextService.GetTextSize, TextService, "Hi", 14, Enum.Font.Arial, {}))
+        "#,
+        1,
+        &[
+            "1 1 100 -2147483648 1 12 1",
+            "nil",
+            "false Argument 4 missing or nil",
+            "false Unable to cast string to Font",
+            "false Unable to cast Array to Vector2",
+        ],
+    );
 }

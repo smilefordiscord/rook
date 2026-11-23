@@ -64,7 +64,9 @@ Edit, false on the client; the client's false is the zero value, so the
 table has no entry for it) and `TestService.Enabled` (false in Edit, true
 on the client). `BubbleChatMessageProperties.FontFace` and
 `GetTextBoundsParams.Font` are skipped: the sweep doesn't store Fonts yet,
-so they read the zero value (Inference).
+so they read the zero value, Source Sans Pro regular and upright, which
+is `GetTextBoundsParams.Font`'s (Studio 0.748, the conformance case
+`scripting/text_service`).
 
 The database is wrong, not silent, about `SoundService.RespectFilteringEnabled`
 (it says false; creator-docs and Studio 0.742 say true), so that one stays
