@@ -1,7 +1,7 @@
 # Post-processing
 
 Checked against Studio 0.748 on 2026-11-23, by its shaders and the
-creator docs only: nothing on this page is measured in Studio yet.
+creator docs only: nothing on this page is measured in Studio.
 
 The PostEffects (ColorCorrectionEffect, BlurEffect, BloomEffect,
 SunRaysEffect, DepthOfFieldEffect and ColorGradingEffect) change the
@@ -10,8 +10,8 @@ and parented to Lighting or to `Workspace.CurrentCamera` (Confirmed:
 creator-docs PostEffect). Effects under Lighting show to every player;
 under the Camera, to its player alone (Confirmed: the post-processing
 guide). Some draw differently or not at all at low quality levels
-(Confirmed: creator-docs PostEffect, unmeasured); Rook draws every level
-the same until it has a quality setting (M13 step 4).
+(Confirmed: creator-docs PostEffect, unmeasured); Rook has no quality
+setting and draws every level the same.
 
 ## Where each effect sits
 
@@ -121,6 +121,8 @@ Approximation). What the properties become is Inference:
   first eight with a `Size` above 0 draw and the first four with `Size`
   0 add in place (Approximation: Studio's limits, if any, aren't
   measured; a bound keeps a frame's passes bounded).
+- A setting that isn't a finite number draws as its default
+  (Inference: Studio's handling isn't measured).
 
 ## SunRaysEffect
 
@@ -225,7 +227,7 @@ first copy does (Inference). So it belongs with Bloom, run with the
 engine's own threshold and intensity at the levels that turn it on. Rook
 doesn't draw it: those settings and levels need Studio captures (Neon
 squares on black with no Bloom, at Automatic and Level21), and Rook has
-no quality levels yet (M13 step 4).
+no quality levels.
 
 ## ColorGradingEffect
 

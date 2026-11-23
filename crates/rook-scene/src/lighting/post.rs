@@ -23,24 +23,27 @@ pub(crate) fn post_effects(dom: &Dom) -> PostEffects {
             // several isn't measured).
             "ColorGradingEffect" if grading.is_none() => grading = Some(id),
             "ColorCorrectionEffect" => post.color.push(ColorCorrection {
-                brightness: dom.float_property(id, "Brightness").unwrap_or(0.0),
-                contrast: dom.float_property(id, "Contrast").unwrap_or(0.0),
-                saturation: dom.float_property(id, "Saturation").unwrap_or(0.0),
-                tint: (dom.color3_property(id, "TintColor")).map_or([1.0; 3], Color3::to_array),
+                brightness: setting(dom, id, "Brightness", 0.0),
+                contrast: setting(dom, id, "Contrast", 0.0),
+                saturation: setting(dom, id, "Saturation", 0.0),
+                tint: (dom.color3_property(id, "TintColor"))
+                    .map(Color3::to_array)
+                    .filter(|c| c.iter().all(|v| v.is_finite()))
+                    .unwrap_or([1.0; 3]),
             }),
             // Each adds its own (Confirmed: creator-docs BloomEffect, they
             // compose).
             "BloomEffect" => post.bloom.push(Bloom {
-                intensity: dom.float_property(id, "Intensity").unwrap_or(0.4),
-                size: dom.float_property(id, "Size").unwrap_or(24.0),
-                threshold: dom.float_property(id, "Threshold").unwrap_or(0.95),
+                intensity: setting(dom, id, "Intensity", 0.4),
+                size: setting(dom, id, "Size", 24.0),
+                threshold: setting(dom, id, "Threshold", 0.95),
             }),
             // The brightest draws (Inference: Studio's shader takes one
             // set of settings).
             "SunRaysEffect" => {
                 let rays = SunRays {
-                    intensity: dom.float_property(id, "Intensity").unwrap_or(0.25),
-                    spread: dom.float_property(id, "Spread").unwrap_or(1.0),
+                    intensity: setting(dom, id, "Intensity", 0.25),
+                    spread: setting(dom, id, "Spread", 1.0),
                 };
                 if post.sun_rays.is_none_or(|r| rays.intensity > r.intensity) {
                     post.sun_rays = Some(rays);
@@ -50,15 +53,15 @@ pub(crate) fn post_effects(dom: &Dom) -> PostEffects {
             // of settings).
             "DepthOfFieldEffect" if post.depth_of_field.is_none() => {
                 post.depth_of_field = Some(DepthOfField {
-                    far_intensity: dom.float_property(id, "FarIntensity").unwrap_or(0.75),
-                    focus_distance: dom.float_property(id, "FocusDistance").unwrap_or(0.05),
-                    in_focus_radius: dom.float_property(id, "InFocusRadius").unwrap_or(10.0),
-                    near_intensity: dom.float_property(id, "NearIntensity").unwrap_or(0.75),
+                    far_intensity: setting(dom, id, "FarIntensity", 0.75),
+                    focus_distance: setting(dom, id, "FocusDistance", 0.05),
+                    in_focus_radius: setting(dom, id, "InFocusRadius", 10.0),
+                    near_intensity: setting(dom, id, "NearIntensity", 0.75),
                 });
             }
             // The greatest Size wins (Confirmed: creator-docs BlurEffect).
             "BlurEffect" => {
-                let size = dom.float_property(id, "Size").unwrap_or(24.0);
+                let size = setting(dom, id, "Size", 24.0);
                 post.blur = post.blur.max(size);
             }
             _ => {}
@@ -69,6 +72,15 @@ pub(crate) fn post_effects(dom: &Dom) -> PostEffects {
         _ => Tonemapper::Default,
     };
     post
+}
+
+/// `id`'s `name`, or `default` when it isn't a finite number
+/// (Inference: what Studio draws for one isn't measured; Rook's shaders
+/// would carry a NaN or infinity into every pixel).
+fn setting(dom: &Dom, id: InstanceId, name: &str, default: f32) -> f32 {
+    (dom.float_property(id, name))
+        .filter(|v| v.is_finite())
+        .unwrap_or(default)
 }
 
 #[cfg(test)]
@@ -268,5 +280,30 @@ mod tests {
         )
         .unwrap();
         assert_eq!(post.tonemapper, Tonemapper::Default);
+    }
+
+    /// A setting a script made NaN or infinite reads as its default, so
+    /// no NaN reaches the frame's pixels.
+    #[test]
+    fn settings_that_are_not_numbers_read_as_defaults() {
+        let (mut dm, mut cache) = place();
+        let post = run(
+            &mut dm,
+            &mut cache,
+            "local b = Instance.new('BloomEffect')
+             b.Intensity = 0/0
+             b.Size = math.huge
+             b.Parent = game.Lighting
+             local c = Instance.new('ColorCorrectionEffect')
+             c.Contrast = -math.huge
+             c.TintColor = Color3.new(0/0, 1, 1)
+             c.Parent = game.Lighting",
+        )
+        .unwrap();
+        assert_eq!((post.bloom[0].intensity, post.bloom[0].size), (0.4, 24.0));
+        assert_eq!(
+            (post.color[0].contrast, post.color[0].tint),
+            (0.0, [1.0; 3])
+        );
     }
 }
