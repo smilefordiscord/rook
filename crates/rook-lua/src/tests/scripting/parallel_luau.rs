@@ -464,3 +464,27 @@ fn shared_tables_clone_freeze_and_compare_by_identity() {
         ],
     );
 }
+
+/// A script can nest tables as deep as memory allows: converting or deeply
+/// copying one past the limit raises, and a long chain of SharedTables is
+/// freed, where both overflowed the stack.
+#[test]
+fn deeply_nested_shared_tables_raise_or_free_without_a_crash() {
+    expect(
+        r#"
+        local t = {} for i = 1, 100000 do t = {t} end
+        print(pcall(SharedTable.new, t))
+        local n = SharedTable.new()
+        for i = 1, 100000 do local m = SharedTable.new() m.c = n n = m end
+        print(pcall(SharedTable.clone, n, true))
+        print(#tostring(SharedTable.clone(n, false)))
+        n = nil
+        "#,
+        0,
+        &[
+            "false SharedTables can't nest more than 1000 deep",
+            "false SharedTables can't nest more than 1000 deep",
+            "11",
+        ],
+    );
+}

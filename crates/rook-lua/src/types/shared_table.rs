@@ -44,12 +44,42 @@ enum Entry {
     Data(Value),
 }
 
+/// How deep SharedTables may nest where Rook walks them by recursion:
+/// converting a Luau table and copying deeply. Approximation: Roblox's
+/// limit isn't documented; without one a script's deeply nested table
+/// overflows the stack.
+const MAX_DEPTH: usize = 1000;
+
 #[derive(Debug, Default)]
 struct Contents {
     frozen: bool,
     /// Counts changes, so `update` can tell the table changed under it.
     version: u64,
     entries: BTreeMap<Key, Entry>,
+}
+
+/// Dropped table by table, not by recursion: a script can chain tables
+/// (each holding the next) as long as memory allows, and dropping such a
+/// chain by recursion overflows the stack.
+impl Drop for Contents {
+    fn drop(&mut self) {
+        let mut pending = tables(std::mem::take(&mut self.entries));
+        while let Some(table) = pending.pop() {
+            if let Ok(lock) = Arc::try_unwrap(table.0) {
+                let mut contents = lock.into_inner().unwrap_or_else(PoisonError::into_inner);
+                pending.extend(tables(std::mem::take(&mut contents.entries)));
+            }
+        }
+    }
+}
+
+fn tables(entries: BTreeMap<Key, Entry>) -> Vec<LSharedTable> {
+    (entries.into_values())
+        .filter_map(|e| match e {
+            Entry::Table(t) => Some(t),
+            _ => None,
+        })
+        .collect()
 }
 
 #[derive(Debug, Clone, Default)]
@@ -84,19 +114,22 @@ impl LSharedTable {
     /// A copy: of this table only, or (`deep`) of every SharedTable it
     /// reaches, each copied once however often it's reached. Each table is
     /// copied in one read, so it's a consistent snapshot of that table.
-    fn clone_table(&self, deep: bool, freeze: bool) -> Self {
+    fn clone_table(&self, deep: bool, freeze: bool) -> mlua::Result<Self> {
         let mut copies = FxHashMap::default();
-        self.clone_into(deep, freeze, &mut copies)
+        self.clone_into((deep, freeze), 0, &mut copies)
     }
 
     fn clone_into(
         &self,
-        deep: bool,
-        freeze: bool,
+        (deep, freeze): (bool, bool),
+        depth: usize,
         copies: &mut FxHashMap<*const RwLock<Contents>, Self>,
-    ) -> Self {
+    ) -> mlua::Result<Self> {
         if let Some(copy) = copies.get(&Arc::as_ptr(&self.0)) {
-            return copy.clone();
+            return Ok(copy.clone());
+        }
+        if depth >= MAX_DEPTH {
+            return Err(too_deep());
         }
         let copy = Self::default();
         copies.insert(Arc::as_ptr(&self.0), copy.clone());
@@ -104,7 +137,7 @@ impl LSharedTable {
         if deep {
             for entry in entries.values_mut() {
                 if let Entry::Table(t) = entry {
-                    *t = t.clone_into(deep, freeze, copies);
+                    *t = t.clone_into((deep, freeze), depth + 1, copies)?;
                 }
             }
         }
@@ -112,8 +145,15 @@ impl LSharedTable {
         contents.entries = entries;
         contents.frozen = freeze;
         drop(contents);
-        copy
+        Ok(copy)
     }
+}
+
+/// Inference: the wording.
+fn too_deep() -> mlua::Error {
+    err(format!(
+        "SharedTables can't nest more than {MAX_DEPTH} deep"
+    ))
 }
 
 impl UserData for LSharedTable {
@@ -224,6 +264,9 @@ fn from_table(
     if within.contains(&address) {
         return Err(err("tables cannot be cyclic"));
     }
+    if within.len() >= MAX_DEPTH {
+        return Err(too_deep());
+    }
     within.push(address);
     let mut entries = BTreeMap::new();
     for pair in table.clone().pairs::<LuaValue, LuaValue>() {
@@ -328,7 +371,7 @@ pub(crate) fn install(lua: &Lua) -> mlua::Result<()> {
         t.set(
             name,
             lua.create_function(move |_, (st, deep): (LuaValue, Option<bool>)| {
-                Ok(table_arg(&st, name)?.clone_table(deep.unwrap_or(false), freeze))
+                table_arg(&st, name)?.clone_table(deep.unwrap_or(false), freeze)
             })?,
         )?;
     }
