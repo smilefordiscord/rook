@@ -9,7 +9,7 @@
 //! 1002 = "Arena.rbxl"
 //! ```
 
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 
 use super::{PlaceSource, Universe};
 
@@ -101,6 +101,17 @@ impl Universe {
             let toml::Value::String(file) = value else {
                 return Err(Parse::Invalid(format!("place {id} must name a file")));
             };
+            // Only files in the manifest's folder or below: a manifest
+            // shared with a place mustn't make a teleport read a file
+            // elsewhere on the machine, or reach a network share.
+            let file = Path::new(file);
+            let mut parts = file.components();
+            if !parts.all(|c| matches!(c, Component::Normal(_))) || file.file_name().is_none() {
+                return Err(Parse::Invalid(format!(
+                    "place {id} must name a file in this folder, not {}",
+                    file.display()
+                )));
+            }
             universe.add_place(id, PlaceSource::File(folder.join(file)));
         }
         for key in table.keys() {
@@ -135,6 +146,8 @@ mod tests {
         assert_eq!(path, &Path::new("games").join("Arena.rbxl"));
     }
 
+    /// A place's file is in the manifest's folder or below it, never a
+    /// path leaving it, an absolute path or a network share.
     #[test]
     fn place_ids_are_positive_numbers_naming_files() {
         for bad in [
@@ -142,6 +155,11 @@ mod tests {
             "[places]\n0 = \"a.rbxl\"",
             "[places]\n5 = 7",
             "game_id = \"x\"",
+            "[places]\n5 = \"../a.rbxl\"",
+            "[places]\n5 = \"games/../../a.rbxl\"",
+            "[places]\n5 = \"/a.rbxl\"",
+            "[places]\n5 = \"//host/share/a.rbxl\"",
+            "[places]\n5 = \"\"",
         ] {
             assert!(
                 matches!(Universe::parse(bad, Path::new("")), Err(Parse::Invalid(_))),
