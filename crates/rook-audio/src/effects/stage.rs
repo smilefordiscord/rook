@@ -16,6 +16,18 @@ pub(super) enum Stage {
     Fader(f32),
     Flange(flange::Flanger),
     Tremolo(tremolo::State),
+    Filter(filter::State),
+    Limiter(limiter::Limiter),
+    Gate(gate::Gate),
+}
+
+fn gate(threshold: [f32; 2], attack: f32, release: f32) -> gate::Settings {
+    gate::Settings {
+        low: threshold[0],
+        high: threshold[1],
+        attack,
+        release,
+    }
 }
 
 impl Stage {
@@ -52,6 +64,15 @@ impl Stage {
                 rate: r,
             } => Self::Flange(flange::Flanger::new(rate, delay, mix, r)),
             Effect::Tremolo(t) => Self::Tremolo(tremolo::State::new(rate, t)),
+            Effect::Filter(f) => Self::Filter(filter::State::new(rate, f)),
+            Effect::Limiter { max_level, release } => {
+                Self::Limiter(limiter::Limiter::new(rate, max_level, release))
+            }
+            Effect::Gate {
+                threshold,
+                attack,
+                release,
+            } => Self::Gate(gate::Gate::new(rate, gate(threshold, attack, release))),
         }
     }
 
@@ -91,6 +112,18 @@ impl Stage {
             (Self::Fader(v), Effect::Fader { volume }) => *v = volume,
             (Self::Flange(f), Effect::Flange { delay, mix, rate }) => f.set(delay, mix, rate),
             (Self::Tremolo(s), Effect::Tremolo(t)) => s.set(t),
+            (Self::Filter(s), Effect::Filter(f)) => s.set(f),
+            (Self::Limiter(l), Effect::Limiter { max_level, release }) => {
+                l.set(max_level, release);
+            }
+            (
+                Self::Gate(g),
+                Effect::Gate {
+                    threshold,
+                    attack,
+                    release,
+                },
+            ) => g.set(gate(threshold, attack, release)),
             _ => return false,
         }
         true
@@ -113,6 +146,9 @@ impl Stage {
             }
             Self::Flange(f) => f.process(frames),
             Self::Tremolo(s) => s.process(frames),
+            Self::Filter(s) => s.process(frames),
+            Self::Limiter(l) => l.process(frames),
+            Self::Gate(g) => g.process(frames),
         }
     }
 

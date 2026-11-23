@@ -12,12 +12,16 @@
 //! tails, oscillators) from one block to the next, also when their
 //! settings change.
 
+mod biquad;
 mod chorus;
 mod compressor;
 mod distortion;
 mod echo;
 mod equalizer;
+mod filter;
 mod flange;
+mod gate;
+mod limiter;
 mod line;
 mod pitch;
 mod reverb;
@@ -27,6 +31,7 @@ mod tremolo;
 use stage::Stage;
 
 pub use equalizer::CROSSOVERS;
+pub use filter::{Filter, FilterType};
 pub use flange::{FLANGE_SPAN, FLANGER_SPAN};
 pub use reverb::{Reverb, ambient};
 pub use tremolo::Tremolo;
@@ -82,6 +87,19 @@ pub enum Effect {
         rate: f32,
     },
     Tremolo(Tremolo),
+    Filter(Filter),
+    /// AudioLimiter: `MaxLevel` in dB, `Release` in seconds.
+    Limiter {
+        max_level: f32,
+        release: f32,
+    },
+    /// AudioGate: `Threshold`'s low and high ends in dB, `Attack` and
+    /// `Release` in seconds.
+    Gate {
+        threshold: [f32; 2],
+        attack: f32,
+        release: f32,
+    },
     /// AudioFader: a plain gain, 0 to 3 (Confirmed: a fader at 2 doubled
     /// a recording's peak exactly).
     Fader {

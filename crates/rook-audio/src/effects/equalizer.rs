@@ -11,56 +11,14 @@
 //! works so, with the same bands, and the levels Studio gave a recording
 //! with each band cut match within a few percent).
 
+use super::biquad::Biquad;
 use super::{Frame, db};
+
+const BUTTERWORTH: f32 = std::f32::consts::FRAC_1_SQRT_2;
 
 /// EqualizerSoundEffect's crossovers, and AudioEqualizer's default
 /// `MidRange`.
 pub const CROSSOVERS: [f32; 2] = [400.0, 4000.0];
-
-/// A second-order filter (the Audio EQ Cookbook's forms).
-#[derive(Debug, Clone, Copy, Default)]
-struct Biquad {
-    b: [f32; 3],
-    a: [f32; 2],
-    /// Per channel: the last two inputs and outputs, as transposed direct
-    /// form II state.
-    z: [[f32; 2]; 2],
-}
-
-#[derive(Clone, Copy)]
-enum Pass {
-    Low,
-    High,
-    All,
-}
-
-impl Biquad {
-    /// Butterworth (Q 1/√2) at `frequency`.
-    fn new(kind: Pass, frequency: f32, rate: f32) -> Self {
-        let w = std::f32::consts::TAU * (frequency / rate).min(0.49);
-        let (sin, cos) = w.sin_cos();
-        let alpha = sin / std::f32::consts::SQRT_2;
-        let a0 = 1.0 + alpha;
-        let b = match kind {
-            Pass::Low => [(1.0 - cos) / 2.0, 1.0 - cos, (1.0 - cos) / 2.0],
-            Pass::High => [(1.0 + cos) / 2.0, -(1.0 + cos), (1.0 + cos) / 2.0],
-            Pass::All => [1.0 - alpha, -2.0 * cos, 1.0 + alpha],
-        };
-        Self {
-            b: b.map(|v| v / a0),
-            a: [-2.0 * cos / a0, (1.0 - alpha) / a0],
-            z: [[0.0; 2]; 2],
-        }
-    }
-
-    fn run(&mut self, channel: usize, x: f32) -> f32 {
-        let z = &mut self.z[channel];
-        let y = self.b[0] * x + z[0];
-        z[0] = self.b[1] * x - self.a[0] * y + z[1];
-        z[1] = self.b[2] * x - self.a[1] * y;
-        y
-    }
-}
 
 /// A Linkwitz-Riley filter: two Butterworth sections in a row.
 #[derive(Debug, Clone, Copy)]
@@ -69,8 +27,11 @@ struct Lr4([Biquad; 2]);
 impl Lr4 {
     fn new(low_pass: bool, frequency: f32, rate: f32) -> Self {
         let one = || {
-            let kind = if low_pass { Pass::Low } else { Pass::High };
-            Biquad::new(kind, frequency, rate)
+            if low_pass {
+                Biquad::low_pass(frequency, BUTTERWORTH, rate)
+            } else {
+                Biquad::high_pass(frequency, BUTTERWORTH, rate)
+            }
         };
         Self([one(), one()])
     }
@@ -102,7 +63,7 @@ impl Equalizer {
             low_high_pass: Lr4::new(false, low, rate),
             mid_pass: Lr4::new(true, high, rate),
             high_pass: Lr4::new(false, high, rate),
-            low_phase: Biquad::new(Pass::All, high, rate),
+            low_phase: Biquad::all_pass(high, BUTTERWORTH, rate),
             gains: [1.0; 3],
             crossovers,
         };

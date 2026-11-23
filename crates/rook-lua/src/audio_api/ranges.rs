@@ -63,6 +63,15 @@ const RANGES: &[(&str, &str, f64, f64)] = &[
 /// (10 to 30,000 read back as 200 to 20,000).
 const MID_RANGE: (f32, f32) = (200.0, 20_000.0);
 
+/// The range `class`'s `property` keeps to, if it has one: what scripts
+/// read back, and what the mixer plays a value saved outside it at.
+pub fn range(class: &str, property: &str) -> Option<(f64, f64)> {
+    RANGES
+        .iter()
+        .find(|(c, p, _, _)| *c == class && *p == property)
+        .map(|&(_, _, lo, hi)| (lo, hi))
+}
+
 /// Store `value` within its range, if `name` has one on `id`'s class.
 /// NaN reads back as the highest value (observed for AudioPlayer's
 /// `Volume`; Inference for the rest).
@@ -88,9 +97,7 @@ pub(crate) fn clamp(
                 .set_property_by_name(id, name, Value::NumberRange(range)),
         );
     }
-    let &(_, _, lo, hi) = RANGES
-        .iter()
-        .find(|(c, p, _, _)| *c == class && *p == name)?;
+    let (lo, hi) = range(class, name)?;
     let v = value.as_number()?;
     let v = if v.is_nan() { hi } else { v.clamp(lo, hi) };
     let stored = match w.dom.property_by_name(id, name) {

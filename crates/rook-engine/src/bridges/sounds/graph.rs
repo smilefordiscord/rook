@@ -6,7 +6,7 @@
 //! `rook_lua::audio_api`'s rules, so scripts and the mixer agree.
 
 use rook_audio::SAMPLE_RATE;
-use rook_audio::effects::{Effect, Reverb};
+use rook_audio::effects::{Effect, FLANGER_SPAN, Reverb, Tremolo};
 use rook_audio::graph::{Graph, Runner};
 
 use super::*;
@@ -19,15 +19,20 @@ pub(crate) struct Metering {
     carry: f64,
 }
 
-/// The effect an effect instance plays, with Studio's defaults; `None`
-/// passes sound through as it is: a bypassed effect (creator-docs), and the
-/// classes below without an arm (Approximation).
+/// The effect an effect instance plays, with Studio's defaults and each
+/// property kept to its range (a value saved outside it plays at its
+/// end); `None` passes sound through as it is: a bypassed effect
+/// (creator-docs).
 pub(super) fn effect(dom: &Dom, id: InstanceId) -> Option<Effect> {
     if dom.bool_property(id, "Bypass").unwrap_or(false) {
         return None;
     }
-    let f = |name: &str, default: f32| dom.float_property(id, name).unwrap_or(default);
-    Some(match dom.class_name(id) {
+    let class = dom.class_name(id);
+    let f = |name: &str, default: f32| {
+        let v = dom.float_property(id, name).unwrap_or(default);
+        rook_lua::audio_api::range(class, name).map_or(v, |(lo, hi)| v.clamp(lo as f32, hi as f32))
+    };
+    Some(match class {
         "AudioFader" => Effect::Fader {
             volume: f("Volume", 1.0),
         },
@@ -74,8 +79,32 @@ pub(super) fn effect(dom: &Dom, id: InstanceId) -> Option<Effect> {
             release: f("Release", 0.1),
             makeup: f("MakeupGain", 0.0),
         },
-        // TODO: play AudioFilter, AudioFlanger, AudioTremolo, AudioLimiter
-        // and AudioGate.
+        "AudioFlanger" => Effect::Flange {
+            delay: f("Depth", 0.45) * FLANGER_SPAN,
+            mix: f("Mix", 0.85),
+            rate: f("Rate", 5.0),
+        },
+        "AudioTremolo" => Effect::Tremolo(Tremolo {
+            depth: f("Depth", 1.0),
+            duty: f("Duty", 0.5),
+            frequency: f("Frequency", 5.0),
+            shape: f("Shape", 0.0),
+            skew: f("Skew", 0.0),
+            square: f("Square", 0.0),
+        }),
+        "AudioFilter" => Effect::Filter(rook_lua::audio_api::filter(dom, id)),
+        "AudioLimiter" => Effect::Limiter {
+            max_level: f("MaxLevel", 0.0),
+            release: f("Release", 0.01),
+        },
+        // Studio's default Threshold is -36 to -24 dB.
+        "AudioGate" => Effect::Gate {
+            threshold: dom
+                .number_range_property(id, "Threshold")
+                .map_or([-36.0, -24.0], |r| [r.min, r.max]),
+            attack: f("Attack", 0.01),
+            release: f("Release", 0.1),
+        },
         _ => return None,
     })
 }

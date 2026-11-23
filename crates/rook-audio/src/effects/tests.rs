@@ -61,4 +61,38 @@ fn new_effects_take_settings_in_place() {
         stage.set(&flange(0.02, 0.8, 2.0)),
         "a flange is taken in place"
     );
+    for (a, b) in [
+        (
+            Effect::Filter(Filter::default()),
+            Effect::Filter(Filter {
+                kind: FilterType::Lowpass48dB,
+                ..Filter::default()
+            }),
+        ),
+        (
+            Effect::Limiter {
+                max_level: 0.0,
+                release: 0.01,
+            },
+            Effect::Limiter {
+                max_level: -6.0,
+                release: 0.1,
+            },
+        ),
+        (
+            Effect::Gate {
+                threshold: [-36.0, -24.0],
+                attack: 0.01,
+                release: 0.1,
+            },
+            Effect::Gate {
+                threshold: [-50.0, -40.0],
+                attack: 0.1,
+                release: 1.0,
+            },
+        ),
+    ] {
+        let mut stage = Stage::new(&a, crate::SAMPLE_RATE as f32);
+        assert!(stage.set(&b), "{b:?} is taken in place");
+    }
 }

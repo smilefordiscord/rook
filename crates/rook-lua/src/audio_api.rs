@@ -13,10 +13,12 @@ mod ranges;
 
 pub use curves::{read_curve, write_curve};
 pub(crate) use ranges::clamp;
+pub use ranges::range;
 
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::collections::BTreeSet;
 
+use rook_audio::effects::{Filter, FilterType};
 use rook_dom::{Change, Dom, InstanceId};
 use rook_types::{CFrame, RollOffMode, Value};
 
@@ -93,6 +95,22 @@ pub fn is_effect(class: &str) -> bool {
             | "AudioLimiter"
             | "AudioGate"
     )
+}
+
+/// An AudioFilter's curve, with Studio's defaults: what the mixer plays
+/// and `GetGainAt` reads.
+pub fn filter(dom: &Dom, id: InstanceId) -> Filter {
+    let d = Filter::default();
+    let f = |name: &str, default: f32| dom.float_property(id, name).unwrap_or(default);
+    Filter {
+        kind: dom
+            .enum_item_property(id, "FilterType")
+            .and_then(FilterType::from_name)
+            .unwrap_or(d.kind),
+        frequency: f("Frequency", d.frequency),
+        gain: f("Gain", d.gain),
+        q: f("Q", d.q),
+    }
 }
 
 /// Whether instances of `class` take part in the graph (as a node or a
