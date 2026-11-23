@@ -1,0 +1,57 @@
+-- studio 0.748.0.7481526
+-- signals: deferred
+FireClient self field error tables cannot be cyclic
+FireAllClients self field error tables cannot be cyclic
+FireClient self index error tables cannot be cyclic
+FireAllClients self index error tables cannot be cyclic
+FireClient two step error tables cannot be cyclic
+FireAllClients two step error tables cannot be cyclic
+FireClient deep cycle error tables cannot be cyclic
+FireAllClients deep cycle error tables cannot be cyclic
+FireClient self key ok 
+FireAllClients self key ok 
+FireClient dropped key ok 
+FireAllClients dropped key ok 
+FireClient behind metatable ok 
+FireAllClients behind metatable ok 
+FireClient shared ok 
+FireAllClients shared ok 
+FireClient cycle second argument error tables cannot be cyclic
+FireClient cycle in array error tables cannot be cyclic
+unreliable FireAllClients error tables cannot be cyclic
+unreliable FireClient error tables cannot be cyclic
+InvokeClient cycle error tables cannot be cyclic
+InvokeClient dropped key pending
+FireServer on server error tables cannot be cyclic
+InvokeServer on server error tables cannot be cyclic
+FireAllClients depth 60 ok 
+FireAllClients depth 70 ok 
+FireAllClients depth 300 error Max lua stack size reached
+FireAllClients depth 1000 error Max lua stack size reached
+unparented FireAllClients error tables cannot be cyclic
+unparented FireAllClients plain ok 
+Fire self field error tables cannot be cyclic
+Invoke self field error tables cannot be cyclic
+Fire self index error tables cannot be cyclic
+Invoke self index error tables cannot be cyclic
+Fire two step error tables cannot be cyclic
+Invoke two step error tables cannot be cyclic
+Fire deep cycle error tables cannot be cyclic
+Invoke deep cycle error tables cannot be cyclic
+Fire self key ok string:<Table> (table: 0x)=number
+Invoke self key ok table
+Fire dropped key ok number:1=number number:2=number
+Invoke dropped key ok table
+Fire behind metatable ok 
+Invoke behind metatable ok table
+Fire shared ok number:1=table number:2=table number:3=table
+Invoke shared ok table
+Fire shared copies false
+Invoke returns cycle error tables cannot be cyclic
+Invoke returns dropped key ok 2 nil
+Invoke cycle second argument error tables cannot be cyclic
+Fire cycle listener ran false false false
+Fire depth 60 60 leaf
+Fire depth 70 70 leaf
+Fire depth 300 error Max lua stack size reached
+Fire depth 1000 error Max lua stack size reached

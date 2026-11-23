@@ -45,7 +45,7 @@ fn chat_send(lua: &Lua, args: MultiValue) -> ApiResult<Outcome> {
         None if a.string(0)? == "server" => RemoteKind::FireServer,
         None => RemoteKind::FireAllClients,
     };
-    let args = to_net(&a.rest(1))?;
+    let args = to_net(lua, &a.rest(1))?;
     with_world(lua, |w| {
         let remote = w.dom.find_service("TextChatService");
         w.outbox.push(RemoteMessage { remote, kind, args });

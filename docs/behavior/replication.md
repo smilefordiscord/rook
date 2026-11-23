@@ -1,6 +1,6 @@
 # Replication
 
-Checked against Studio 0.743 on 2026-10-14.
+Checked against Studio 0.748 on 2026-11-23.
 
 What a client DataModel receives from the server, as `rook-net` copies it.
 
@@ -142,21 +142,41 @@ What `RemoteEvent` and `RemoteFunction` calls carry (`rook_lua::net`).
 From creator-docs "Remote events and callbacks" (argument limitations):
 tables arrive as copies, never the table sent, results returned to an
 invoker too; metatables are lost; functions arrive as nil, and so do
-instances the receiver can't see.
+instances the receiver can't see; non-string keys become strings, and a
+table with an array part loses its other keys.
 
-Tables reached more than once (Inference: the docs give no rule, and
-these follow what [bindables](scripting/bindables.md) were measured to
-do, with the message players see from remotes):
+Confirmed in Studio 0.748 (conformance cases `scripting/net_cycles` on
+the server and `scripting/client_remotes` on a client), the same as
+[bindables](scripting/bindables.md) were measured to copy:
 
-- A table reached twice, in one argument or across several, arrives as
-  separate copies, no two the same table.
 - A table reached from itself raises `tables cannot be cyclic` from the
   call that sends it (`FireServer`, `FireClient`, `FireAllClients`,
-  `InvokeServer`, `InvokeClient`), and nothing is sent. Results a
-  callback returns that hold one fail the invoke with that message
-  instead.
-- Tables nested more than 64 deep arrive as nil (Approximation: the docs
-  give no limit, and Studio's hasn't been measured).
+  `InvokeServer`, `InvokeClient`, an UnreliableRemoteEvent's too), in any
+  argument and at any depth, and nothing is sent. Only what's copied
+  counts: a table that is its own key (`t[t] = 1`) is sent, the key
+  becoming a string, and so is an array whose only way back is a key the
+  copy drops (`{1, 2, x = t}`), or a metatable's. A table reached twice
+  without a cycle is sent.
+- Tables nested 300 deep raise `Max lua stack size reached`; 70 are sent
+  whole. Rook's limit is 200 (Approximation: the limit between the two
+  isn't measured).
+- The arguments are copied before the call checks its side: `FireServer`
+  and `InvokeServer` on a server with a cyclic table raise `tables cannot
+  be cyclic`, not that they're the client's.
+- A client may call `FireClient` and `FireAllClients` on a RemoteEvent
+  it made and never parented: they return without an error, reaching no
+  one, and `InvokeClient` on such a RemoteFunction waits forever. Rook
+  does the same for any remote outside the DataModel on a client
+  (Inference: only unparented ones were measured); one inside it raises
+  `FireClient can only be called from the server` and the like
+  (Inference: the words). `FireServer` on an unparented remote returns
+  too.
+
+Inference, following the bindables' measured rules for what the docs
+leave open: a dictionary's keys arrive as the strings bindables make of
+them (`<Instance> (Workspace)`, `"2"` for a number), and a boolean key
+raises `Invalid table key type used`. Results a callback returns that
+can't be copied fail the invoke with the error instead.
 
 ## From clients
 

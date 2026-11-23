@@ -2,7 +2,9 @@
 //!
 //! Calls are queued in the World's outbox; the session delivers them to
 //! the other DataModel (creator-docs "Remote events and callbacks").
-//! Error texts are Inference.
+//! Confirmed (Studio 0.748, `scripting/net_cycles` and
+//! `scripting/client_remotes`): the arguments are copied before the call
+//! checks which side it's on. Error texts are Inference unless marked.
 
 use mlua::{Lua, MultiValue, Value as LuaValue};
 use rook_dom::InstanceId;
@@ -69,29 +71,48 @@ fn player_arg(lua: &Lua, a: &Args, method: &str) -> ApiResult<InstanceId> {
     }
 }
 
+/// A server's method called on a client: raises for a remote in the
+/// DataModel. Confirmed (Studio 0.748): for one outside it, which reaches
+/// no server, the call goes nowhere without an error (`FireClient`,
+/// `FireAllClients`) or waits forever (`InvokeClient`); `Ok(false)`.
+fn on_server(lua: &Lua, remote: InstanceId, method: &str) -> ApiResult<bool> {
+    let (client, in_game) = with_world(lua, |w| {
+        (w.is_client, w.dom.is_ancestor_of(w.dom.root(), remote))
+    });
+    match (client, in_game) {
+        (false, _) => Ok(true),
+        (true, false) => Ok(false),
+        (true, true) => Err(ScriptError(format!(
+            "{method} can only be called from the server"
+        ))),
+    }
+}
+
 fn fire_server(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> {
+    let args = to_net(lua, &a.rest(0))?;
     if !is_client(lua) {
         return Err("FireServer can only be called from the client".into());
     }
-    push(lua, this, RemoteKind::FireServer, to_net(&a.rest(0))?);
+    push(lua, this, RemoteKind::FireServer, args);
     Outcome::ret(lua, ())
 }
 
 fn fire_client(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> {
-    if is_client(lua) {
-        return Err("FireClient can only be called from the server".into());
+    let args = to_net(lua, &a.rest(1))?;
+    if !on_server(lua, this, "FireClient")? {
+        return Outcome::ret(lua, ());
     }
     let player = player_arg(lua, a, "FireClient")?;
-    let args = to_net(&a.rest(1))?;
     push(lua, this, RemoteKind::FireClient { player }, args);
     Outcome::ret(lua, ())
 }
 
 fn fire_all_clients(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> {
-    if is_client(lua) {
-        return Err("FireAllClients can only be called from the server".into());
+    let args = to_net(lua, &a.rest(0))?;
+    if !on_server(lua, this, "FireAllClients")? {
+        return Outcome::ret(lua, ());
     }
-    push(lua, this, RemoteKind::FireAllClients, to_net(&a.rest(0))?);
+    push(lua, this, RemoteKind::FireAllClients, args);
     Outcome::ret(lua, ())
 }
 
@@ -101,7 +122,11 @@ fn invoke(lua: &Lua, args: MultiValue) -> ApiResult<Outcome> {
     let a = Args::new(args, "Invoke");
     let remote = a.instance(0)?;
     let target = a.string(1)?;
+    let args = to_net(lua, &a.rest(3))?;
     let client = is_client(lua);
+    if target == "client" && !on_server(lua, remote, "InvokeClient")? {
+        return Ok(Outcome::Yield);
+    }
     let kind_for = |call: u64| -> ApiResult<RemoteKind> {
         match (target.as_str(), client) {
             ("server", true) => Ok(RemoteKind::InvokeServer { call }),
@@ -125,7 +150,6 @@ fn invoke(lua: &Lua, args: MultiValue) -> ApiResult<Outcome> {
         w.next_call
     });
     let kind = kind_for(call)?;
-    let args = to_net(&a.rest(3))?;
     let thread = lua.current_thread();
     with_world(lua, |w| {
         w.pending_calls.insert(call, thread);
@@ -144,7 +168,7 @@ pub(crate) fn install(lua: &Lua) -> mlua::Result<()> {
             |lua, (call, ok, rest): (u64, bool, mlua::Variadic<LuaValue>)| {
                 // Results that can't be sent fail the invoke with why, as an
                 // error raised by the callback would (Inference).
-                let (ok, args) = match to_net(&rest) {
+                let (ok, args) = match to_net(lua, &rest) {
                     Ok(args) => (ok, args),
                     Err(ScriptError(message)) => {
                         (false, vec![NetValue::String(message.into_bytes())])
