@@ -374,6 +374,45 @@ fn each_actor_has_its_own_globals_and_modules() {
     );
 }
 
+/// An Actor's globals outlive its scripts, as its VM does: a script that
+/// set them and stopped leaves them for one started after a collection
+/// (they were held only through running scripts' environments, so a
+/// collection while none ran lost them). They go once the Actor is freed.
+#[test]
+fn an_actors_globals_outlive_its_scripts_until_it_is_freed() {
+    let rt = place();
+    let sss = service(&rt, "ServerScriptService");
+    let actor = add(&rt, sss, "Actor", "Actor", "");
+    let first = add(
+        &rt,
+        actor,
+        "Script",
+        "First",
+        r#"_G.x = "kept" shared.y = "kept" script:Destroy()"#,
+    );
+    assert!(play(&rt, &[first], 1).is_empty());
+    rt.lua().gc_collect().unwrap();
+    rt.lua().gc_collect().unwrap();
+    let second = add(&rt, actor, "Script", "Second", "print(_G.x, shared.y)");
+    assert_eq!(play(&rt, &[second], 1), ["kept kept"]);
+
+    let held = |rt: &Runtime| {
+        let all: mlua::Table = rt.lua().named_registry_value("rook.actor_globals").unwrap();
+        all.pairs::<mlua::Value, mlua::Value>().count()
+    };
+    assert_eq!(held(&rt), 1);
+    rt.world_mut().dom.destroy(actor).unwrap();
+    finish(&rt, 1);
+    let mut freed = Vec::new();
+    for _ in 0..2 {
+        rt.lua().gc_collect().unwrap();
+        let end = rt.world().dom.journal().end();
+        freed.extend(rt.trim_journal(end));
+    }
+    assert!(freed.contains(&actor), "the Actor is freed");
+    assert_eq!(held(&rt), 0);
+}
+
 #[test]
 fn shared_tables_keep_what_the_creator_docs_list() {
     expect(

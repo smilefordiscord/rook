@@ -49,7 +49,8 @@ pub(crate) fn actor_of(dom: &Dom, id: InstanceId) -> Option<InstanceId> {
 
 /// The globals table environments in `context` fall back to: the shared
 /// globals for the DataModel's own scripts, and for an Actor a table of
-/// its own (kept while any environment uses it).
+/// its own, kept until the Actor is freed ([`forget`]): an Actor's VM, and
+/// so its `_G`, outlives any one of its scripts.
 pub(crate) fn globals(lua: &Lua, context: Context) -> mlua::Result<Table> {
     let Some(actor) = context else {
         return Ok(lua.globals());
@@ -68,6 +69,13 @@ pub(crate) fn globals(lua: &Lua, context: Context) -> mlua::Result<Table> {
     globals.raw_set("task", crate::api::globals::task_library(lua, context)?)?;
     all.raw_set(key_of(actor), globals.clone())?;
     Ok(globals)
+}
+
+/// Drop the globals of Actor `id`, which is being freed. Environments made
+/// in it keep the table they fall back to.
+pub(crate) fn forget(lua: &Lua, id: InstanceId) -> mlua::Result<()> {
+    let all: Table = lua.named_registry_value("rook.actor_globals")?;
+    all.raw_set(key_of(id), LuaValue::Nil)
 }
 
 /// Record that `env` belongs to `context`.
@@ -157,12 +165,12 @@ fn set_phase(lua: &Lua, phase: Phase) {
 }
 
 pub(crate) fn install(lua: &Lua) -> mlua::Result<()> {
-    // Environments' Actors (weak keys) and Actors' globals (weak values,
-    // kept by the environments that fall back to them).
-    for (key, mode) in [("rook.actor_envs", "k"), ("rook.actor_globals", "v")] {
-        let t = crate::runtime::ctx::weak_table(lua, mode)?;
-        lua.set_named_registry_value(key, t)?;
-    }
+    // Environments' Actors (weak keys), and Actors' globals, held until
+    // the Actor is freed: weak values would lose an Actor's `_G` whenever
+    // none of its scripts' environments happened to be alive.
+    let envs = crate::runtime::ctx::weak_table(lua, "k")?;
+    lua.set_named_registry_value("rook.actor_envs", envs)?;
+    lua.set_named_registry_value("rook.actor_globals", lua.create_table()?)?;
     let phase = lua.create_table()?;
     phase.raw_set("parallel", false)?;
     let guard: Function = lua
