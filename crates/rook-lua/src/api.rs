@@ -22,5 +22,6 @@ pub(crate) fn install(lua: &Lua) -> mlua::Result<()> {
     methods::remotes::install(lua)?;
     methods::teleport::install(lua)?;
     methods::gui::text_chat::install(lua)?;
+    methods::web::marketplace::install(lua)?;
     Ok(())
 }

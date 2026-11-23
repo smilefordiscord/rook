@@ -9,10 +9,14 @@
 local std = ...
 local game, Enum, DateTime = std.game, std.Enum, std.DateTime
 local pcall, ipairs = std.pcall, std.ipairs
-local new_instance, set, fire, get_callback, send =
-	std.new_instance, std.set_internal, std.fire, std.get_callback, std.chat_send
+local new_instance, set, fire, get_callback, service_send =
+	std.new_instance, std.set_internal, std.fire, std.get_callback, std.service_send
 
 local chat = game:GetService("TextChatService")
+
+local function send(to, ...)
+	service_send(chat, to, ...)
+end
 local players = game:GetService("Players")
 
 local api = {}

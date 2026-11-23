@@ -70,6 +70,9 @@ pub(crate) fn set_member(lua: &Lua, id: InstanceId, key: &str, value: LuaValue) 
     let (member, identity) = find_member(lua, id, key, true);
     let p = match member {
         Some(Member::Property(p)) => p,
+        Some(Member::Callback("ProcessReceipt")) => {
+            return methods::web::marketplace::set_process_receipt(lua, id, value);
+        }
         Some(Member::Callback(name)) => {
             let f = match value {
                 LuaValue::Function(f) => Some(f),

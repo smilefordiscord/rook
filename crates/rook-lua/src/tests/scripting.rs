@@ -8,6 +8,7 @@ mod encoding;
 mod errors;
 mod instances;
 mod json;
+mod marketplace;
 mod members;
 mod memory_stores;
 mod messaging;

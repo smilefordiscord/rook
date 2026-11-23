@@ -37,6 +37,7 @@ Everything Rook supports today. What's coming next is in the [roadmap](../roadma
 - Joining creates the `Player`, `Backpack` and `PlayerGui` from `StarterPack` and `StarterGui`, fires `PlayerAdded`, sets `Players.LocalPlayer` and starts **LocalScripts** where Roblox allows them.
 - `RemoteEvent`, `UnreliableRemoteEvent` and `RemoteFunction`: arguments are copied between VMs the way Roblox copies them, and invokes yield until the reply.
 - **Multi-place games**: a `universe.toml` beside the place names the game's places by PlaceId, and `TeleportService` moves players between them, to public or reserved servers, with their teleport data, join data and loading GUI ([teleports](../behavior/scripting/teleports.md)).
+- MarketplaceService's purchase prompts, from a server or client, make Studio's test purchases: the player answers Rook's own prompt, the session owns what was bought, and developer products' receipts go to `ProcessReceipt` ([marketplace](../behavior/scripting/marketplace.md)).
 
 ## Physics
 

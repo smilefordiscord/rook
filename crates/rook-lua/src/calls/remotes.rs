@@ -6,6 +6,17 @@ use rook_dom::InstanceId;
 use crate::runtime::signal::SignalKey;
 use crate::{NetValue, RemoteMessage, Runtime};
 
+/// The `std` table that takes a service's own firings (`std.service_send`)
+/// in place of scripts: chat messages, and purchase prompts and their
+/// answers.
+fn own_messages(class: &str) -> Option<&'static str> {
+    match class {
+        "TextChatService" => Some("text_chat"),
+        "MarketplaceService" => Some("marketplace"),
+        _ => None,
+    }
+}
+
 impl Runtime {
     /// Remote calls made since the last call, for the session to deliver.
     pub fn take_outbox(&self) -> Vec<RemoteMessage> {
@@ -31,10 +42,9 @@ impl Runtime {
         for a in args {
             values.push(crate::net::from_net(lua, a).unwrap_or(mlua::Value::Nil));
         }
-        // Chat messages travel as TextChatService's own firings.
-        let chat = self.world().dom.class_name(remote) == "TextChatService";
+        let own = own_messages(self.world().dom.class_name(remote));
         self.guarded(|| {
-            if chat {
+            if let Some(owner) = own {
                 let handler = if self.world().is_client {
                     "onClient"
                 } else {
@@ -42,7 +52,7 @@ impl Runtime {
                 };
                 let api = lua
                     .named_registry_value::<mlua::Table>("rook.std")
-                    .and_then(|std| std.get::<mlua::Table>("text_chat"))
+                    .and_then(|std| std.get::<mlua::Table>(owner))
                     .and_then(|api| api.get::<mlua::Function>(handler));
                 if let Ok(f) = api {
                     // Errors are the thread's to report.

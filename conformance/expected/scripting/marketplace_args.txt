@@ -1,0 +1,97 @@
+-- studio 0.748.0.7481526
+-- signals: deferred
+ProductPurchaseDecision 0=NotProcessedYet 1=PurchaseGranted
+InfoType 0=Asset 1=Product 2=GamePass 3=Subscription 4=Bundle
+CurrencyType 0=Default 1=Robux 2=Tix
+ProductPurchaseChannel 1=InExperience 2=ExperienceDetailsPage 3=AdReward 4=CommerceProduct
+SubscriptionPeriod 0=Month
+MembershipType 0=None 1=BuildersClub 2=TurboBuildersClub 3=OutrageousBuildersClub 4=Premium
+read ProcessReceipt error ProcessReceipt is a callback member of MarketplaceService; you can only set the callback value, get is not available
+set function ok 
+read after set error ProcessReceipt is a callback member of MarketplaceService; you can only set the callback value, get is not available
+set again ok 
+set C function ok 
+set nil ok 
+set number ok 
+set string ok 
+set table ok 
+set callable table ok 
+set lowercase error processReceipt is not a valid member of MarketplaceService "MarketplaceService"
+rawget error invalid argument #1 to 'rawget' (table expected, got Instance)
+unset ok 
+ProcessReceipt on Workspace error ProcessReceipt is not a valid member of Workspace "Workspace"
+PromptPurchase nil error MarketplaceService:PromptPurchase(): player should be of type Player.
+PromptPurchase Workspace error MarketplaceService:PromptPurchase(): player should be of type Player.
+PromptPurchase Part error MarketplaceService:PromptPurchase(): player should be of type Player.
+PromptPurchase UserId error Unable to cast value to Object
+PromptPurchase string error Unable to cast value to Object
+PromptPurchase table error Unable to cast value to Object
+PromptGamePassPurchase nil error MarketplaceService:PromptGamePassPurchase(): player should be of type Player.
+PromptGamePassPurchase Workspace error MarketplaceService:PromptGamePassPurchase(): player should be of type Player.
+PromptGamePassPurchase Part error MarketplaceService:PromptGamePassPurchase(): player should be of type Player.
+PromptGamePassPurchase UserId error Unable to cast value to Object
+PromptGamePassPurchase string error Unable to cast value to Object
+PromptGamePassPurchase table error Unable to cast value to Object
+PromptProductPurchase nil error MarketplaceService:PromptProductPurchase(): player should be of type Player.
+PromptProductPurchase Workspace error MarketplaceService:PromptProductPurchase(): player should be of type Player.
+PromptProductPurchase Part error MarketplaceService:PromptProductPurchase(): player should be of type Player.
+PromptProductPurchase UserId error Unable to cast value to Object
+PromptProductPurchase string error Unable to cast value to Object
+PromptProductPurchase table error Unable to cast value to Object
+PromptBundlePurchase nil error MarketplaceService:PromptBundlePurchase() player should be of type Player
+PromptBundlePurchase Workspace error MarketplaceService:PromptBundlePurchase() player should be of type Player
+PromptBundlePurchase Part error MarketplaceService:PromptBundlePurchase() player should be of type Player
+PromptBundlePurchase UserId error Unable to cast value to Object
+PromptBundlePurchase string error Unable to cast value to Object
+PromptBundlePurchase table error Unable to cast value to Object
+PromptSubscriptionPurchase nil error First argument to PromptSubscriptionPurchase must be a player
+PromptSubscriptionPurchase Workspace error First argument to PromptSubscriptionPurchase must be a player
+PromptSubscriptionPurchase Part error First argument to PromptSubscriptionPurchase must be a player
+PromptSubscriptionPurchase UserId error Unable to cast value to Object
+PromptSubscriptionPurchase string error Unable to cast value to Object
+PromptSubscriptionPurchase table error Unable to cast value to Object
+PromptPremiumPurchase nil error First argument to PromptPremiumPurchase must be a Player
+PromptPremiumPurchase Workspace error First argument to PromptPremiumPurchase must be a Player
+PromptPremiumPurchase Part error First argument to PromptPremiumPurchase must be a Player
+PromptPremiumPurchase UserId error Unable to cast value to Object
+PromptPremiumPurchase string error Unable to cast value to Object
+PromptPremiumPurchase table error Unable to cast value to Object
+PromptPurchase no args error Argument 2 missing or nil
+PromptPurchase id word error Unable to cast string to int64
+PromptPurchase id table error Unable to cast Array to int64
+PromptGamePassPurchase id word error Unable to cast string to int64
+PromptGamePassPurchase id table error Unable to cast Array to int64
+PromptProductPurchase id word error Unable to cast string to int64
+PromptProductPurchase id table error Unable to cast Array to int64
+PromptBundlePurchase id word error Unable to cast string to int64
+PromptBundlePurchase id table error Unable to cast Array to int64
+PromptPurchase bad currency error Unable to cast string to CurrencyType
+PromptProductPurchase equip table error Unable to cast Array to bool
+PromptSubscriptionPurchase id table error Invalid SubscriptionId
+UserOwnsGamePassAsync no args error Argument 2 missing or nil
+UserOwnsGamePassAsync nil user error Argument 1 missing or nil
+UserOwnsGamePassAsync word user error Unable to cast string to User
+UserOwnsGamePassAsync table user error Unable to cast Array to User
+UserOwnsGamePassAsync Workspace user error Unable to cast Instance to User
+UserOwnsGamePassAsync nil pass error Argument 2 missing or nil
+UserOwnsGamePassAsync word pass error Unable to cast string to int64
+PlayerOwnsAsset nil error Argument 1 missing or nil
+PlayerOwnsAsset UserId error Unable to cast value to Object
+PlayerOwnsAsset word id error Unable to cast string to int64
+PlayerOwnsBundle Workspace error Argument 1 is invalid: expected 'Player' instance type
+PlayerOwnsBundleAsync word id error Unable to cast string to int64
+GetUserSubscriptionStatusAsync nil error Argument 1 missing or nil
+GetUserSubscriptionStatusAsync Workspace error Argument 1 is invalid: expected 'Player' instance type
+GetUserSubscriptionStatusAsync table id error Invalid SubscriptionId
+GetProductInfo no args error Argument 1 missing or nil
+GetProductInfo word error Unable to cast string to int64
+GetProductInfo table error Unable to cast Array to int64
+GetProductInfo bad type name error Unable to cast string to InfoType
+GetProductInfo other enum error Unable to cast Material to InfoType
+GetProductInfo bad type number error Unable to cast double to InfoType
+GetProductInfoAsync word error Unable to cast string to int64
+GetProductInfoAsync other enum error Unable to cast Material to InfoType
+GetSubscriptionProductInfoAsync table error Can only call GetSubscriptionProductInfoAsync from Script with RunContext = Client
+GetSubscriptionProductInfoAsync nil error Argument 1 missing or nil
+dot call error Expected ':' not '.' calling member function PromptPurchase
+unknown member error PromptNothing is not a valid member of MarketplaceService "MarketplaceService"

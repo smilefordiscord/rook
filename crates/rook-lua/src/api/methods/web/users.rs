@@ -1,9 +1,9 @@
 //! Who users are: names and ids (`users`), friendships (`friends`) and
-//! avatar thumbnails (`thumbnails`), and what they own: passes and assets
-//! (`inventory`). With no endpoint ([`super::requests`]), the session is
-//! all there is: its players are the only users, none are friends,
-//! nobody owns anything, and no thumbnail is ready. Groups and badges
-//! are [`super::groups`] and [`super::badges`].
+//! avatar thumbnails (`thumbnails`). With no endpoint
+//! ([`super::requests`]), the session is all there is: its players are
+//! the only users, none are friends, and no thumbnail is ready. Groups
+//! and badges are [`super::groups`] and [`super::badges`]; passes and
+//! assets they own are [`super::marketplace`]'s.
 
 use mlua::{Lua, MultiValue, Value as LuaValue};
 use rook_dom::InstanceId;
@@ -22,8 +22,6 @@ pub(super) fn native(owner: &str, name: &str) -> Option<RawMethod> {
         ("Players", "GetUserThumbnailAsync") => user_thumbnail,
         ("UserService", "GetUserInfosByUserIdsAsync") => user_infos,
         ("Player", "IsFriendsWith") => is_friends_with,
-        ("MarketplaceService", "UserOwnsGamePassAsync") => owns_game_pass,
-        ("MarketplaceService", "PlayerOwnsAsset") => player_owns_asset,
         _ => return None,
     })
 }
@@ -244,19 +242,4 @@ fn is_friends_with(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> 
     ask(lua, "friends", &path, false, |d| {
         d.iter().any(|s| s["status"] == "Friends")
     })
-}
-
-/// `GET inventory/v1/users/{id}/items/GamePass/{pass}`.
-fn owns_game_pass(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
-    let (user, pass) = (id(a, 0)?, id(a, 1)?);
-    let path = format!("/v1/users/{user}/items/GamePass/{pass}");
-    ask(lua, "inventory", &path, false, |d| !d.is_empty())
-}
-
-/// `GET inventory/v1/users/{id}/items/Asset/{asset}` for a Player.
-fn player_owns_asset(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
-    let player = a.instance(0)?;
-    let asset = id(a, 1)?;
-    let path = format!("/v1/users/{}/items/Asset/{asset}", player_id(lua, player));
-    ask(lua, "inventory", &path, false, |d| !d.is_empty())
 }
