@@ -78,6 +78,9 @@ impl ClientHost {
         } else if options.menu {
             crate::menu::install(&client);
         }
+        if let Some((width, height)) = options.viewport {
+            client.set_viewport(width, height);
+        }
         client.note_camera_scripts();
         client.start();
         Ok(Self {

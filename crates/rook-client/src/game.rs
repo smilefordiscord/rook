@@ -110,6 +110,11 @@ pub struct Setup {
     /// The player's settings file; `None` for runs that aren't played,
     /// whose changes aren't saved.
     pub user_settings: Option<PathBuf>,
+    /// The size the game is shown at, which the player's camera has as
+    /// its `ViewportSize` from the start (see
+    /// [`rook_engine::Options::viewport`]); a window gives its own
+    /// ([`Loading::set_viewport`]).
+    pub viewport: Option<(u32, u32)>,
 }
 
 impl Loading {
@@ -123,6 +128,7 @@ impl Loading {
             core_scripts: setup.core_scripts.clone(),
             menu: setup.menu,
             user_settings: setup.user_settings.clone(),
+            viewport: setup.viewport,
             ..Options::default()
         };
         let script = setup.script.clone();
@@ -147,6 +153,12 @@ impl Loading {
 
     pub fn name(&self) -> &str {
         &self.finish.name
+    }
+
+    /// The size of the window the game will be shown in, once it's open:
+    /// the player's camera starts with it, if the player hasn't joined.
+    pub fn set_viewport(&mut self, width: u32, height: u32) {
+        self.finish.options.viewport = Some((width, height));
     }
 
     /// The game, once the place has loaded. Joining the client (Play) or

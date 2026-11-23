@@ -107,6 +107,12 @@ pub struct Options {
     /// [`user_settings`]): clients load it and save it when the player
     /// changes something. `None` keeps Roblox's defaults, unsaved.
     pub user_settings: Option<std::path::PathBuf>,
+    /// The size of the window a client is shown in, which its camera's
+    /// `ViewportSize` is before its scripts start, as Roblox's is (a
+    /// LocalScript in ReplicatedFirst sizing GUI from it divided by
+    /// zero while Rook's read 0 × 0 until the first frame). `None` until
+    /// the host sets one.
+    pub viewport: Option<(u32, u32)>,
 }
 
 impl Default for Options {
@@ -121,6 +127,7 @@ impl Default for Options {
             menu: false,
             endpoints: None,
             user_settings: None,
+            viewport: None,
         }
     }
 }

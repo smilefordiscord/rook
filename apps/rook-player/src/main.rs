@@ -237,6 +237,8 @@ fn play(args: &Args) -> anyhow::Result<()> {
         core_scripts,
         menu: settings::menu(args.no_menu),
         user_settings: None,
+        // Shown at this size offscreen; a window gives its own.
+        viewport: Some((args.width, args.height)),
     };
     if args.windowed() && !args.crash_test {
         // The player's settings, which only a window's player changes.

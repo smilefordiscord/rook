@@ -75,6 +75,10 @@ impl Launch {
         let Some(loading) = &mut self.loading else {
             return;
         };
+        if let Some(gfx) = &self.gfx {
+            let size = gfx.window.inner_size();
+            loading.set_viewport(size.width, size.height);
+        }
         let gamepads = self.gamepads.as_mut().expect("until the game starts");
         let present = || {
             let mut present = Vec::new();
