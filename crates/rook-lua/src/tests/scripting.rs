@@ -19,4 +19,3 @@ mod scheduling;
 mod scripts;
 mod teleports;
 mod tweens;
-mod web;
