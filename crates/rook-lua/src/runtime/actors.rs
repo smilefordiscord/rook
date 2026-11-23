@@ -34,6 +34,9 @@ const MAX_PARALLEL_JOBS: usize = 100_000;
 #[derive(Debug)]
 pub struct Message {
     pub(crate) actor: InstanceId,
+    /// The place its parallel bindings take in the parallel queue, taken
+    /// as it was sent.
+    pub(crate) place: u64,
     pub(crate) topic: String,
     pub(crate) args: Vec<LuaValue>,
 }
@@ -50,7 +53,8 @@ pub(crate) fn actor_of(dom: &Dom, id: InstanceId) -> Option<InstanceId> {
 /// The globals table environments in `context` fall back to: the shared
 /// globals for the DataModel's own scripts, and for an Actor a table of
 /// its own, kept until the Actor is freed ([`forget`]): an Actor's VM, and
-/// so its `_G`, outlives any one of its scripts.
+/// so its `_G`, outlives any one of its scripts. An Actor's table reads
+/// only the globals every script starts with ([`note_builtins`]).
 pub(crate) fn globals(lua: &Lua, context: Context) -> mlua::Result<Table> {
     let Some(actor) = context else {
         return Ok(lua.globals());
@@ -61,7 +65,10 @@ pub(crate) fn globals(lua: &Lua, context: Context) -> mlua::Result<Table> {
     }
     let globals = lua.create_table()?;
     let mt = lua.create_table()?;
-    mt.raw_set("__index", lua.globals())?;
+    mt.raw_set(
+        "__index",
+        lua.named_registry_value::<Function>("rook.actor_index")?,
+    )?;
     globals.set_metatable(Some(mt))?;
     globals.raw_set("_G", lua.create_table()?)?;
     globals.raw_set("shared", lua.create_table()?)?;
@@ -69,6 +76,38 @@ pub(crate) fn globals(lua: &Lua, context: Context) -> mlua::Result<Table> {
     globals.raw_set("task", crate::api::globals::task_library(lua, context)?)?;
     all.raw_set(key_of(actor), globals.clone())?;
     Ok(globals)
+}
+
+/// Note the globals every script starts with, once they're all made, for
+/// Actors' scripts to read. The DataModel's scripts share Luau's globals
+/// table, which is also their `_G`; what they put there isn't an Actor's
+/// (Confirmed: Studio 0.748, an Actor's script reads nil for a global the
+/// main script set through `_G`). The values are read when used, so a
+/// builtin removed later (`loadstring`) is gone for Actors too.
+pub(crate) fn note_builtins(lua: &Lua) -> mlua::Result<()> {
+    let names = lua.create_table()?;
+    for pair in lua.globals().pairs::<LuaValue, LuaValue>() {
+        names.raw_set(pair?.0, true)?;
+    }
+    let index: Function = lua
+        .load(
+            r#"
+            local globals, names, rawget = ...
+            return function(_, key)
+                if names[key] then
+                    return rawget(globals, key)
+                end
+                return nil
+            end
+            "#,
+        )
+        .set_name("=[rook] actor_globals")
+        .call((
+            lua.globals(),
+            names,
+            lua.globals().get::<Function>("rawget")?,
+        ))?;
+    lua.set_named_registry_value("rook.actor_index", index)
 }
 
 /// Drop the globals of Actor `id`, which is being freed. Environments made
@@ -98,27 +137,57 @@ pub(crate) fn context_of(lua: &Lua, func: &Function) -> Context {
     }
 }
 
+/// Whether the running thread started in a script: whether the outermost
+/// function on its stack that isn't Rook's own has a script's environment.
+/// Code without a script (Studio's command bar and plugins; in Rook,
+/// `run_source` without one) runs in an environment with no `script`.
+pub(crate) fn in_script(lua: &Lua) -> bool {
+    let globals = lua.globals();
+    let mut outermost = None;
+    for level in 0.. {
+        let Some(env) = lua.inspect_stack(level, |d| d.function().environment()) else {
+            break;
+        };
+        if let Some(env) = env.filter(|env| *env != globals) {
+            outermost = Some(env);
+        }
+    }
+    outermost.is_some_and(|env| !env.raw_get::<LuaValue>("script").is_ok_and(|s| s.is_nil()))
+}
+
 /// Whether the code running now is desynchronized.
 pub(crate) fn in_parallel(lua: &Lua) -> bool {
     with_world(lua, |w| w.scheduler.phase() != Phase::Serial)
 }
 
 /// Hand each waiting message to the bindings its Actor has for its topic
-/// now: serial ones run here, parallel ones wait for the phase. Each
-/// binding gets a copy of its own, as each bindable listener does.
+/// now: serial ones run here, parallel ones wait for the phase, in the
+/// place the message took when sent. Each binding gets a copy of its own,
+/// as each bindable listener does. Messages sent meanwhile are delivered
+/// too (Confirmed: Studio 0.748, a serial binding's message to its own
+/// Actor reaches it before the parallel phase).
 fn deliver_messages(lua: &Lua) {
-    let messages = with_world(lua, |w| std::mem::take(&mut w.messages));
-    for message in messages {
-        let key = SignalKey {
-            instance: message.actor,
-            kind: SignalKind::Message(message.topic),
-        };
-        let args = message.args;
-        fire_with(lua, &key, || {
-            crate::api::methods::instances::bindables::copy_values(lua, &args, true)
-                .unwrap_or_default()
-        });
-        drain_deferred(lua);
+    let mut budget = MAX_PARALLEL_JOBS;
+    while budget > 0 {
+        let messages = with_world(lua, |w| std::mem::take(&mut w.messages));
+        if messages.is_empty() {
+            break;
+        }
+        for message in messages {
+            budget = budget.saturating_sub(1);
+            let key = SignalKey {
+                instance: message.actor,
+                kind: SignalKind::Message(message.topic),
+            };
+            let args = message.args;
+            with_world(lua, |w| w.scheduler.deliver_at(Some(message.place)));
+            fire_with(lua, &key, || {
+                crate::api::methods::instances::bindables::copy_values(lua, &args, true)
+                    .unwrap_or_default()
+            });
+            drain_deferred(lua);
+            with_world(lua, |w| w.scheduler.deliver_at(None));
+        }
     }
 }
 

@@ -123,9 +123,11 @@ pub(super) fn find_first_child_which_is_a(
     find_child_by(lua, this, a.truthy(1), |w, c| w.dom.is_a(c, &class))
 }
 
-pub(super) fn find_first_descendant(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> {
-    let name = a.string(0)?;
-    find_child_by(lua, this, true, |w, c| w.dom.name(c) == name)
+/// Roblox hasn't enabled it (Confirmed: Studio 0.748, called in a
+/// parallel phase; that a serial call fails too is Inference, as the
+/// message names no phase).
+pub(super) fn find_first_descendant(_: &Lua, _: InstanceId, _: &Args) -> ApiResult<Outcome> {
+    Err(ScriptError("FindFirstDescendant is not enabled".into()))
 }
 
 fn find_ancestor_by(

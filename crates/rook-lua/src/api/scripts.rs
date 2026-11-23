@@ -334,11 +334,10 @@ pub(crate) fn require_in(lua: &Lua, context: Context) -> mlua::Result<Function> 
 }
 
 fn require(lua: &Lua, args: MultiValue, context: Context) -> ApiResult<Outcome> {
-    // Confirmed: creator-docs Parallel Luau, require can't be used in a
-    // desynchronized phase. The message is Inference.
+    // Confirmed: Studio 0.748, the words included.
     if actors::in_parallel(lua) {
         return Err(ScriptError(
-            "require is not safe to call in parallel".into(),
+            "require can not be used during the parallel phase".into(),
         ));
     }
     let a = Args::new(args, "require");

@@ -124,7 +124,13 @@ impl UserData for LRegion3 {
         m.add_meta_method(MetaMethod::ToString, |_, t, ()| {
             let center = (r3(t.0.min) + r3(t.0.max)) * 0.5;
             let size = r3(t.0.max) - r3(t.0.min);
-            Ok(format!("{}; {}", fmt_v3(center), fmt_v3(size)))
+            // Confirmed: Studio 0.748 prints its CFrame, which is never
+            // rotated, then its size.
+            Ok(format!(
+                "{}, 1, 0, 0, 0, 1, 0, 0, 0, 1; {}",
+                fmt_v3(center),
+                fmt_v3(size)
+            ))
         });
     }
 }

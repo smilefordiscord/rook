@@ -51,7 +51,7 @@ pub(super) fn check_event(lua: &Lua, id: InstanceId, name: &str) -> ApiResult<()
 /// Setting callback `name` of `id` (`OnInvoke`, `OnServerInvoke`, ...)
 /// while desynchronized (every callback is Unsafe in the dump).
 pub(super) fn check_callback(lua: &Lua, id: InstanceId, name: &str) -> ApiResult<()> {
-    check_declared(lua, id, name, "Callback", "set", |m| {
+    check_declared(lua, id, name, "Callback", "access", |m| {
         m.callbacks
             .iter()
             .find(|c| c.name == name)

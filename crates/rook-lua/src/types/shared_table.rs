@@ -5,43 +5,51 @@
 //! can be read and changed from several Actors' threads: keys and values
 //! are converted on the way in and out, never kept as Luau values. Every
 //! operation takes the lock once, so each is atomic, and Luau code (an
-//! `update` function) never runs while it's held. Roblox's `update` calls
-//! its function again when another script changed the table meanwhile;
+//! `update` function) never runs while it's held. `update` calls its
+//! function again when the table changed meanwhile, as Roblox's does;
 //! Rook's Actors take turns on one thread, so only the function itself
-//! can, and that is an error rather than a retry that never ends.
+//! can change it.
 
 use std::collections::BTreeMap;
 use std::sync::{Arc, PoisonError, RwLock, RwLockReadGuard, RwLockWriteGuard};
 
 use mlua::{
-    Function, Lua, MetaMethod, Table, UserData, UserDataFields, UserDataMethods, UserDataRef,
-    Value as LuaValue,
+    Function, Lua, MetaMethod, MultiValue, Table, UserData, UserDataFields, UserDataMethods,
+    UserDataRef, Value as LuaValue,
 };
 use rook_types::Value;
 use rustc_hash::FxHashMap;
 
 use crate::runtime::ctx::args::type_name;
 use crate::runtime::ctx::convert::{datatype_value, to_lua};
+use crate::runtime::ctx::{ApiResult, Outcome, api_fn};
+use crate::types::enums::{LEnumItem, push_item};
 use crate::types::err;
+use crate::types::tween_info::LTweenInfo;
 
 /// Keys are strings or whole numbers from 0 to 2³² − 1 (Confirmed:
-/// creator-docs). Whole numbers iterate first, in order, then strings in
-/// byte order (Inference: Roblox doesn't say).
+/// Studio 0.748). Whole numbers iterate first, in order (Confirmed), then
+/// strings in byte order (Approximation: Studio's order is a hash order
+/// that changes with the table's size).
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 enum Key {
     Index(u32),
     Name(Vec<u8>),
 }
 
-/// Values are booleans, numbers, vectors, strings, SharedTables and
-/// Roblox's serializable datatypes (Confirmed: creator-docs).
+/// Values are booleans, numbers, vectors, strings, buffers (copied),
+/// SharedTables, EnumItems, TweenInfos and Roblox's serializable
+/// datatypes (Confirmed: Studio 0.748).
 #[derive(Debug, Clone)]
 enum Entry {
     Bool(bool),
     Number(f64),
     Vector([f32; 3]),
     String(Vec<u8>),
+    Buffer(Vec<u8>),
     Table(LSharedTable),
+    EnumItem(LEnumItem),
+    TweenInfo(LTweenInfo),
     Data(Value),
 }
 
@@ -96,8 +104,8 @@ impl LSharedTable {
     fn write(&self) -> mlua::Result<RwLockWriteGuard<'_, Contents>> {
         let contents = self.0.write().unwrap_or_else(PoisonError::into_inner);
         if contents.frozen {
-            // Inference: Luau's own words for a frozen table.
-            return Err(err("attempt to modify a readonly table"));
+            // Confirmed: Studio 0.748.
+            return Err(err("SharedTable is frozen"));
         }
         Ok(contents)
     }
@@ -168,10 +176,13 @@ impl UserData for LSharedTable {
             let entry = t.read().entries.get(&key).cloned();
             entry.map_or(Ok(LuaValue::Nil), |e| entry_to_lua(lua, e))
         });
+        // The key is checked first, then whether the table is frozen, then
+        // the value (Confirmed: Studio 0.748).
         m.add_meta_method(
             MetaMethod::NewIndex,
             |lua, t, (key, value): (LuaValue, LuaValue)| {
                 let key = key_of(&key)?;
+                drop(t.write()?);
                 let entry = entry_of(lua, &value)?;
                 t.set(key, entry)
             },
@@ -189,26 +200,28 @@ impl UserData for LSharedTable {
         m.add_meta_method(MetaMethod::Eq, |_, a, b: UserDataRef<Self>| {
             Ok(Arc::ptr_eq(&a.0, &b.0))
         });
-        // Inference: the type's name, as other datatypes without a
-        // printed form show.
-        m.add_meta_method(MetaMethod::ToString, |_, _, ()| Ok("SharedTable"));
+        // Confirmed: Studio 0.748 prints the table's address.
+        m.add_meta_method(MetaMethod::ToString, |_, t, ()| {
+            Ok(format!("SharedTable: 0x{:016x}", Arc::as_ptr(&t.0).addr()))
+        });
     }
 }
 
+/// Confirmed: Studio 0.748, the errors included.
 fn key_of(key: &LuaValue) -> mlua::Result<Key> {
     let index = |n: f64| {
-        (n.fract() == 0.0 && (0.0..4_294_967_296.0).contains(&n)).then_some(Key::Index(n as u32))
+        (n.fract() == 0.0 && (0.0..4_294_967_296.0).contains(&n))
+            .then_some(Key::Index(n as u32))
+            .ok_or_else(|| {
+                err("Numeric SharedTable keys must be nonnegative integers less than 2^32")
+            })
     };
-    let key = match key {
-        LuaValue::String(s) => Some(Key::Name(s.as_bytes().to_vec())),
+    match key {
+        LuaValue::String(s) => Ok(Key::Name(s.as_bytes().to_vec())),
         LuaValue::Integer(i) => index(*i as f64),
         LuaValue::Number(n) => index(*n),
-        _ => None,
-    };
-    // Inference: the wording.
-    key.ok_or_else(|| {
-        err("invalid SharedTable key (expected a string or a whole number from 0 to 4294967295)")
-    })
+        _ => Err(err("SharedTable keys can only be strings or numbers.")),
+    }
 }
 
 fn key_to_lua(lua: &Lua, key: Key) -> mlua::Result<LuaValue> {
@@ -219,8 +232,7 @@ fn key_to_lua(lua: &Lua, key: Key) -> mlua::Result<LuaValue> {
 }
 
 /// What `value` is stored as; `None` removes the key. A Luau table becomes
-/// a new SharedTable (Confirmed for `SharedTable.new`; Inference for
-/// assigning one).
+/// a new SharedTable (Confirmed: Studio 0.748).
 fn entry_of(lua: &Lua, value: &LuaValue) -> mlua::Result<Option<Entry>> {
     entry_within(lua, value, &mut Vec::new())
 }
@@ -233,27 +245,49 @@ fn entry_within(
     within: &mut Vec<*const std::ffi::c_void>,
 ) -> mlua::Result<Option<Entry>> {
     Ok(Some(match value {
-        LuaValue::Nil => return Ok(None),
+        // A thread is stored as nil too (Confirmed: Studio 0.748).
+        LuaValue::Nil | LuaValue::Thread(_) | LuaValue::LightUserData(_) => return Ok(None),
         LuaValue::Boolean(b) => Entry::Bool(*b),
         LuaValue::Integer(i) => Entry::Number(*i as f64),
         LuaValue::Number(n) => Entry::Number(*n),
         LuaValue::Vector(v) => Entry::Vector([v.x(), v.y(), v.z()]),
         LuaValue::String(s) => Entry::String(s.as_bytes().to_vec()),
+        LuaValue::Buffer(b) => Entry::Buffer(b.to_vec()),
         LuaValue::Table(t) => Entry::Table(from_table(lua, t, within)?),
-        LuaValue::UserData(u) => match u.borrow::<LSharedTable>() {
-            Ok(t) => Entry::Table(t.clone()),
-            Err(_) => Entry::Data(datatype_value(u).ok_or_else(|| unsupported(value))?),
-        },
-        _ => return Err(unsupported(value)),
+        LuaValue::UserData(u) => {
+            if let Ok(t) = u.borrow::<LSharedTable>() {
+                Entry::Table(t.clone())
+            } else if let Ok(item) = u.borrow::<LEnumItem>() {
+                Entry::EnumItem(*item)
+            } else if let Ok(info) = u.borrow::<LTweenInfo>() {
+                Entry::TweenInfo(info.clone())
+            } else {
+                match type_name(value).as_str() {
+                    // Stored as nil, without an error (Confirmed: Studio
+                    // 0.748, for `Enum.Material`, `Enum` and `newproxy()`).
+                    "Enum" | "Enums" | "userdata" => return Ok(None),
+                    "Content" => return Err(refused(value)),
+                    _ => Entry::Data(datatype_value(u).ok_or_else(|| refused(value))?),
+                }
+            }
+        }
+        _ => return Err(refused(value)),
     }))
 }
 
-/// Inference: the wording.
-fn unsupported(value: &LuaValue) -> mlua::Error {
-    err(format!(
-        "a value of type {} cannot be stored in a SharedTable",
-        type_name(value)
-    ))
+/// Confirmed: Studio 0.748, for functions, Instances, DateTime, Random,
+/// Content, RBXScriptSignal and RBXScriptConnection; other types are
+/// named the same way (Inference).
+fn refused(value: &LuaValue) -> mlua::Error {
+    let what = match value {
+        LuaValue::Function(_) => "Functions".to_owned(),
+        _ => match type_name(value).as_str() {
+            "RBXScriptSignal" => "EventInstances".to_owned(),
+            "RBXScriptConnection" => "Connections".to_owned(),
+            name => format!("{name}s"),
+        },
+    };
+    err(format!("{what} can not be stored in a SharedTable"))
 }
 
 fn from_table(
@@ -263,7 +297,7 @@ fn from_table(
 ) -> mlua::Result<LSharedTable> {
     let address = table.to_pointer();
     if within.contains(&address) {
-        return Err(err("tables cannot be cyclic"));
+        return Err(err("Cannot convert a cyclic table to a SharedTable"));
     }
     if within.len() >= MAX_DEPTH {
         return Err(too_deep());
@@ -289,13 +323,22 @@ fn entry_to_lua(lua: &Lua, entry: Entry) -> mlua::Result<LuaValue> {
         Entry::Number(n) => LuaValue::Number(n),
         Entry::Vector([x, y, z]) => LuaValue::Vector(mlua::Vector::new(x, y, z)),
         Entry::String(s) => LuaValue::String(lua.create_string(s)?),
+        Entry::Buffer(b) => LuaValue::Buffer(lua.create_buffer(b)?),
         Entry::Table(t) => LuaValue::UserData(lua.create_userdata(t)?),
+        Entry::EnumItem(item) => push_item(lua, item.enum_id, item.value)?,
+        Entry::TweenInfo(info) => LuaValue::UserData(lua.create_userdata(info)?),
         Entry::Data(v) => to_lua(lua, &v, None)?,
     })
 }
 
-/// The SharedTable argument of a `SharedTable.*` function.
-fn table_arg(value: &LuaValue, function: &str) -> mlua::Result<LSharedTable> {
+/// The SharedTable argument of a `SharedTable.*` function (Confirmed:
+/// Studio 0.748, the errors included).
+fn table_arg(args: &MultiValue, function: &str) -> mlua::Result<LSharedTable> {
+    let Some(value) = args.front() else {
+        return Err(err(format!(
+            "missing argument #1 to '{function}' (SharedTable expected)"
+        )));
+    };
     let table = match value {
         LuaValue::UserData(u) => u.borrow::<LSharedTable>().ok().map(|t| t.clone()),
         _ => None,
@@ -308,64 +351,171 @@ fn table_arg(value: &LuaValue, function: &str) -> mlua::Result<LSharedTable> {
     })
 }
 
-fn new(lua: &Lua, from: Option<Table>) -> mlua::Result<LSharedTable> {
-    match from {
-        Some(t) => from_table(lua, &t, &mut Vec::new()),
+fn arg(args: &MultiValue, i: usize) -> &LuaValue {
+    args.get(i).unwrap_or(&LuaValue::Nil)
+}
+
+/// `SharedTable.new()` or `SharedTable.new(t)`; an explicit nil is
+/// refused (Confirmed: Studio 0.748).
+fn new(lua: &Lua, args: &MultiValue) -> mlua::Result<LSharedTable> {
+    match args.front() {
         None => Ok(LSharedTable::default()),
+        Some(LuaValue::Table(t)) => from_table(lua, t, &mut Vec::new()),
+        Some(v) => Err(err(format!(
+            "invalid argument #1 to 'new' (table expected, got {})",
+            type_name(v)
+        ))),
+    }
+}
+
+/// `clone` and `cloneAndFreeze`: a second argument, when there is one,
+/// must be a boolean, nil included (Confirmed: Studio 0.748).
+fn clone(args: &MultiValue, name: &str, freeze: bool) -> mlua::Result<LSharedTable> {
+    let st = table_arg(args, name)?;
+    let deep = match args.get(1) {
+        None => false,
+        Some(LuaValue::Boolean(b)) => *b,
+        Some(v) => {
+            return Err(err(format!(
+                "invalid argument #2 to '{name}' (boolean expected, got {})",
+                type_name(v)
+            )));
+        }
+    };
+    st.clone_table(deep, freeze)
+}
+
+/// How `increment`'s errors name a key.
+fn shown(key: &Key) -> String {
+    match key {
+        Key::Index(i) => format!("\"{i}\""),
+        Key::Name(s) => format!("\"{}\"", String::from_utf8_lossy(s)),
     }
 }
 
 /// Adds `delta` to a number already stored under `key`, returning the
-/// number before (Confirmed: creator-docs SharedTable.increment).
-fn increment(st: &LSharedTable, key: &LuaValue, delta: f64) -> mlua::Result<f64> {
-    let key = key_of(key)?;
+/// number before (Confirmed: Studio 0.748, the errors and their order
+/// included; how a numeric key is quoted is Inference). The delta must be
+/// a number: a numeric string isn't one.
+fn increment(args: &MultiValue) -> mlua::Result<f64> {
+    let st = table_arg(args, "increment")?;
+    let key = key_of(arg(args, 1))?;
+    let delta = match args.get(2) {
+        None => return Err(err("Failed to get value for insertion into SharedTable")),
+        Some(LuaValue::Integer(i)) => *i as f64,
+        Some(LuaValue::Number(n)) => *n,
+        Some(_) => return Err(err("Variant cast failed")),
+    };
     let mut contents = st.write()?;
-    let Some(Entry::Number(old)) = contents.entries.get(&key).cloned() else {
-        // Inference: the wording.
-        return Err(err("SharedTable.increment: the element is not a number"));
+    let old = match contents.entries.get(&key) {
+        Some(Entry::Number(n)) => *n,
+        Some(_) => {
+            return Err(err(format!(
+                "Unable to increment the value for key {} because it is not a number value.",
+                shown(&key)
+            )));
+        }
+        None => {
+            return Err(err(format!(
+                "Unable to increment the value for key {} because it does not exist in the \
+                 SharedTable.",
+                shown(&key)
+            )));
+        }
     };
     contents.entries.insert(key, Entry::Number(old + delta));
     contents.version += 1;
     Ok(old)
 }
 
-/// Calls `f` with the value under `key` and stores what it returns.
-/// Roblox calls `f` again when other scripts changed the table while it
-/// ran (Confirmed: creator-docs SharedTable.update). Nothing runs beside
-/// `f` in Rook, which can't yield inside it, so a change meanwhile is
-/// `f`'s own, which every retry would make again: it raises instead
-/// (Inference: the creator docs leave it out; the wording is Rook's).
-fn update(lua: &Lua, st: &LSharedTable, key: &LuaValue, f: &Function) -> mlua::Result<()> {
-    let key = key_of(key)?;
+/// The most times `update` calls its function. Studio raises `table
+/// overflow` when the function changes the table on every call (Confirmed:
+/// Studio 0.748, for a nested `update` of the same table); Rook stops
+/// after this many calls (Approximation: Roblox's limit isn't known).
+const MAX_UPDATE_CALLS: usize = 1000;
+
+/// Luau's error for a yield where a C function called in.
+const YIELD_ACROSS: &str = "attempt to yield across metamethod/C-call boundary";
+
+/// Calls `f` with the value under `key` and stores what it returns,
+/// calling it again when the table changed while it ran (Confirmed:
+/// Studio 0.748, where a function that changes another key on its first
+/// call is called twice). An error in `f` propagates as raised, a table
+/// included, and `f` can't yield (Confirmed: Studio 0.748).
+fn update(lua: &Lua, args: &MultiValue, pcall: &Function, error: &Function) -> ApiResult<Outcome> {
+    let st = table_arg(args, "update")?;
+    let key = key_of(arg(args, 1))?;
+    let Some(LuaValue::Function(f)) = args.get(2) else {
+        return Err("Third argument to SharedTable::Update should be a function.".into());
+    };
     // A frozen table fails before `f` runs.
     drop(st.write()?);
-    let (version, current) = {
-        let contents = st.read();
-        (contents.version, contents.entries.get(&key).cloned())
-    };
-    let current = current.map_or(Ok(LuaValue::Nil), |e| entry_to_lua(lua, e))?;
-    let new = entry_of(lua, &f.call::<LuaValue>(current)?)?;
-    let mut contents = st.write()?;
-    if contents.version != version {
-        return Err(err(
-            "SharedTable.update: the update function must not change the table",
-        ));
+    for _ in 0..MAX_UPDATE_CALLS {
+        let (version, current) = {
+            let contents = st.read();
+            (contents.version, contents.entries.get(&key).cloned())
+        };
+        let current = current.map_or(Ok(LuaValue::Nil), |e| entry_to_lua(lua, e))?;
+        let mut results = pcall.call::<MultiValue>((f.clone(), current))?.into_iter();
+        let ran = matches!(results.next(), Some(LuaValue::Boolean(true)));
+        let value = results.next().unwrap_or(LuaValue::Nil);
+        if !ran {
+            if let LuaValue::String(s) = &value
+                && s.to_string_lossy().ends_with(YIELD_ACROSS)
+            {
+                return Err("thread is not yieldable".into());
+            }
+            let raise = MultiValue::from_vec(vec![value, LuaValue::Integer(0)]);
+            return Ok(Outcome::Call(error.clone(), raise));
+        }
+        let new = entry_of(lua, &value)?;
+        let mut contents = st.write()?;
+        if contents.version != version {
+            continue;
+        }
+        match new {
+            Some(e) => contents.entries.insert(key, e),
+            None => contents.entries.remove(&key),
+        };
+        contents.version += 1;
+        return Outcome::ret(lua, ());
     }
-    match new {
-        Some(e) => contents.entries.insert(key, e),
-        None => contents.entries.remove(&key),
-    };
-    contents.version += 1;
-    Ok(())
+    Err("table overflow".into())
+}
+
+/// `getmetatable` on a SharedTable gives a string (Confirmed: Studio
+/// 0.748; the words are Inference, Roblox's for its locked metatables).
+/// mlua sets `__metatable` to false on every userdata metatable and won't
+/// set it through its API, so it's set on the type's metatable directly.
+#[allow(unsafe_code)]
+fn lock_metatable(lua: &Lua) -> mlua::Result<()> {
+    let sample = lua.create_userdata(LSharedTable::default())?;
+    // SAFETY: the closure runs with `sample` on top of the stack, which
+    // `exec_raw` checked has room for three more values; it pushes the
+    // metatable and a string, sets the field (a raw set, which runs no Lua
+    // code) and pops the metatable, leaving the stack as it found it.
+    unsafe {
+        lua.exec_raw::<()>(sample, |state| {
+            if mlua::ffi::lua_getmetatable(state, -1) != 0 {
+                mlua::ffi::lua_pushstring(state, c"The metatable is locked".as_ptr());
+                mlua::ffi::lua_rawsetfield(state, -2, c"__metatable".as_ptr());
+                mlua::ffi::lua_pop(state, 1);
+            }
+        })
+    }
 }
 
 pub(crate) fn install(lua: &Lua) -> mlua::Result<()> {
+    lock_metatable(lua)?;
     let t = lua.create_table()?;
-    t.set("new", lua.create_function(new)?)?;
+    t.set(
+        "new",
+        lua.create_function(|lua, args: MultiValue| new(lua, &args))?,
+    )?;
     t.set(
         "clear",
-        lua.create_function(|_, st: LuaValue| {
-            let st = table_arg(&st, "clear")?;
+        lua.create_function(|_, args: MultiValue| {
+            let st = table_arg(&args, "clear")?;
             let mut contents = st.write()?;
             contents.entries.clear();
             contents.version += 1;
@@ -375,30 +525,30 @@ pub(crate) fn install(lua: &Lua) -> mlua::Result<()> {
     for (name, freeze) in [("clone", false), ("cloneAndFreeze", true)] {
         t.set(
             name,
-            lua.create_function(move |_, (st, deep): (LuaValue, Option<bool>)| {
-                table_arg(&st, name)?.clone_table(deep.unwrap_or(false), freeze)
-            })?,
+            lua.create_function(move |_, args: MultiValue| clone(&args, name, freeze))?,
         )?;
     }
     t.set(
         "increment",
-        lua.create_function(|_, (st, key, delta): (LuaValue, LuaValue, f64)| {
-            increment(&table_arg(&st, "increment")?, &key, delta)
-        })?,
+        lua.create_function(|_, args: MultiValue| increment(&args))?,
     )?;
     t.set(
         "isFrozen",
-        lua.create_function(|_, st: LuaValue| Ok(table_arg(&st, "isFrozen")?.read().frozen))?,
+        lua.create_function(|_, args: MultiValue| Ok(table_arg(&args, "isFrozen")?.read().frozen))?,
     )?;
     t.set(
         "size",
-        lua.create_function(|_, st: LuaValue| Ok(table_arg(&st, "size")?.read().entries.len()))?,
-    )?;
-    t.set(
-        "update",
-        lua.create_function(|lua, (st, key, f): (LuaValue, LuaValue, Function)| {
-            update(lua, &table_arg(&st, "update")?, &key, &f)
+        lua.create_function(|_, args: MultiValue| {
+            Ok(table_arg(&args, "size")?.read().entries.len())
         })?,
     )?;
+    let pcall: Function = lua.globals().get("pcall")?;
+    let error: Function = lua.globals().get("error")?;
+    t.set(
+        "update",
+        api_fn(lua, move |lua, args| update(lua, &args, &pcall, &error))?,
+    )?;
+    // Confirmed: Studio 0.748, the global is frozen.
+    t.set_readonly(true);
     lua.globals().set("SharedTable", t)
 }

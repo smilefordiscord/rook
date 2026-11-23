@@ -42,6 +42,9 @@ pub(crate) fn resume(lua: &Lua, thread: &Thread, args: impl IntoLuaMulti) {
     if let Err(e) = thread.resume::<MultiValue>(args) {
         report_error(lua, thread, &e);
     }
+    let finished = thread.status() != ThreadStatus::Resumable;
+    let owner = thread.to_pointer().addr();
+    with_world(lua, |w| w.scheduler.resumption_ended(owner, finished));
 }
 
 /// Whether `func` belongs to a stopped script.
@@ -112,7 +115,7 @@ fn run_handler(lua: &Lua, connection: ConnectionId, handler: Handler, args: Vec<
     match handler {
         // As a Deferred invocation, so disconnecting drops it.
         Handler::Parallel { func, actor } => with_world(lua, |w| {
-            w.scheduler.desynchronize(
+            w.scheduler.desynchronize_handler(
                 actor,
                 Job::Fire {
                     connection,

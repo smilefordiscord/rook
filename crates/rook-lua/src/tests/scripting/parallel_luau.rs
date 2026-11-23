@@ -75,7 +75,7 @@ fn phases_switch_at_the_next_phase_not_inline() {
     );
 }
 
-/// Confirmed: creator-docs task.desynchronize and task.synchronize.
+/// Confirmed: Studio 0.748.
 #[test]
 fn switching_phases_outside_an_actor_is_an_error() {
     expect(
@@ -85,14 +85,15 @@ fn switching_phases_outside_an_actor_is_an_error() {
         "#,
         1,
         &[
-            "false task.desynchronize() should only be called from a script that is a descendant of an Actor",
-            "false task.synchronize() should only be called from a script that is a descendant of an Actor",
+            "false task.desynchronize() may only be called from a script that is a descendant of an Actor",
+            "false task.synchronize() may only be called from a script that is a descendant of an Actor",
         ],
     );
 }
 
 /// A parallel connection's handler waits for the parallel phase; work it
-/// waits for or defers there stays desynchronized.
+/// waits for or defers there stays desynchronized. What it defers runs
+/// once the handler has been resumed again, as in Studio 0.748.
 #[test]
 fn connect_parallel_handlers_start_in_the_parallel_phase() {
     let rt = place();
@@ -126,8 +127,8 @@ fn connect_parallel_handlers_start_in_the_parallel_phase() {
         [
             "fired".to_owned(),
             format!("handler 1 {refused}"),
-            format!("deferred {refused}"),
             format!("waited {refused}"),
+            format!("deferred {refused}"),
             "synchronized".to_owned(),
         ]
     );
@@ -181,9 +182,14 @@ fn serial_handlers_of_a_signal_fired_in_parallel_run_serially() {
     }
 }
 
+/// A script outside any Actor, or a module it required, can't connect in
+/// parallel; code without a script (the command bar's, a plugin's) can't
+/// either, a module it required included (Confirmed: Studio 0.748, for
+/// code without a script).
 #[test]
 fn connecting_in_parallel_outside_an_actor_is_an_error() {
     let rt = place();
+    let sss = service(&rt, "ServerScriptService");
     let storage = service(&rt, "ReplicatedStorage");
     add(
         &rt,
@@ -196,22 +202,26 @@ fn connecting_in_parallel_outside_an_actor_is_an_error() {
         end
         "#,
     );
-    rt.run_source(
-        "Workspace.Script",
-        r#"
+    let source = r#"
         local signal = Instance.new("BindableEvent").Event
         print(pcall(function() signal:ConnectParallel(function() end) end))
         print(require(game.ReplicatedStorage.Connector)(signal))
-        "#,
-        None,
-    )
-    .unwrap();
+        "#;
+    let script = add(&rt, sss, "Script", "Script", source);
     assert_eq!(
-        finish(&rt, 0),
+        play(&rt, &[script], 0),
         [
             "false Scripts that connect in parallel must be rooted under an Actor",
             "false A module script may only connect in parallel if this instantiation of the \
              script was required by a script associated with an actor",
+        ]
+    );
+    rt.run_source("Command", source, None).unwrap();
+    assert_eq!(
+        finish(&rt, 0),
+        [
+            "false Function Event.ConnectParallel can only be used inside scripts",
+            "false Function Event.ConnectParallel can only be used inside scripts",
         ]
     );
 }
@@ -258,9 +268,9 @@ fn desynchronized_code_may_only_do_what_is_safe_in_parallel() {
             "Function Instance.WaitForChild is not safe to call in parallel",
             "Property GuiBase2d.AbsoluteSize is not safe to read in parallel",
             "Event BasePart.Touched is not safe to access in parallel",
-            "require is not safe to call in parallel",
+            "require can not be used during the parallel phase",
             "Instance",
-            "Property Instance.Parent is not safe to write in parallel",
+            "Unable to parent new Instance during parallel execution.",
             "ok 0, 0",
         ]
     );
@@ -292,8 +302,8 @@ fn desynchronized_code_cannot_set_a_callback() {
     assert_eq!(
         play(&rt, &[script], 1),
         [
-            "false Callback BindableFunction.OnInvoke is not safe to set in parallel",
-            "false Callback RemoteFunction.OnServerInvoke is not safe to set in parallel",
+            "false Callback BindableFunction.OnInvoke is not safe to access in parallel",
+            "false Callback RemoteFunction.OnServerInvoke is not safe to access in parallel",
             "serial",
         ]
     );
@@ -350,7 +360,8 @@ fn messages_reach_the_actors_bindings_at_the_next_resumption_point() {
         play(&rt, &[receiver, sender], 2),
         [
             "sent false Attempt to load a function from a different Lua VM".to_owned(),
-            "false BindToMessage can only be called from a script that is a descendant of the Actor"
+            "false Calling BindToMessage on an Actor is only allowed in scripts that are a \
+             descendent of that Actor"
                 .to_owned(),
             "serial sent true".to_owned(),
             format!("parallel sent {refused}"),
@@ -451,7 +462,7 @@ fn shared_tables_keep_what_the_creator_docs_list() {
     expect(
         r#"
         local st = SharedTable.new({ x = 1, y = 2, z = { "a", "b", "c" } })
-        print(typeof(st), st.x, st.y, st.z[1], st.z[3], typeof(st.z), tostring(st))
+        print(typeof(st), st.x, st.y, st.z[1], st.z[3], typeof(st.z), tostring(st):match("^SharedTable: 0x%x+$") ~= nil)
         print(SharedTable.size(st))
         st.y = nil
         print(SharedTable.size(st), st.y)
@@ -475,7 +486,7 @@ fn shared_tables_keep_what_the_creator_docs_list() {
         "#,
         0,
         &[
-            "SharedTable 1 2 a c SharedTable SharedTable",
+            "SharedTable 1 2 a c SharedTable true",
             "3",
             "2 nil",
             "1 6",
@@ -483,33 +494,35 @@ fn shared_tables_keep_what_the_creator_docs_list() {
             "new",
             "1, 2, 3 1, 0, 0 SharedTable",
             "1=10 2=20 a=1",
-            "false invalid SharedTable key (expected a string or a whole number from 0 to 4294967295)",
-            "false invalid SharedTable key (expected a string or a whole number from 0 to 4294967295)",
-            "false a value of type function cannot be stored in a SharedTable",
-            "false a value of type Instance cannot be stored in a SharedTable",
-            "false SharedTable.increment: the element is not a number",
+            "false Numeric SharedTable keys must be nonnegative integers less than 2^32",
+            "false Numeric SharedTable keys must be nonnegative integers less than 2^32",
+            "false Functions can not be stored in a SharedTable",
+            "false Instances can not be stored in a SharedTable",
+            "false Unable to increment the value for key \"w\" because it is not a number value.",
         ],
     );
 }
 
-/// An update function that changes its own table raises, where retrying
-/// until the table stood still made the same change each time and ran
-/// until the script timed out.
+/// `update` calls its function again when the table changed while it ran;
+/// one that changes it every time stops with `table overflow`, as Studio
+/// 0.748's does, rather than run until the script times out.
 #[test]
-fn a_shared_table_update_whose_function_changes_the_table_raises() {
+fn a_shared_table_update_retries_while_its_function_changes_the_table() {
     expect(
         r#"
         local st = SharedTable.new({ n = 1 })
+        local calls = 0
+        print(pcall(SharedTable.update, st, "n", function(v)
+            calls += 1
+            if calls == 1 then st.other = v end
+            return v + 1
+        end))
+        print(calls, st.n, st.other)
         print(pcall(SharedTable.update, st, "n", function(v) st.other = v return v + 1 end))
-        print(st.n, st.other)
-        print(pcall(SharedTable.update, st, "n", function(v) return v + 1 end), st.n)
+        print(st.n)
         "#,
         0,
-        &[
-            "false SharedTable.update: the update function must not change the table",
-            "1 1",
-            "true 2",
-        ],
+        &["true", "2 2 1", "false table overflow", "2"],
     );
 }
 
@@ -547,9 +560,9 @@ fn shared_tables_clone_freeze_and_compare_by_identity() {
             "false true",
             "false",
             "true true false",
-            "false attempt to modify a readonly table",
-            "false attempt to modify a readonly table",
-            "false attempt to modify a readonly table",
+            "false SharedTable is frozen",
+            "false SharedTable is frozen",
+            "false SharedTable is frozen",
             "0 2",
             "true",
             "true",
@@ -577,7 +590,7 @@ fn deeply_nested_shared_tables_raise_or_free_without_a_crash() {
         &[
             "false SharedTables can't nest more than 1000 deep",
             "false SharedTables can't nest more than 1000 deep",
-            "11",
+            "31",
         ],
     );
 }

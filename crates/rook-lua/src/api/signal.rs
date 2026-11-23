@@ -88,6 +88,19 @@ fn this_signal(args: &mut Vec<LuaValue>, name: &str) -> ApiResult<LSignal> {
 fn connect(lua: &Lua, args: MultiValue, name: &'static str, once: bool) -> ApiResult<Outcome> {
     let mut v = args.into_vec();
     let sig = this_signal(&mut v, name)?;
+    if actors::in_parallel(lua) {
+        // Confirmed: Studio 0.748, for a signal read before
+        // desynchronizing.
+        return Err(ScriptError(format!(
+            "Function Event.{name} is not safe to call in parallel"
+        )));
+    }
+    if name == "ConnectParallel" && !actors::in_script(lua) {
+        // Confirmed: Studio 0.748, before the function is looked at.
+        return Err(ScriptError(
+            "Function Event.ConnectParallel can only be used inside scripts".into(),
+        ));
+    }
     let args = Args::new(MultiValue::from_vec(v), name);
     let func = args.function(0).map_err(|_| {
         ScriptError("Attempt to connect failed: Passed value is not a function".into())

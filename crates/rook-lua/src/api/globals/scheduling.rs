@@ -122,7 +122,8 @@ pub(super) fn task_defer(lua: &Lua, args: MultiValue) -> ApiResult<Outcome> {
         args: a.rest(1),
         wait: WaitKind::None,
     };
-    with_world(lua, |w| w.scheduler.defer(job));
+    let owner = lua.current_thread().to_pointer().addr();
+    with_world(lua, |w| w.scheduler.defer_held(owner, job));
     Outcome::ret(lua, thread)
 }
 
@@ -190,12 +191,10 @@ pub(crate) fn task_library(lua: &Lua, context: Context) -> mlua::Result<Table> {
     Ok(task)
 }
 
-/// Confirmed: creator-docs task.desynchronize and task.synchronize raise
-/// an error outside an Actor. The wording is Inference, from DevForum
-/// reports of it.
+/// Confirmed: Studio 0.748, the words included.
 fn outside_actor(function: &str) -> ScriptError {
     ScriptError(format!(
-        "task.{function}() should only be called from a script that is a descendant of an Actor"
+        "task.{function}() may only be called from a script that is a descendant of an Actor"
     ))
 }
 

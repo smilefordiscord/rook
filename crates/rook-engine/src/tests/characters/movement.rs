@@ -88,7 +88,9 @@ fn near(got: f32, want: f32, within: f32) -> bool {
 }
 
 /// Measured: walking reaches WalkSpeed within two frames and keeps it,
-/// with the root at standing height (R6: 3 above the floor).
+/// with the root at standing height (R6: 3 above the floor). The script
+/// resumes from `task.wait` before the frame's Heartbeat, so its first
+/// `Heartbeat:Wait()` returns that frame: 29 frames of walking.
 #[test]
 fn walking_reaches_walk_speed() {
     let local = r#"local z0 = r.Position.Z
@@ -100,7 +102,7 @@ fn walking_reaches_walk_speed() {
         print(("stop %.3f"):format(r.AssemblyLinearVelocity.Magnitude))"#;
     let out = drive("", "CFrame.new(0, 3, 0)", local, 1.5);
     let walk = numbers(&out, "walk");
-    assert!(near(walk[0], 7.96, 0.1), "{out:?}");
+    assert!(near(walk[0], 7.69, 0.1), "{out:?}");
     assert!(near(walk[1], 16.0, 0.01), "{out:?}");
     assert!(near(walk[2], 3.0, 0.02), "{out:?}");
     assert!(numbers(&out, "stop")[0] < 0.01, "{out:?}");

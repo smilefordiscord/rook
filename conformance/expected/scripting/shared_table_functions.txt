@@ -1,0 +1,112 @@
+-- studio 0.748.0.7481526
+-- signals: deferred
+size 3
+size empty 0
+size type number
+size no args error missing argument #1 to 'size' (SharedTable expected)
+size table error invalid argument #1 to 'size' (SharedTable expected, got table)
+size number error invalid argument #1 to 'size' (SharedTable expected, got number)
+size Instance error invalid argument #1 to 'size' (SharedTable expected, got Instance)
+clone false a=1 inner={}
+clone shares inner true
+clone separate 1 2
+deep clone false 2
+deep clone separate 2
+clone false ok true
+clone nil deep error invalid argument #2 to 'clone' (boolean expected, got nil)
+clone number deep error invalid argument #2 to 'clone' (boolean expected, got number)
+clone string deep error invalid argument #2 to 'clone' (boolean expected, got string)
+clone no args error missing argument #1 to 'clone' (SharedTable expected)
+clone table error invalid argument #1 to 'clone' (SharedTable expected, got table)
+clone same inner twice ok true false
+clone cycle shallow ok true false
+clone cycle deep ok false true
+clone frozen ok false true false false
+clone keeps order ok 1=4 2=2 a=3 b=1
+isFrozen new false
+cloneAndFreeze false true false a=1 inner={}
+frozen shallow inner true false
+frozen deep inner false true
+frozen read 1 3
+cloneAndFreeze frozen ok false true
+cloneAndFreeze no args error missing argument #1 to 'cloneAndFreeze' (SharedTable expected)
+cloneAndFreeze table error invalid argument #1 to 'cloneAndFreeze' (SharedTable expected, got table)
+isFrozen no args error missing argument #1 to 'isFrozen' (SharedTable expected)
+isFrozen table error invalid argument #1 to 'isFrozen' (SharedTable expected, got table)
+frozen write error SharedTable is frozen
+frozen add error SharedTable is frozen
+frozen remove error SharedTable is frozen
+frozen same value error SharedTable is frozen
+frozen bad key error Numeric SharedTable keys must be nonnegative integers less than 2^32
+frozen bad value error SharedTable is frozen
+frozen deep inner write error SharedTable is frozen
+frozen clear error SharedTable is frozen
+frozen increment error SharedTable is frozen
+frozen update ok false false SharedTable is frozen
+frozen unchanged 1 2
+frozen into new ok true true
+new from frozen error invalid argument #1 to 'new' (table expected, got SharedTable)
+clear 0 nil nil 3
+clear empty ok 
+clear no args error missing argument #1 to 'clear' (SharedTable expected)
+clear table error invalid argument #1 to 'clear' (SharedTable expected, got table)
+clear returns ok 0
+increment 10 15
+increment negative 15 -5
+increment fraction -5 -4.5
+increment numeric key ok 7 8
+increment missing error Unable to increment the value for key "missing" because it does not exist in the SharedTable.
+increment string value error Unable to increment the value for key "s" because it is not a number value.
+increment boolean value error Unable to increment the value for key "b" because it is not a number value.
+increment table value error Unable to increment the value for key "list" because it is not a number value.
+increment string delta error Variant cast failed
+increment bad delta error Variant cast failed
+increment no delta error Failed to get value for insertion into SharedTable
+increment nil delta error Variant cast failed
+increment nan delta ok true
+increment bad key error Numeric SharedTable keys must be nonnegative integers less than 2^32
+increment no key error SharedTable keys can only be strings or numbers.
+increment no args error missing argument #1 to 'increment' (SharedTable expected)
+increment table error invalid argument #1 to 'increment' (SharedTable expected, got table)
+increment after -4.5 5 true
+update returns ok 0
+update result 2
+update missing ok nil made
+update to nil ok nil 2
+update no return ok nil
+update args ok 1
+update two returns ok 3
+update to table ok SharedTable 2
+update nested value ok SharedTable
+update to function error Functions can not be stored in a SharedTable
+update keeps on error 3
+update error error boom
+update error value ok false table 1
+update yields error thread is not yieldable
+update after yield 3
+update not function error Third argument to SharedTable::Update should be a function.
+update no function error Third argument to SharedTable::Update should be a function.
+update bad key error SharedTable keys can only be strings or numbers.
+update table error invalid argument #1 to 'update' (SharedTable expected, got table)
+update writes other key ok true nil 2 2 1
+update reads during ok 6
+nested update error table overflow
+registry SharedTableRegistry SharedTableRegistry Instance
+get new SharedTable 0 false
+get same true
+get keeps 1
+set replaces true false
+set nil false 0
+set no table ok 
+set Luau table error Unable to cast Array to SharedTable
+set number error Unable to cast double to SharedTable
+set frozen ok true true
+same table two names ok true
+name empty ok 0
+name number ok true
+name nil error Argument 1 missing or nil
+name none error Argument 1 missing or nil
+name table ok SharedTable: <address>
+set name nil error Argument 1 missing or nil
+dot call error Expected ':' not '.' calling member function GetSharedTable
+children 0

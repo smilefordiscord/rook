@@ -39,18 +39,28 @@ impl UserData for LTweenInfo {
         m.add_meta_method(MetaMethod::Eq, |_, t, o: UserDataRef<LTweenInfo>| {
             Ok(*t == *o)
         });
+        // Confirmed: Studio 0.748 (`Time:1 DelayTime:0 RepeatCount:0
+        // Reverses:False EasingDirection:Out EasingStyle:Quad`).
         m.add_meta_method(MetaMethod::ToString, |_, t, ()| {
             Ok(format!(
                 "Time:{} DelayTime:{} RepeatCount:{} Reverses:{} EasingDirection:{} EasingStyle:{}",
                 t.time,
                 t.delay_time,
                 t.repeat_count,
-                t.reverses,
-                t.easing_direction,
-                t.easing_style
+                if t.reverses { "True" } else { "False" },
+                item_name("EasingDirection", t.easing_direction),
+                item_name("EasingStyle", t.easing_style)
             ))
         });
     }
+}
+
+/// The name of item `value` of `Enum.<enum_name>`.
+fn item_name(enum_name: &str, value: u32) -> &'static str {
+    rook_reflection::database()
+        .enum_by_name(enum_name)
+        .and_then(|e| e.items.iter().find(|(_, v)| *v == value))
+        .map_or("", |(name, _)| name)
 }
 
 /// The value of `Enum.<enum_name>.<item>`, an item the database has.

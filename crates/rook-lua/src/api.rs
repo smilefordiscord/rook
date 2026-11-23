@@ -20,5 +20,6 @@ pub(crate) fn install(lua: &Lua) -> mlua::Result<()> {
     methods::web::http::install(lua)?;
     methods::remotes::install(lua)?;
     methods::gui::text_chat::install(lua)?;
+    crate::runtime::actors::note_builtins(lua)?;
     Ok(())
 }
