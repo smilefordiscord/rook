@@ -84,7 +84,7 @@ fn group(lua: &Lua, players: Vec<InstanceId>) -> ApiResult<Vec<InstanceId>> {
 /// instances kept, a mixed table's array part only, a boolean key and a
 /// cycle raise).
 fn copied(lua: &Lua, v: &LuaValue) -> ApiResult<LuaValue> {
-    Ok(copy_values(lua, std::slice::from_ref(v))?
+    Ok(copy_values(lua, std::slice::from_ref(v), false)?
         .pop()
         .unwrap_or(LuaValue::Nil))
 }
