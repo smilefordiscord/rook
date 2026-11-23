@@ -109,8 +109,9 @@ fn a_local_script_kicks_only_its_own_player() {
     assert_eq!(players_of(server), ["B"]);
 }
 
-/// The prompt takes the window's input: only releasing the mouse over its
-/// button leaves.
+/// The prompt takes the window's input: only pressing and releasing the
+/// mouse on its button leaves, so a button held down when the kick came
+/// doesn't, and it's centered again when the window's size changes.
 #[test]
 fn the_prompt_leaves_from_its_button() {
     let options = Options::default();
@@ -123,33 +124,37 @@ fn the_prompt_leaves_from_its_button() {
     let client = session.client_mut(0).unwrap();
     client.set_viewport(800, 600);
     client.end_session(crate::session::ended::kick_prompt("bye"));
-    {
-        let mut w = client.runtime.world_mut();
+    let draw = |dm: &DataModel| {
+        let mut w = dm.runtime.world_mut();
         let w = &mut *w;
         w.gui.draw(&w.dom);
-    }
-    let on_button = |dm: &DataModel, y: f32| {
-        let at = glam::Vec2::new(400.0, y);
+    };
+    draw(client);
+    let on_button = |dm: &DataModel, x: f32, y: f32| {
+        let at = glam::Vec2::new(x, y);
         dm.runtime.world().gui.prompt_button_at(at)
     };
-    let y = (0..600).map(|y| y as f32).find(|&y| on_button(client, y));
+    let y = (0..600)
+        .map(|y| y as f32)
+        .find(|&y| on_button(client, 400.0, y));
     let y = y.expect("the prompt has a button") + 2.0;
+    let button = |dm: &mut DataModel, down| {
+        dm.input(InputEvent::MouseButton { button: 1, down });
+    };
     client.input(InputEvent::MouseMove { x: 100.0, y });
-    client.input(InputEvent::MouseButton {
-        button: 1,
-        down: false,
-    });
+    button(client, false);
     assert!(!client.left(), "off the button");
     client.input(InputEvent::MouseMove { x: 400.0, y });
-    client.input(InputEvent::MouseButton {
-        button: 1,
-        down: true,
-    });
+    button(client, false);
+    assert!(!client.left(), "released on the button, pressed elsewhere");
+    assert!(!on_button(client, 200.0, y));
+    client.set_viewport(400, 600);
+    draw(client);
+    assert!(on_button(client, 200.0, y), "centered on the new size");
+    client.input(InputEvent::MouseMove { x: 200.0, y });
+    button(client, true);
     assert!(!client.left());
-    client.input(InputEvent::MouseButton {
-        button: 1,
-        down: false,
-    });
+    button(client, false);
     assert!(client.left());
     assert_eq!(client.mouse_lock(), MouseLock::Free);
 }

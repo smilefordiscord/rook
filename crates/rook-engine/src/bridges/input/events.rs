@@ -23,6 +23,10 @@ impl DataModel {
     /// The window's size in pixels (for the mouse ray and Mouse.ViewSize).
     pub fn set_viewport(&mut self, width: u32, height: u32) {
         self.input.viewport = (width.max(1), height.max(1));
+        if self.session_ended() {
+            self.resize_ended();
+            return;
+        }
         self.sync_viewport_size();
     }
 
@@ -79,6 +83,10 @@ impl DataModel {
     /// Look under the mouse again after a frame; the ClickDetector hovers
     /// it changed.
     pub fn refresh_hover(&mut self) -> Vec<ClickEvent> {
+        // Scripts stop with the connection, so nothing hears hovers.
+        if self.session_ended() {
+            return Vec::new();
+        }
         let mut clicks = Vec::new();
         self.refresh_mouse(&mut clicks);
         clicks

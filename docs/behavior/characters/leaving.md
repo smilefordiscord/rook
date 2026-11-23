@@ -69,8 +69,8 @@ Roblox's `Connection` CoreScript shows it for a kick
 
 Rook draws the prompt itself (`rook_gui`'s `draw/overlays/prompt.rs`), so
 it shows with or without Roblox's CoreScripts: centered over everything,
-the mouse freed, Roblox's arrow cursor, and releasing the first mouse
-button over `Leave` closes the window. Approximation: the layout follows
+the mouse freed, Roblox's arrow cursor, and pressing and releasing the
+first mouse button on `Leave` closes the window. Approximation: the layout follows
 the frames `ErrorPrompt` builds (title in Source Sans Semibold 25, message
 in Source Sans 20 wrapped, a 36-pixel button, 20 pixels of padding), but
 its sizes and colors come from Roblox's shared constants, which the plain

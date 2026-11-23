@@ -61,6 +61,15 @@ impl Gui {
         self.laid_out += 1;
     }
 
+    /// The window's size changed under the shown prompt: it's centered
+    /// again on the next drawing, though no layout runs while it shows.
+    pub fn resize_prompt(&mut self) {
+        if self.prompt.is_some() {
+            self.screen.repaint_prompt();
+            self.laid_out += 1;
+        }
+    }
+
     pub fn prompt_shown(&self) -> bool {
         self.prompt.is_some()
     }
