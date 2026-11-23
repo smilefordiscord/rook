@@ -3,14 +3,16 @@
 //! state; this module gives pads their slots and turns each new state
 //! into the events for what changed. gilrs reads most pads; on Windows,
 //! where its only backend doesn't list Sony's, `sony` reads those over HID.
+//! The other way, each frame's motor speeds go to the pads whose speeds
+//! changed (docs/behavior/input/gamepads.md#motors).
 
 #[cfg(windows)]
 mod sony;
 mod sony_reports;
 mod system;
 
-use rook_engine::{GamepadAxis, GamepadKind, InputEvent};
-use rook_types::GamepadKey;
+use rook_engine::{GamepadAxis, GamepadKind, InputEvent, MotorSpeeds};
+use rook_types::{GamepadKey, VibrationMotor};
 
 /// The keys Studio lists for a pad, in its order: the same for a
 /// DualShock and an Xbox pad, a stick once per axis (measured).
@@ -72,22 +74,32 @@ enum PadId {
     Sony(u64),
 }
 
+/// The motors every source runs: a pad's compatible rumble.
+const RUMBLE_MOTORS: [VibrationMotor; 2] = [VibrationMotor::Large, VibrationMotor::Small];
+
+/// A pad's Large and Small motors' speeds, 0 to 1.
+type Rumble = [f32; 2];
+
 #[derive(Debug)]
 enum PadChange {
     Connected {
         id: PadId,
         kind: GamepadKind,
         supported: Vec<GamepadKey>,
+        /// Whether it has [`RUMBLE_MOTORS`].
+        rumbles: bool,
     },
     State(PadId, PadState),
     Disconnected(PadId),
 }
 
-/// A pad in a slot, and the state the game was last told.
+/// A pad in a slot, the state the game was last told, and the speeds
+/// the pad was last sent.
 #[derive(Debug)]
 struct Slot {
     id: PadId,
     sent: PadState,
+    rumble: Rumble,
 }
 
 #[derive(Debug)]
@@ -129,8 +141,14 @@ impl Gamepads {
                     id,
                     kind,
                     supported,
+                    rumbles,
                 } => {
-                    self.connect(id, kind, supported, &mut send);
+                    let motors = if rumbles {
+                        RUMBLE_MOTORS.to_vec()
+                    } else {
+                        Vec::new()
+                    };
+                    self.connect(id, kind, supported, motors, &mut send);
                 }
                 PadChange::Disconnected(id) => {
                     if let Some(pad) = self.slot_of(id) {
@@ -151,6 +169,26 @@ impl Gamepads {
         self.changes = changes;
     }
 
+    /// Run each pad's motors at the speeds the game decided
+    /// ([`rook_engine::DataModel::motor_speeds`]), sending only what
+    /// changed.
+    pub(crate) fn rumble(&mut self, speeds: &MotorSpeeds) {
+        let (system, slots) = (&mut self.system, &mut self.slots);
+        #[cfg(windows)]
+        let sony = &self.sony;
+        rumble_changes(slots, speeds, |id, want| match id {
+            PadId::System(id) => system.rumble(id, want),
+            #[cfg(windows)]
+            PadId::Sony(id) => {
+                if let Some(sony) = sony {
+                    sony.rumble(id, want);
+                }
+            }
+            #[cfg(not(windows))]
+            PadId::Sony(_) => {}
+        });
+    }
+
     fn slot_of(&self, id: PadId) -> Option<usize> {
         self.slots
             .iter()
@@ -164,6 +202,7 @@ impl Gamepads {
         id: PadId,
         kind: GamepadKind,
         supported: Vec<GamepadKey>,
+        motors: Vec<VibrationMotor>,
         send: &mut impl FnMut(InputEvent),
     ) {
         if self.slot_of(id).is_some() {
@@ -176,12 +215,32 @@ impl Gamepads {
         self.slots[pad] = Some(Slot {
             id,
             sent: PadState::default(),
+            rumble: [0.0; 2],
         });
         send(InputEvent::GamepadConnected {
             pad,
             kind,
             supported,
+            motors,
         });
+    }
+}
+
+/// Send each pad whose speeds differ from what it was last sent.
+fn rumble_changes(
+    slots: &mut [Option<Slot>; 8],
+    speeds: &MotorSpeeds,
+    mut send: impl FnMut(PadId, Rumble),
+) {
+    for (slot, speeds) in slots.iter_mut().zip(speeds) {
+        let Some(slot) = slot else {
+            continue;
+        };
+        let want = RUMBLE_MOTORS.map(|m| speeds[m.index()]);
+        if want != slot.rumble {
+            slot.rumble = want;
+            send(slot.id, want);
+        }
     }
 }
 

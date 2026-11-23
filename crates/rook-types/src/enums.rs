@@ -160,6 +160,28 @@ impl GamepadKey {
 }
 
 roblox_enum! {
+    /// `Enum.VibrationMotor`: the motors HapticService drives.
+    VibrationMotor {
+        Large = 0,
+        Small = 1,
+        LeftTrigger = 2,
+        RightTrigger = 3,
+        LeftHand = 4,
+        RightHand = 5,
+    }
+}
+
+impl VibrationMotor {
+    pub const COUNT: usize = Self::ITEMS.len();
+
+    /// Where this motor is in [`VibrationMotor::ITEMS`]: its value, as
+    /// the items run from 0 without a gap.
+    pub fn index(self) -> usize {
+        self as usize
+    }
+}
+
+roblox_enum! {
     UserInputState {
         Begin = 0,
         Change = 1,
@@ -223,6 +245,13 @@ mod tests {
         check(UserInputType::NAME, UserInputType::ITEMS);
         check(UserInputState::NAME, UserInputState::ITEMS);
         check(GamepadKey::NAME, GamepadKey::ITEMS);
+        check(VibrationMotor::NAME, VibrationMotor::ITEMS);
+        assert!(
+            VibrationMotor::ITEMS
+                .iter()
+                .enumerate()
+                .all(|(i, &(_, m))| m.index() == i)
+        );
         check(MeshType::NAME, MeshType::ITEMS);
         check(RollOffMode::NAME, RollOffMode::ITEMS);
     }

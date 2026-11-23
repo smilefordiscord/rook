@@ -9,7 +9,7 @@ repository.workspace = true
 rust-version.workspace = true
 
 [features]
-window = ["dep:winit", "dep:gilrs", "dep:windows-sys", "rook-audio/output"]
+window = ["dep:winit", "dep:gilrs", "dep:crc32fast", "dep:windows-sys", "rook-audio/output"]
 # The `>` prompt in the terminal that runs Luau in the open place.
 repl = ["rook-engine/repl"]
 
@@ -25,6 +25,7 @@ rook-engine.workspace = true
 rook-lua.workspace = true
 winit = { workspace = true, optional = true }
 gilrs = { workspace = true, optional = true }
+crc32fast = { workspace = true, optional = true }
 glam.workspace = true
 image.workspace = true
 anyhow.workspace = true

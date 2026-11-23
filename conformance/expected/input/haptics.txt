@@ -1,0 +1,74 @@
+-- studio 0.748.0.7481526
+-- signals: deferred
+service HapticService HapticService
+VibrationMotor Large=0 Small=1 LeftTrigger=2 RightTrigger=3 LeftHand=4 RightHand=5
+IsVibrationSupported Gamepad1 ok 1 false
+IsVibrationSupported Gamepad2 ok 1 false
+IsVibrationSupported Gamepad8 ok 1 false
+IsVibrationSupported Keyboard ok 1 false
+IsVibrationSupported Touch ok 1 false
+IsVibrationSupported string ok 1 false
+IsVibrationSupported number ok 1 false
+IsVibrationSupported bad string error Unable to cast string to UserInputType
+IsVibrationSupported other enum error Unable to cast KeyCode to UserInputType
+IsVibrationSupported nil error Argument 1 missing or nil
+IsVibrationSupported none error Argument 1 missing or nil
+IsMotorSupported Gamepad1 Large ok 1 false
+IsMotorSupported Gamepad1 Small ok 1 false
+IsMotorSupported Gamepad1 LeftTrigger ok 1 false
+IsMotorSupported Gamepad1 RightTrigger ok 1 false
+IsMotorSupported Gamepad1 LeftHand ok 1 false
+IsMotorSupported Gamepad1 RightHand ok 1 false
+IsMotorSupported Keyboard Large ok 1 false
+IsMotorSupported string motor ok 1 false
+IsMotorSupported number motor ok 1 false
+IsMotorSupported bad motor error Unable to cast string to VibrationMotor
+IsMotorSupported nil motor error Argument 2 missing or nil
+IsMotorSupported no motor error Argument 2 missing or nil
+GetMotor unset ok 0 
+GetMotor unset keyboard ok 0 
+SetMotor 0.5 ok 0 
+GetMotor 0.5 ok 1 0.5
+SetMotor 1 ok 0 
+GetMotor 1 ok 1 1
+SetMotor 2.5 ok 0 
+GetMotor 2.5 ok 1 2.5
+SetMotor -1 ok 0 
+GetMotor -1 ok 1 -1
+SetMotor nan ok 0 
+GetMotor nan ok 1 nan
+SetMotor huge ok 0 
+GetMotor huge ok 1 inf
+SetMotor tuple ok 0 
+GetMotor tuple ok 3 0.25 0.75 x
+SetMotor string number ok 0 
+GetMotor string number ok 1 0.3
+SetMotor bad string ok 0 
+GetMotor bad string ok 1 x
+SetMotor boolean ok 0 
+GetMotor boolean ok 1 1
+SetMotor table ok 0 
+GetMotor table ok 1 <table>
+SetMotor nil ok 0 
+GetMotor nil ok 1 nil
+SetMotor none ok 0 
+GetMotor none ok 1 nil
+SetMotor LeftTrigger ok 0 
+GetMotor LeftTrigger ok 1 0.6000000238418579
+SetMotor RightHand ok 0 
+GetMotor RightHand ok 1 0.699999988079071
+SetMotor Gamepad8 ok 0 
+GetMotor Gamepad8 ok 1 0.800000011920929
+SetMotor Keyboard ok 0 
+GetMotor Keyboard ok 1 0.8999999761581421
+SetMotor Touch ok 0 
+GetMotor Touch ok 1 0.10000000149011612
+SetMotor string type ok 0 
+GetMotor string type ok 1 0.20000000298023224
+GetMotor other slot ok 0 
+SetMotor nil type error Argument 1 missing or nil
+SetMotor nil motor error Argument 2 missing or nil
+SetMotor wrong enum error Unable to cast KeyCode to VibrationMotor
+GetMotor no motor error Argument 2 missing or nil
+Supported after set ok 2 false false
+reset ok 1 0

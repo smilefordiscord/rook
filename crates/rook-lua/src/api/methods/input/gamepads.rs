@@ -9,19 +9,23 @@ use rook_types::{GamepadKey, UserInputType};
 use super::sequence;
 use crate::runtime::ctx::args::Args;
 use crate::runtime::ctx::{ApiResult, Outcome, with_world};
-use crate::types::enums::{enum_item, item_value};
+use crate::types::enums::enum_item;
 
 /// The slot an argument names: 0 for Gamepad1. None for any other input
-/// type, which every query answers as a pad that isn't there.
+/// type, which every query answers as a pad that isn't there. Cast as
+/// reflected methods cast enums (measured on HapticService: `Unable to
+/// cast KeyCode to UserInputType`, `Argument 1 missing or nil`).
 fn pad_arg(lua: &Lua, a: &Args, i: usize) -> ApiResult<Option<usize>> {
-    let value =
-        item_value(lua, a.get(i), "UserInputType").ok_or_else(|| a.wrong(i, "UserInputType"))?;
-    Ok(UserInputType::from_u32(value).and_then(UserInputType::gamepad_index))
+    Ok(pad_of(a.enum_value(lua, i, "UserInputType")?))
+}
+
+/// The slot a `UserInputType` value names: 0 for Gamepad1.
+pub(super) fn pad_of(input_type: u32) -> Option<usize> {
+    UserInputType::from_u32(input_type).and_then(UserInputType::gamepad_index)
 }
 
 fn key_arg(lua: &Lua, a: &Args, i: usize) -> ApiResult<Option<GamepadKey>> {
-    let value = item_value(lua, a.get(i), "KeyCode").ok_or_else(|| a.wrong(i, "KeyCode"))?;
-    Ok(GamepadKey::from_u32(value))
+    Ok(GamepadKey::from_u32(a.enum_value(lua, i, "KeyCode")?))
 }
 
 fn items(lua: &Lua, name: &str, values: impl IntoIterator<Item = u32>) -> ApiResult<Outcome> {

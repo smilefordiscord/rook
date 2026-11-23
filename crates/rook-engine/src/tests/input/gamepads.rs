@@ -22,6 +22,7 @@ fn connect(session: &mut Session, index: usize, pad: usize) {
             pad,
             kind: GamepadKind::PlayStation5,
             supported: GamepadKey::ITEMS.iter().map(|&(_, k)| k).collect(),
+            motors: Vec::new(),
         },
     );
 }
@@ -96,6 +97,7 @@ fn pads_present_at_start_count_from_the_first_line() {
         pad: 0,
         kind: GamepadKind::PlayStation5,
         supported: GamepadKey::ITEMS.iter().map(|&(_, k)| k).collect(),
+        motors: Vec::new(),
     }];
     let index = session.join_with("Player", 1, &present).unwrap();
     session.run_for(0.1);

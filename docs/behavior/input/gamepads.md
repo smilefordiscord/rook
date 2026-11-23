@@ -1,6 +1,6 @@
 # Gamepads
 
-Checked against Studio 0.747 on 2026-11-10.
+Checked against Studio 0.748 on 2026-11-23.
 
 [M19](../../roadmap/m19-input-and-platforms.md) step 1. Measured in
 Studio 0.747 on 2026-11-10 in a playtest client on Baseplate, with a
@@ -118,6 +118,47 @@ pad connected came from the edit DataModel.
   Gamepad1 and a DualSense connected after it gave ButtonCross for
   ButtonA, before and half a second after pressing the Xbox pad's A.
 
+## Motors
+
+What scripts see was measured in Studio 0.748 on 2026-11-23 on a
+playtest server with no pad (conformance case `input/haptics`); what a
+pad does follows the creator docs (HapticService, `Enum.VibrationMotor`,
+the gamepad input guide), with Rook's own choices marked Inference.
+
+- `Enum.VibrationMotor` is Large 0, Small 1, LeftTrigger 2,
+  RightTrigger 3, LeftHand 4 and RightHand 5.
+- The input type and motor are cast as every reflected method casts an
+  enum (Confirmed): an item, its name or its number; `"Pad"` is "Unable
+  to cast string to UserInputType", another enum's item "Unable to cast
+  KeyCode to UserInputType" (or `to VibrationMotor`), and nil or nothing
+  "Argument 1 missing or nil" (`Argument 2` for the motor).
+  UserInputService's gamepad methods cast theirs the same way
+  (Inference).
+- `HapticService:SetMotor(inputType, motor, values...)` keeps its whole
+  tuple for that input type and motor, whatever it holds, and never
+  fails on it (Confirmed). `GetMotor` returns the tuple as kept, and
+  nothing before `SetMotor`. Numbers are kept as single-precision floats
+  (0.6 reads 0.6000000238418579), not clamped (2.5, -1, NaN and infinity
+  read back); `true` reads 1 (Inference: `false` 0); a string, a table
+  and nil are kept as they are (`"0.3"` reads back a string); no value
+  at all reads back one nil. Keyboard, Touch and every other input type
+  keep their values too.
+- A motor runs at its tuple's first value (creator docs), a number;
+  anything else stills it (Inference).
+- The motor's output is scaled by the player's haptic intensity,
+  `UserGameSettings.HapticStrength`, which only Roblox's own scripts can
+  set. Rook runs a motor at the value clamped to 0 to 1, times the
+  strength (Inference: a plain product).
+- Most pads have a large and a small motor. `IsVibrationSupported` and
+  `IsMotorSupported` are true for a `GamepadN` whose pad has the motor,
+  and false with no pad in the slot and for input types that aren't
+  pads (Confirmed with no pad, for every motor and input type, also
+  after `SetMotor`).
+- A slot keeps what was set while pads come and go, so a pad connecting
+  to it runs at it (Inference).
+- HapticService is deprecated in favor of `HapticEffect`, which Rook
+  lacks.
+
 ## How Rook does it
 
 Code: pads are read in `rook-client`'s `window/gamepads.rs` and reach the
@@ -139,6 +180,19 @@ engine as `InputEvent`s; the engine side is
   and LocalScripts start.
 - `GetSupportedGamepadKeyCodes` lists the keys in Studio's order, less
   any gilrs doesn't map on a pad it reads.
+- A pad's Large and Small motors are its compatible rumble: gilrs's
+  strong and weak motors, and on Windows a PlayStation pad's own output
+  report, laid out as Linux's `hid-playstation` writes it (a DualSense on
+  update 2.21 or later gets the newer compatible rumble, as there), at
+  the length the pad's descriptor declares, as SDL sends it. The
+  trigger motors aren't reached, so `IsMotorSupported` is false for them
+  (Approximation: whether Studio runs an Xbox pad's trigger motors is
+  unmeasured). The engine decides each motor's speed
+  (`DataModel::motor_speeds`), and the window sends a pad its speeds
+  when they change; gilrs applies them on its next 50 ms tick. Closing
+  the player stops a PlayStation pad's motors before it exits; gilrs
+  stops the others on its next tick, which a player exiting sooner
+  misses.
 - The CoreScripts bind `MemStorageService`'s `ActiveGamepadConnected`
   key, which none of them set: Roblox's engine does, with a value only
   Roblox's own scripts can read (a plugin's `GetItem` fails, "lacking

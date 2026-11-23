@@ -1,9 +1,10 @@
 //! Gamepad slots as UserInputService sees them: whether each is
 //! connected, what it has, and the InputObjects every event and
-//! `GetGamepadState` share (docs/behavior/input/gamepads.md).
+//! `GetGamepadState` share (docs/behavior/input/gamepads.md), and the
+//! motors HapticService runs (docs/behavior/input/gamepads.md#motors).
 
 use rook_dom::{Dom, InstanceId};
-use rook_types::{GamepadKey, UserInputState, UserInputType};
+use rook_types::{GamepadKey, UserInputState, UserInputType, VibrationMotor};
 
 pub const GAMEPAD_SLOTS: usize = 8;
 
@@ -35,6 +36,7 @@ pub struct Gamepad {
     /// `SetNavigationGamepad(pad, false)` took it off the navigation
     /// list, which holds every slot until then (measured).
     pub not_navigation: bool,
+    pub motors: Vec<VibrationMotor>,
     /// Its InputObjects, by [`GamepadKey::index`], made on first use and
     /// reused by every event and `GetGamepadState`, as Studio's are.
     objects: [Option<InstanceId>; GamepadKey::COUNT],

@@ -143,6 +143,9 @@ wgpu = { version = "30", default-features = false, features = ["std", "parking_l
 winit = "0.30"
 # Gamepads: Windows.Gaming.Input on Windows (its default `wgi`).
 gilrs = "0.11.2"
+# The CRC-32 a PlayStation pad's Bluetooth output reports end with
+# (rook-client); flate2 already builds it.
+crc32fast = "1.5"
 # Message boxes for what ends a rook-player run. On Linux they
 # go through zenity, which needs neither the portal's async runtime nor
 # Wayland's crates.

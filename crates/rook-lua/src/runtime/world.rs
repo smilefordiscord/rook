@@ -117,6 +117,11 @@ pub struct InputState {
     pub tool_mice: Vec<(InstanceId, InstanceId)>,
     /// Gamepad1 to Gamepad8.
     pub gamepads: [crate::gamepads::Gamepad; crate::gamepads::GAMEPAD_SLOTS],
+    /// What `HapticService:SetMotor` last set, by `UserInputType` value
+    /// and motor, for `GetMotor` and the pads' motors: any input type
+    /// keeps its values (Confirmed), and a slot keeps them while pads come
+    /// and go (Inference).
+    pub motor_values: FxHashMap<(u32, rook_types::VibrationMotor), Vec<crate::net::NetValue>>,
     /// What `GetLastInputType` answers; None until the first input, when
     /// it's Focus, as Studio's client starts.
     pub last_input_type: Option<rook_types::UserInputType>,
@@ -130,6 +135,11 @@ impl InputState {
     pub fn forget(&mut self, id: InstanceId) {
         for pad in &mut self.gamepads {
             pad.forget(id);
+        }
+        for values in self.motor_values.values_mut() {
+            for v in values {
+                v.map_instances(&|kept| (kept != id).then_some(kept));
+            }
         }
     }
 

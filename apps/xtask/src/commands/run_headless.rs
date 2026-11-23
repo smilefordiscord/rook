@@ -75,6 +75,10 @@ pub(crate) fn run(file: &Path, how: &Run<'_>) -> anyhow::Result<()> {
                     .iter()
                     .map(|&(_, k)| k)
                     .collect(),
+                motors: vec![
+                    rook_types::VibrationMotor::Large,
+                    rook_types::VibrationMotor::Small,
+                ],
             })
             .into_iter()
             .collect();

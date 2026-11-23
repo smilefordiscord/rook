@@ -1,7 +1,9 @@
-//! UserInputService and VRService queries, and Player:GetMouse. Input events themselves
-//! are fired by the engine, which owns the window.
+//! UserInputService, HapticService and VRService queries, and
+//! Player:GetMouse. Input events themselves are fired by the engine,
+//! which owns the window.
 
 mod gamepads;
+mod haptics;
 mod key_names;
 mod keyboard_mouse;
 mod vr;
@@ -15,6 +17,7 @@ use crate::runtime::ctx::{ApiResult, Outcome};
 
 pub(crate) fn native(owner: &str, name: &str) -> Option<RawMethod> {
     use gamepads::*;
+    use haptics::*;
     use key_names::*;
     use keyboard_mouse::*;
     use vr::*;
@@ -38,6 +41,10 @@ pub(crate) fn native(owner: &str, name: &str) -> Option<RawMethod> {
         ("UserInputService", "SetNavigationGamepad") => set_navigation_gamepad,
         ("UserInputService", "GetStringForKeyCode") => string_for_key,
         ("UserInputService", "GetImageForKeyCode") => image_for_key,
+        ("HapticService", "IsVibrationSupported") => vibration_supported,
+        ("HapticService", "IsMotorSupported") => motor_supported,
+        ("HapticService", "SetMotor") => set_motor,
+        ("HapticService", "GetMotor") => get_motor,
         ("Player", "GetMouse") => get_mouse,
         ("VRService", "GetUserCFrame") => user_cframe,
         ("VRService", "GetUserCFrameEnabled") => user_cframe_enabled,
