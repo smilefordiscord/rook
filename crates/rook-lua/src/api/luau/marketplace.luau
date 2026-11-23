@@ -2,13 +2,15 @@
 -- is charged, and what is bought is kept for the session only
 -- (docs/behavior/scripting/marketplace.md).
 --
--- A prompt shows on the client of the player it's for: a server's goes
--- there as a firing of the service ("prompt"). The client asks the player
--- (`purchase_prompt`), tells the server what was bought ("bought") when
--- they buy, and when the prompt closes fires the prompt's Finished event
--- and tells the server ("finished"), which fires it there. A developer
--- product bought becomes a receipt the server hands to ProcessReceipt
--- until it's granted.
+-- The server keeps each player's open prompt and sends it to the player's
+-- client as a firing of the service ("prompt"); a client prompting its own
+-- player asks the server to ("ask"). The client asks the player
+-- (`purchase_prompt`), tells the server when they buy ("bought"), and when
+-- the prompt closes fires the prompt's Finished event and tells the server
+-- ("finished"), which fires it there. The server takes those answers only
+-- for the prompt it has open for that player, each once: a client can't
+-- buy what it wasn't offered. A developer product bought becomes a receipt
+-- the server hands to ProcessReceipt until it's granted.
 local std, pcall = ...
 local game, Enum = std.game, std.Enum
 local ipairs, tostring, typeof, error = std.ipairs, std.tostring, std.typeof, std.error
@@ -142,21 +144,53 @@ local function receipt(player, id)
 	}
 end
 
--- Server: subscriptions bought by a prompt still open, whose change
--- Players announces when it closes (creator-docs
+-- Server: each player's open prompt, by Player: what it sells, whether
+-- they bought it, and whether that subscribed them, which Players
+-- announces when it closes (creator-docs
 -- Players.UserSubscriptionStatusChanged).
-local subscribing = {}
+local prompts = {}
 
-function api.onServer(player, what, kind, id, purchased)
+-- Whether `id` is what a prompt for `kind` takes, as the Prompt members
+-- check it.
+local function valid(kind, id)
 	if typeof(kind) ~= "string" or TITLES[kind] == nil then
+		return false
+	elseif kind == "Premium" then
+		return id == nil
+	elseif kind == "Subscription" then
+		return typeof(id) == "string"
+	end
+	return typeof(id) == "number"
+end
+
+-- Server: prompt `player` for `kind` `id`. A player sees one prompt at a
+-- time; one asked for while another is open is dropped (Confirmed for
+-- PromptVIPServerPurchase by creator-docs; Inference for the rest).
+local function open(player, kind, id)
+	if prompts[player] then
 		return
 	end
-	if what == "bought" then
-		-- Inference: as with the prompt's other events, the server takes
-		-- the client's word.
+	prompts[player] = { kind = kind, id = id, bought = false, subscribed = false }
+	send(market, player, "prompt", kind, id)
+end
+
+function api.onServer(player, what, kind, id)
+	if not valid(kind, id) then
+		return
+	end
+	if what == "ask" then
+		open(player, kind, id)
+		return
+	end
+	local current = prompts[player]
+	if not current or current.kind ~= kind or current.id ~= id then
+		return
+	end
+	if what == "bought" and not current.bought then
+		current.bought = true
 		local changed = own(kind, player.UserId, id)
-		if kind == "Subscription" and changed then
-			subscribing[key(kind, player.UserId, id)] = true
+		if kind == "Subscription" then
+			current.subscribed = changed
 		elseif kind == "Product" then
 			local list = pending[player.UserId] or {}
 			pending[player.UserId] = list
@@ -164,10 +198,9 @@ function api.onServer(player, what, kind, id, purchased)
 			process(player.UserId)
 		end
 	elseif what == "finished" then
-		finished(player, kind, id, purchased == true)
-		local k = key(kind, player.UserId, id)
-		if subscribing[k] then
-			subscribing[k] = nil
+		prompts[player] = nil
+		finished(player, kind, id, current.bought)
+		if current.subscribed then
 			fire(players, "UserSubscriptionStatusChanged", player, id)
 		end
 	end
@@ -177,6 +210,10 @@ players.PlayerAdded:Connect(function(player)
 	if not is_client() then
 		process(player.UserId)
 	end
+end)
+
+players.PlayerRemoving:Connect(function(player)
+	prompts[player] = nil
 end)
 
 -- Client: what the prompt shows for `kind` `id`; raises what
@@ -220,8 +257,6 @@ local function offer(kind, info)
 	return format("Buy this %s for %d Robux?", TITLES[kind]:lower(), info.PriceInRobux or 0)
 end
 
-local open = false
-
 -- Client: ask the local player, then finish the prompt. The prompt
 -- finishes and closes even when asking raises (an item whose web answer
 -- isn't the shape the prompt shows), so one bad item can't keep every
@@ -250,40 +285,30 @@ local function run(kind, id)
 		end
 	end)
 	prompt.close()
-	open = false
+	-- The server hears first, so a prompt a Finished listener asks for
+	-- finds this one closed there.
+	send(market, "server", "finished", kind, id)
 	finished(player, kind, id, purchased)
-	send(market, "server", "finished", kind, id, purchased)
 	if not asked then
 		error(problem, 0)
 	end
 end
 
--- A client shows one prompt at a time; others asked for meanwhile are
--- dropped (Confirmed for PromptVIPServerPurchase by creator-docs;
--- Inference for the rest).
-local function show(kind, id)
-	if open then
-		return
-	end
-	open = true
-	spawn(run, kind, id)
-end
-
 -- `Prompt*Purchase(player, id)`, its arguments checked.
 function api.prompt(kind, player, id)
 	if not is_client() then
-		send(market, player, "prompt", kind, id)
+		open(player, kind, id)
 		return
 	end
 	-- Inference: a client prompting another player does nothing.
 	if player == players.LocalPlayer then
-		show(kind, id)
+		send(market, "server", "ask", kind, id)
 	end
 end
 
 function api.onClient(what, kind, id)
-	if what == "prompt" and typeof(kind) == "string" and TITLES[kind] ~= nil then
-		show(kind, id)
+	if what == "prompt" and valid(kind, id) then
+		spawn(run, kind, id)
 	end
 end
 

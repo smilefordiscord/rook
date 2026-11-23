@@ -87,6 +87,8 @@ GUI); the tests are `rook-lua`'s `tests/scripting/marketplace.rs` and
 - The prompt shows on the player's client. One shows at a time; a
   prompt asked for while one is open is dropped (Confirmed for
   `PromptVIPServerPurchase` by creator-docs, Inference for the rest).
+  The server decides: it keeps each player's open prompt, and a client
+  prompting its own player asks the server to open it.
 - Purchases are Studio's test purchases: the player is never charged,
   and nothing bought is kept past the session (Confirmed: Roblox's
   announcement), and an item from another experience can be bought
@@ -154,15 +156,21 @@ GUI); the tests are `rook-lua`'s `tests/scripting/marketplace.rs` and
   creator-docs "Retries and Timeouts"). Only while the player is in the
   server; a receipt whose callback hasn't returned isn't handed over a
   second time meanwhile (Inference).
-- The server takes the client's word that it bought something
-  (Inference, as with the other prompt events a client reports).
+- A purchase counts only for the prompt the server has open for that
+  player, once, and its Finished event says it was bought only then.
+  A client that says it bought something it wasn't prompted for, says so
+  twice, or answers another player's prompt changes nothing (Inference:
+  Roblox's prompts are its own servers' to settle, which no client can
+  answer for).
 
 ## Messages between server and client
 
-A server's prompt reaches the client, and the client's purchase and the
-prompt's closing reach the server, as firings of MarketplaceService
-itself, which scripts never see, as TextChatService's chat messages do
-([chat](../gui/chat.md)).
+A server's prompt reaches the client, and a client's request for a
+prompt, its purchase and the prompt's closing reach the server, as
+firings of MarketplaceService itself, which scripts never see, as
+TextChatService's chat messages do ([chat](../gui/chat.md)). The client
+tells the server a prompt closed before firing its own Finished event, so
+a prompt a listener asks for next isn't dropped as the old one's.
 
 ## What isn't here
 

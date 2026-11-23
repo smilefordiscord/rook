@@ -3,6 +3,7 @@
 //! session owns afterwards (docs/behavior/scripting/marketplace.md).
 
 use crate::tests::*;
+use rook_lua::{NetValue, RemoteKind, RemoteMessage};
 
 /// A session with one player, whose server runs `server_source` and
 /// whose client runs `client_source` as a LocalScript.
@@ -268,6 +269,109 @@ fn a_client_cannot_forge_a_purchase() {
         .unwrap();
     session.run_for(0.1);
     assert_eq!(lines(session.server()), ["false"]);
+}
+
+/// Send the server one of MarketplaceService's own messages from client
+/// `index`, as a modified client could, without its prompt.
+fn forge(session: &Session, index: usize, args: &[NetValue]) {
+    let client = session.client(index).unwrap();
+    let mut w = client.runtime().world_mut();
+    let market = w.dom.find_service("MarketplaceService");
+    w.outbox.push(RemoteMessage {
+        remote: market,
+        kind: RemoteKind::FireServer,
+        args: args.to_vec(),
+    });
+}
+
+fn text(s: &str) -> NetValue {
+    NetValue::String(s.as_bytes().to_vec())
+}
+
+/// The server keeps the prompts it opened, so a client's answer counts
+/// only for a prompt open for its own player, and only once: a client
+/// can't buy what it wasn't offered, buy it twice, or answer another
+/// player's prompt.
+#[test]
+fn a_client_answers_only_its_players_open_prompt() {
+    let server = Server::new(&Options::default()).unwrap();
+    add_script(
+        &server,
+        "ServerScriptService",
+        "Shop",
+        r#"
+        local market = game:GetService("MarketplaceService")
+        market.ProcessReceipt = function(r)
+            print("receipt", r.PlayerId, r.ProductId)
+            return Enum.ProductPurchaseDecision.PurchaseGranted
+        end
+        market.PromptProductPurchaseFinished:Connect(function(user, product, bought)
+            print("finished", user, product, bought)
+        end)
+        market.PromptGamePassPurchaseFinished:Connect(function(player, pass, bought)
+            print("pass finished", player.Name, pass, bought)
+        end)
+        "#,
+    );
+    let mut server = server;
+    server.start();
+    let mut session = Session::new(server, Options::default());
+    let one = session.join("Player1", 1).unwrap();
+    let two = session.join("Player2", 2).unwrap();
+    session.run_for(0.5);
+    let product = || [text("Product"), NetValue::Number(42.0)];
+    let message = |what: &str, item: [NetValue; 2]| {
+        let mut args = vec![text(what)];
+        args.extend(item);
+        args
+    };
+
+    // Nothing prompted: a purchase and its closing are ignored.
+    let pass = [text("GamePass"), NetValue::Number(5.0)];
+    forge(&session, one, &message("bought", pass.clone()));
+    forge(&session, one, &message("finished", pass));
+    session.run_for(0.2);
+    session
+        .server()
+        .run_extra_script(
+            "print('owns', game:GetService('MarketplaceService'):UserOwnsGamePassAsync(1, 5))",
+        )
+        .unwrap();
+    session.run_for(0.1);
+    assert_eq!(lines(session.server()), ["owns false"]);
+
+    // Player1's prompt: Player2 can't answer it.
+    session
+        .server()
+        .run_extra_script(
+            "game:GetService('MarketplaceService'):PromptProductPurchase(game.Players.Player1, 42)",
+        )
+        .unwrap();
+    session.run_for(0.2);
+    forge(&session, two, &message("bought", product()));
+    forge(&session, two, &message("finished", product()));
+    session.run_for(0.2);
+    assert_eq!(lines(session.server()), Vec::<String>::new());
+
+    // Player1 buys it once, however often their client says so, and
+    // nothing after it closes.
+    forge(
+        &session,
+        one,
+        &message("bought", [text("Product"), NetValue::Number(43.0)]),
+    );
+    forge(&session, one, &message("bought", product()));
+    forge(&session, one, &message("bought", product()));
+    session.run_for(0.2);
+    forge(&session, one, &message("finished", product()));
+    session.run_for(0.2);
+    forge(&session, one, &message("bought", product()));
+    forge(&session, one, &message("finished", product()));
+    session.run_for(0.2);
+    assert_eq!(
+        lines(session.server()),
+        ["receipt 1 42", "finished 1 42 true"]
+    );
 }
 
 /// A prompt whose buttons a LocalScript took out of CoreGui is built
