@@ -79,8 +79,9 @@ the frame.
 ## What comes back
 
 - `GetAsync` and `PostAsync` return the body of a 2xx answer. Any other
-  status raises `HTTP <code> (<reason>)`, as `HTTP 404 (Not Found)`
-  (*Inference:* the message as players report it).
+  status raises `HTTP <code> (<reason>)`, as `HTTP 404 (Not Found)`, or
+  `HTTP <code>` for a code with no standard reason (*Inference:* the
+  message as players report it).
 - `RequestAsync` returns a table whatever the status (*Confirmed*,
   creator docs):
   - `Success`: true for a 2xx status.

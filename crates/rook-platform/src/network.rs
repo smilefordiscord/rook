@@ -19,6 +19,10 @@ pub struct Request<'a> {
     pub timeout: Option<Duration>,
 }
 
+/// How long a request may take at most; [`Request::timeout`] may only
+/// shorten it.
+pub const TIMEOUT: Duration = Duration::from_secs(60);
+
 /// An answer, whatever its status.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Response {
@@ -73,7 +77,7 @@ pub trait Network: Send + Sync + Debug {
     fn send(&self, request: &Request<'_>) -> Result<Response, NetworkError>;
 }
 
-/// HTTPS through ureq (rustls, gzip), a minute per request at most,
+/// HTTPS through ureq (rustls, gzip), [`TIMEOUT`] per request at most,
 /// following up to 10 redirects.
 #[cfg(feature = "native")]
 #[derive(Debug)]
@@ -85,7 +89,7 @@ pub struct Ureq {
 impl Ureq {
     pub fn new() -> Self {
         let agent = ureq::Agent::config_builder()
-            .timeout_global(Some(std::time::Duration::from_secs(60)))
+            .timeout_global(Some(TIMEOUT))
             .http_status_as_error(false)
             .user_agent(concat!(
                 "Rook/",

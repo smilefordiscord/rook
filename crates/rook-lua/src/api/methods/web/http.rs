@@ -350,7 +350,7 @@ const REQUESTS_PER_MINUTE: usize = 500;
 /// How long a request may take; `RequestAsync`'s `Timeout` may only
 /// shorten it. Approximation: the network's own limit, as Roblox's default
 /// isn't documented.
-const MAX_TIMEOUT: f64 = 60.0;
+const MAX_TIMEOUT: f64 = rook_platform::network::TIMEOUT.as_secs_f64();
 
 /// `GetAsync(url, nocache, headers)`. Approximation: `nocache` changes
 /// nothing, as Rook keeps no answers to reuse and every call is sent.
@@ -472,6 +472,9 @@ fn gzip(request: &mut WebRequest) -> ApiResult<()> {
     request.body = encoder.finish().map_err(failed)?;
     request
         .headers
+        .retain(|(name, _)| !name.eq_ignore_ascii_case("Content-Encoding"));
+    request
+        .headers
         .push(("Content-Encoding".into(), "gzip".into()));
     Ok(())
 }
@@ -534,11 +537,15 @@ fn http_error(e: &NetworkError) -> String {
 }
 
 /// `GetAsync` and `PostAsync`'s answer: the body of a 2xx response, and
-/// `HTTP <code> (<reason>)` raised for any other (Inference: the message
-/// players report).
+/// `HTTP <code> (<reason>)` raised for any other, `HTTP <code>` for a code
+/// with no standard reason (Inference: the message players report).
 fn body_of_success(lua: &Lua, response: &Response) -> Result<MultiValue, String> {
     if !(200..300).contains(&response.status) {
-        return Err(format!("HTTP {} ({})", response.status, response.reason));
+        return Err(if response.reason.is_empty() {
+            format!("HTTP {}", response.status)
+        } else {
+            format!("HTTP {} ({})", response.status, response.reason)
+        });
     }
     let body = lua
         .create_string(&response.body)
