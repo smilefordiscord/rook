@@ -14,6 +14,18 @@ pub struct PostEffects {
     pub blur: f32,
     /// The BloomEffects, each adding its own glow.
     pub bloom: Vec<Bloom>,
+    /// The enabled SunRaysEffect with the greatest `Intensity`.
+    pub sun_rays: Option<SunRays>,
+}
+
+/// A SunRaysEffect's properties.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct SunRays {
+    /// How bright the rays are: the share of the sun's light they carry
+    /// at the sun.
+    pub intensity: f32,
+    /// How wide they spread around the sun, 0 to 1.
+    pub spread: f32,
 }
 
 /// A BloomEffect's properties.

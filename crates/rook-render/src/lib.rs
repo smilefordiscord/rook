@@ -18,7 +18,7 @@ pub use scene::{
     DrawShape, EffectSlots, Emitter, EmitterLook, EmitterShape, Fidelity, Flipbook, FlipbookMode,
     FloorWire, Grow, Highlight, ImageHash, ImagePlacement, InOut, Layer, Light, LightShape,
     Lighting, LocalLight, MapAlpha, MaterialMaps, MeshHash, Orientation, PartInstance, PostEffects,
-    RibbonLook, SKYBOX_FACES, Scene, Sequence, Space, Spawn, TerrainColor, TerrainLook,
+    RibbonLook, SKYBOX_FACES, Scene, Sequence, Space, Spawn, SunRays, TerrainColor, TerrainLook,
     TerrainVoxels, TextureMode, Tonemapper, Trail, Viewport,
 };
 

@@ -9,6 +9,7 @@
 
 pub(crate) mod bloom;
 pub(crate) mod blur;
+pub(crate) mod sun_rays;
 
 use wesl_core::include_wesl;
 
@@ -66,11 +67,14 @@ impl Slots {
 }
 
 /// What every post pass binds: its parameters, two textures and a
-/// filtering sampler that clamps at the edges.
+/// filtering sampler that clamps at the edges. The second texture is the
+/// depth buffer for the passes that read depth.
 #[derive(Debug)]
 pub(crate) struct Shared {
     layout: wgpu::BindGroupLayout,
     pipeline_layout: wgpu::PipelineLayout,
+    depth_layout: wgpu::BindGroupLayout,
+    depth_pipeline_layout: wgpu::PipelineLayout,
     sampler: wgpu::Sampler,
     slots: Slots,
     /// One black texel, for a texture a pass or the tone pass doesn't use.
@@ -95,34 +99,49 @@ impl Shared {
             },
             count: None,
         };
-        let layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("rook post"),
-            entries: &[
-                wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Uniform,
-                        has_dynamic_offset: true,
-                        min_binding_size: wgpu::BufferSize::new(SLOT),
+        let depth = wgpu::BindGroupLayoutEntry {
+            binding: 2,
+            visibility: wgpu::ShaderStages::FRAGMENT,
+            ty: wgpu::BindingType::Texture {
+                sample_type: wgpu::TextureSampleType::Depth,
+                view_dimension: wgpu::TextureViewDimension::D2,
+                multisampled: false,
+            },
+            count: None,
+        };
+        let layouts = |second: wgpu::BindGroupLayoutEntry| {
+            let layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some("rook post"),
+                entries: &[
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Uniform,
+                            has_dynamic_offset: true,
+                            min_binding_size: wgpu::BufferSize::new(SLOT),
+                        },
+                        count: None,
                     },
-                    count: None,
-                },
-                texture(1),
-                texture(2),
-                wgpu::BindGroupLayoutEntry {
-                    binding: 3,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
-                    count: None,
-                },
-            ],
-        });
-        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("rook post"),
-            bind_group_layouts: &[Some(&layout)],
-            immediate_size: 0,
-        });
+                    texture(1),
+                    second,
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 3,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                        count: None,
+                    },
+                ],
+            });
+            let pipeline = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some("rook post"),
+                bind_group_layouts: &[Some(&layout)],
+                immediate_size: 0,
+            });
+            (layout, pipeline)
+        };
+        let (layout, pipeline_layout) = layouts(texture(2));
+        let (depth_layout, depth_pipeline_layout) = layouts(depth);
         let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
             label: Some("rook post"),
             mag_filter: wgpu::FilterMode::Linear,
@@ -151,6 +170,8 @@ impl Shared {
         Self {
             layout,
             pipeline_layout,
+            depth_layout,
+            depth_pipeline_layout,
             sampler,
             slots: Slots::new(device),
             black: black.create_view(&Default::default()),
@@ -158,7 +179,7 @@ impl Shared {
     }
 
     /// A full-screen pass's pipeline: `entry` of `module` drawing one
-    /// triangle over the target, of `format`, blended by `blend`.
+    /// triangle over the target, blended by `blend`.
     fn pipeline(
         &self,
         device: &wgpu::Device,
@@ -166,9 +187,28 @@ impl Shared {
         entry: &str,
         blend: Option<wgpu::BlendState>,
     ) -> wgpu::RenderPipeline {
+        Self::make_pipeline(device, &self.pipeline_layout, (module, entry), blend)
+    }
+
+    /// [`Shared::pipeline`] for a pass reading the depth buffer.
+    fn depth_pipeline(
+        &self,
+        device: &wgpu::Device,
+        module: &wgpu::ShaderModule,
+        entry: &str,
+    ) -> wgpu::RenderPipeline {
+        Self::make_pipeline(device, &self.depth_pipeline_layout, (module, entry), None)
+    }
+
+    fn make_pipeline(
+        device: &wgpu::Device,
+        layout: &wgpu::PipelineLayout,
+        (module, entry): (&wgpu::ShaderModule, &str),
+        blend: Option<wgpu::BlendState>,
+    ) -> wgpu::RenderPipeline {
         device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some(entry),
-            layout: Some(&self.pipeline_layout),
+            layout: Some(layout),
             vertex: wgpu::VertexState {
                 module,
                 entry_point: Some("vs_post"),
@@ -200,9 +240,29 @@ impl Shared {
         a: &wgpu::TextureView,
         b: Option<&wgpu::TextureView>,
     ) -> wgpu::BindGroup {
+        self.make_group(device, &self.layout, a, b.unwrap_or(&self.black))
+    }
+
+    /// A bind group reading `a` and the depth buffer's `depth` aspect.
+    fn depth_group(
+        &self,
+        device: &wgpu::Device,
+        a: &wgpu::TextureView,
+        depth: &wgpu::TextureView,
+    ) -> wgpu::BindGroup {
+        self.make_group(device, &self.depth_layout, a, depth)
+    }
+
+    fn make_group(
+        &self,
+        device: &wgpu::Device,
+        layout: &wgpu::BindGroupLayout,
+        a: &wgpu::TextureView,
+        b: &wgpu::TextureView,
+    ) -> wgpu::BindGroup {
         device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("rook post"),
-            layout: &self.layout,
+            layout,
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
@@ -218,7 +278,7 @@ impl Shared {
                 },
                 wgpu::BindGroupEntry {
                     binding: 2,
-                    resource: wgpu::BindingResource::TextureView(b.unwrap_or(&self.black)),
+                    resource: wgpu::BindingResource::TextureView(b),
                 },
                 wgpu::BindGroupEntry {
                     binding: 3,
@@ -290,6 +350,19 @@ impl Shared {
     }
 }
 
+/// What the post passes read of the frame being drawn.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct PostView<'a> {
+    /// The frame, in its encoding (`shaders/tone.wgsl`).
+    pub(crate) frame: &'a wgpu::TextureView,
+    /// The main pass's depth buffer, its depth alone.
+    pub(crate) depth: &'a wgpu::TextureView,
+    /// The frame's size in pixels.
+    pub(crate) size: (u32, u32),
+    pub(crate) camera: &'a Camera,
+    pub(crate) lighting: &'a Lighting,
+}
+
 /// What the tone pass reads besides the frame: each effect's texture,
 /// and how much of each it takes.
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
@@ -298,6 +371,8 @@ pub(crate) struct ToneInputs {
     pub(crate) blur: f32,
     /// 1 when the bloom texture holds light to add.
     pub(crate) bloom: f32,
+    /// 1 when the sun rays texture holds light to add.
+    pub(crate) rays: f32,
     /// The Blooms without bleed (`Size` 0), added in place: each one's
     /// threshold in light units, and its intensity (0 for none).
     pub(crate) in_place: [[f32; 4]; 2],
@@ -308,10 +383,11 @@ pub(crate) struct ToneInputs {
 struct ToneReads {
     blurred: Option<wgpu::TextureView>,
     bloom: Option<wgpu::TextureView>,
+    rays: Option<wgpu::TextureView>,
 }
 
 /// How many textures the tone pass's group 1 holds after its sampler.
-const TONE_TEXTURES: u32 = 2;
+const TONE_TEXTURES: u32 = 3;
 
 /// The post effects' pipelines and textures.
 #[derive(Debug)]
@@ -325,6 +401,7 @@ pub(crate) struct Post {
     tone_reads: ToneReads,
     blur: blur::Blur,
     bloom: bloom::BloomPasses,
+    sun_rays: sun_rays::SunRaysPasses,
 }
 
 impl Post {
@@ -364,6 +441,11 @@ impl Post {
             &shared,
             &module("rook bloom", include_wesl!("bloom")),
         );
+        let sun_rays = sun_rays::SunRaysPasses::new(
+            device,
+            &shared,
+            &module("rook sun rays", include_wesl!("sun_rays")),
+        );
         let tone_reads = ToneReads::default();
         let tone_group = Self::make_tone_group(device, &shared, &tone_layout, &tone_reads);
         Self {
@@ -373,6 +455,7 @@ impl Post {
             tone_reads,
             blur,
             bloom,
+            sun_rays,
         }
     }
 
@@ -410,33 +493,36 @@ impl Post {
                 },
                 texture(1, reads.blurred.as_ref(), &shared.black),
                 texture(2, reads.bloom.as_ref(), &shared.black),
+                texture(3, reads.rays.as_ref(), &shared.black),
             ],
         })
     }
 
-    /// Run the enabled effects' passes from `frame` (`size` pixels) and
-    /// point the tone group at what they drew; what the tone pass takes
-    /// of each.
+    /// Run the enabled effects' passes from `view` and point the tone
+    /// group at what they drew; what the tone pass takes of each.
     pub(crate) fn record(
         &mut self,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         encoder: &mut wgpu::CommandEncoder,
-        frame: &wgpu::TextureView,
-        size: (u32, u32),
+        view: &PostView,
         effects: &PostEffects,
     ) -> ToneInputs {
+        let (frame, size) = (view.frame, view.size);
         let shared = &mut self.shared;
+        let rays = (self.sun_rays).record(device, shared, encoder, view, effects.sun_rays);
         let bloom = (self.bloom).record(device, shared, encoder, (frame, size), &effects.bloom);
         let blurred = (self.blur).record(device, shared, encoder, frame, size, effects.blur);
         shared.slots.upload(queue);
         let reads = ToneReads {
             blurred,
             bloom: bloom.texture,
+            rays,
         };
         let inputs = ToneInputs {
             blur: if reads.blurred.is_some() { 1.0 } else { 0.0 },
             bloom: if reads.bloom.is_some() { 1.0 } else { 0.0 },
+            rays: if reads.rays.is_some() { 1.0 } else { 0.0 },
             in_place: bloom.in_place,
         };
         if reads != self.tone_reads {

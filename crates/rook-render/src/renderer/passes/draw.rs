@@ -40,12 +40,13 @@ impl Renderer {
         self.tonemap.frame(&self.device, width, height);
     }
 
-    fn depth_view(&mut self, width: u32, height: u32) -> wgpu::TextureView {
-        if let Some((_, view, w, h)) = &self.depth
-            && *w == width
-            && *h == height
+    /// The depth buffer for a `width` × `height` frame, and a view of its
+    /// depth alone for the post effects that read it.
+    fn depth_view(&mut self, width: u32, height: u32) -> (wgpu::TextureView, wgpu::TextureView) {
+        if let Some(d) = &self.depth
+            && d.size == (width, height)
         {
-            return view.clone();
+            return (d.view.clone(), d.read.clone());
         }
         let texture = self.device.create_texture(&wgpu::TextureDescriptor {
             label: Some("rook depth"),
@@ -58,12 +59,20 @@ impl Renderer {
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
             format: main_depth_format(&self.device),
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
             view_formats: &[],
         });
         let view = texture.create_view(&Default::default());
-        self.depth = Some((texture, view.clone(), width, height));
-        view
+        let read = texture.create_view(&wgpu::TextureViewDescriptor {
+            aspect: wgpu::TextureAspect::DepthOnly,
+            ..Default::default()
+        });
+        self.depth = Some(DepthBuffer {
+            view: view.clone(),
+            read: read.clone(),
+            size: (width, height),
+        });
+        (view, read)
     }
 
     /// Draw the scene into `target` (a view of a `color_format` texture):
@@ -140,7 +149,7 @@ impl Renderer {
         );
 
         stage(&mut times.draws);
-        let depth = self.depth_view(width, height);
+        let (depth, depth_read) = self.depth_view(width, height);
         let (frame, mask, gui_layer) = self.tonemap.frame(&self.device, width, height);
         self.lights.fill(
             &self.queue,
@@ -176,8 +185,13 @@ impl Renderer {
             &self.device,
             &self.queue,
             &mut encoder,
-            &frame,
-            (width, height),
+            &PostView {
+                frame: &frame,
+                depth: &depth_read,
+                size: (width, height),
+                camera,
+                lighting: &l,
+            },
             &self.post,
         );
         self.tonemap.record(

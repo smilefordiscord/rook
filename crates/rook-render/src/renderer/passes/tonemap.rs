@@ -25,7 +25,7 @@ struct ToneUniform {
     /// The ColorCorrections' matrix, on sRGB pixel values.
     color: ColorMatrix,
     /// x: how much of the blurred frame replaces the frame; y: 1 to add
-    /// the bloom texture's light.
+    /// the bloom texture's light; z: 1 to add the sun rays'.
     effects: [f32; 4],
     /// The Blooms added in place: thresholds in light units, then
     /// intensities.
@@ -251,7 +251,7 @@ impl Tonemap {
                 f32::from(u8::from(color.is_some())),
             ],
             color: color.unwrap_or(COLOR_IDENTITY),
-            effects: [inputs.blur, inputs.bloom, 0.0, 0.0],
+            effects: [inputs.blur, inputs.bloom, inputs.rays, 0.0],
             in_place: inputs.in_place,
             looks: looks.copied().unwrap_or([[0.0; 4]; 2 * HIGHLIGHT_LIMIT]),
         };

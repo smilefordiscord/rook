@@ -119,6 +119,43 @@ Approximation). What the properties become is Inference:
 - Each Bloom runs its own chain into one sum the tone pass adds; the
   first four with `Size` 0 add in place.
 
+## SunRaysEffect
+
+A halo of light with rays around the sun, shaped and blocked by what's
+between the camera and the sun; `Intensity` its opacity, `Spread` how
+wide it spreads, meant to stay within 0 to 1 (Confirmed: creator-docs).
+It moves with `ClockTime` (Confirmed: the post-processing guide). Studio's
+defaults: Intensity 0.25, Spread 1.
+
+Studio's sun rays shaders (`SunRays6FS`, `9FS`, `12FS`, then
+`RadialBlur3FS` to `12FS`; Inference):
+
+- Each pixel takes 6, 9 or 12 steps from itself towards the sun's place
+  on screen, covering half the way and stopping at the screen's edge,
+  shifted by a noise texture.
+- It counts the steps whose linear depth reads as sky (Studio's linear
+  depth is studs × 0.002, sky 1, tested against 0.999: anything 499.5
+  studs or further counts).
+- Its light is the sun's color times that count, the intensity and a
+  Henyey–Greenstein lobe in the angle between the pixel's view ray and
+  the sun: (1 − *g*²) / (1 + *g*² − 2*g* cos θ)^1.5.
+- A radial blur then averages taps from each pixel a quarter of the way
+  towards the sun, and the last pass adds the result to the frame's light
+  before the curve (`ImageProcessFXCompositionFS`).
+
+Rook (`renderer/passes/post/sun_rays.rs`, `shaders/post/sun_rays.wgsl`)
+does the same at half the frame's size, with 12 steps and 6 blur taps,
+from `Lighting`'s sun direction (the moon's at night) and its light in
+light units. It draws nothing while the sun is behind the camera. Its
+own choices:
+
+- The lobe is scaled to 1 at the sun, so `Intensity` is the share of the
+  sun's light the rays carry there (Approximation).
+- *g* is 1 − 0.2 × Spread, at most 0.99: a halo about 15 degrees wide at
+  Spread 1 and under a degree at 0 (Approximation).
+- Of several SunRaysEffects the one with the greatest `Intensity` draws
+  (Inference: the shader takes one set of settings).
+
 ## Neon's glow
 
 Neon glows at high quality levels with no BloomEffect anywhere
@@ -171,4 +208,8 @@ texel when they're off.
   `Intensity` scales it, and whether two Blooms add or one wins.
 - Neon's glow with no Bloom, at Automatic and Level21: whether it shows,
   its reach and strength.
+- SunRays: the halo's width for each `Spread` and its brightness for each
+  `Intensity` (the open sky around the sun at several settings), how it
+  falls off with the sun off screen or behind the camera, whether it
+  comes from the moon at night, and what two effects do together.
 - Which of several ColorGradingEffects picks the curve.

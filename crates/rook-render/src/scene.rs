@@ -23,7 +23,7 @@ pub use emitters::{
 };
 pub use lighting::{LightShape, Lighting, LocalLight, SKYBOX_FACES};
 pub(crate) use post::IDENTITY as COLOR_IDENTITY;
-pub use post::{Bloom, ColorCorrection, ColorMatrix, PostEffects, Tonemapper};
+pub use post::{Bloom, ColorCorrection, ColorMatrix, PostEffects, SunRays, Tonemapper};
 pub use ribbons::{Anchor, Beam, FloorWire, RibbonLook, TextureMode, Trail};
 pub use terrain::{TerrainLook, TerrainVoxels};
 

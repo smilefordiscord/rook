@@ -170,3 +170,40 @@ fn bloom_brightens_around_a_bright_light() {
     let after = middle(&mut r, &wall, &wall_camera);
     assert!(after[0] > before[0], "{after:?} {before:?}");
 }
+
+/// SunRays brighten the sky around the sun, but not through a wall in
+/// front of it, and nothing while the sun is behind the camera.
+#[test]
+fn sun_rays_stream_from_the_sky_around_the_sun() {
+    let Ok(mut r) = Renderer::headless() else {
+        return;
+    };
+    let mut scene = Scene::default();
+    let sun = scene.lighting.sun_direction;
+    let toward = Camera::look_at(Vec3::ZERO, sun * 10.0);
+    let rays = SunRays {
+        intensity: 0.5,
+        spread: 1.0,
+    };
+    let with = |r: &mut Renderer, scene: &mut Scene, camera: &Camera, on: bool| {
+        scene.post.sun_rays = on.then_some(rays);
+        middle(r, scene, camera)
+    };
+    let sky = with(&mut r, &mut scene, &toward, false);
+    let rayed = with(&mut r, &mut scene, &toward, true);
+    assert!(rayed[0] > sky[0], "{rayed:?} {sky:?}");
+    let away = Camera::look_at(Vec3::ZERO, -sun * 10.0);
+    assert_eq!(
+        with(&mut r, &mut scene, &away, true),
+        with(&mut r, &mut scene, &away, false)
+    );
+    let mut wall = part(PartShape::Block, 0.0, [0.5; 3], 0.0);
+    wall.size = Vec3::new(200.0, 200.0, 1.0);
+    wall.position = sun * 20.0;
+    wall.rotation = toward.rotation;
+    scene.parts = vec![wall];
+    assert_eq!(
+        with(&mut r, &mut scene, &toward, true),
+        with(&mut r, &mut scene, &toward, false)
+    );
+}

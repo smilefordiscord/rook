@@ -14,7 +14,7 @@ struct Tone {
     // its w.
     color: array<vec4<f32>, 3>,
     // x: how much of the blurred frame replaces the frame; y: 1 to add
-    // the bloom texture's light.
+    // the bloom texture's light; z: 1 to add the sun rays'.
     effects: vec4<f32>,
     // The Blooms added in place (`Size` 0): thresholds in light units,
     // then intensities.
@@ -36,6 +36,8 @@ struct Tone {
 @group(1) @binding(1) var blurred: texture_2d<f32>;
 // The chained Blooms' light, in light units, half the frame's size.
 @group(1) @binding(2) var bloom: texture_2d<f32>;
+// The sun rays' light, in light units, half the frame's size.
+@group(1) @binding(3) var rays: texture_2d<f32>;
 
 @vertex
 fn vs_tonemap(@builtin(vertex_index) i: u32) -> @builtin(position) vec4<f32> {
@@ -60,6 +62,10 @@ fn fs_tonemap(@builtin(position) at: vec4<f32>) -> @location(0) vec4<f32> {
     }
     if tone.effects.y > 0.0 {
         units += textureSampleLevel(bloom, post_sampler, uv, 0.0).rgb;
+    }
+    // The sun rays' too (Studio's `ImageProcessFXCompositionFS`).
+    if tone.effects.z > 0.0 {
+        units += textureSampleLevel(rays, post_sampler, uv, 0.0).rgb;
     }
     // The blurred frame is mixed in before the curve, as Studio's last
     // pass mixes it.

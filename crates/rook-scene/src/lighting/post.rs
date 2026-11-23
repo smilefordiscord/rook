@@ -4,7 +4,7 @@
 //! (`RenderChanges::post_effects`), so a read costs those children.
 
 use super::*;
-use rook_render::{Bloom, ColorCorrection, PostEffects, Tonemapper};
+use rook_render::{Bloom, ColorCorrection, PostEffects, SunRays, Tonemapper};
 
 /// The enabled PostEffects directly under Lighting, then under the current
 /// Camera, in child order (Confirmed: creator-docs PostEffect, effects
@@ -35,6 +35,17 @@ pub(crate) fn post_effects(dom: &Dom) -> PostEffects {
                 size: dom.float_property(id, "Size").unwrap_or(24.0),
                 threshold: dom.float_property(id, "Threshold").unwrap_or(0.95),
             }),
+            // The brightest draws (Inference: Studio's shader takes one
+            // set of settings).
+            "SunRaysEffect" => {
+                let rays = SunRays {
+                    intensity: dom.float_property(id, "Intensity").unwrap_or(0.25),
+                    spread: dom.float_property(id, "Spread").unwrap_or(1.0),
+                };
+                if post.sun_rays.is_none_or(|r| rays.intensity > r.intensity) {
+                    post.sun_rays = Some(rays);
+                }
+            }
             // The greatest Size wins (Confirmed: creator-docs BlurEffect).
             "BlurEffect" => {
                 let size = dom.float_property(id, "Size").unwrap_or(24.0);
@@ -180,6 +191,25 @@ mod tests {
             (post.bloom[0].intensity, post.bloom[0].threshold),
             (0.4, 0.95)
         );
+    }
+
+    /// Of several SunRays the brightest draws.
+    #[test]
+    fn the_brightest_sun_rays_win() {
+        let (mut dm, mut cache) = place();
+        let post = run(
+            &mut dm,
+            &mut cache,
+            "local a = Instance.new('SunRaysEffect')
+             a.Parent = game.Lighting
+             local b = Instance.new('SunRaysEffect')
+             b.Intensity = 0.5
+             b.Spread = 0.3
+             b.Parent = game.Lighting",
+        )
+        .unwrap();
+        let rays = post.sun_rays.unwrap();
+        assert_eq!((rays.intensity, rays.spread), (0.5, 0.3));
     }
 
     /// A ColorGradingEffect's curve applies from the Camera too, and the
