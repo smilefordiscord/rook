@@ -11,6 +11,7 @@ mod gui;
 mod lighting;
 mod maps;
 mod parts;
+mod post_processing;
 
 fn part(shape: PartShape, x: f32, color: [f32; 3], transparency: f32) -> PartInstance {
     PartInstance {

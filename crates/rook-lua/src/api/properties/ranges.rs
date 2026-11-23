@@ -24,6 +24,17 @@ const RANGES: &[(&str, &str, f64, f64)] = &[
     // Conformance case `lighting/clouds_clamps`.
     ("Clouds", "Cover", 0.0, 1.0),
     ("Clouds", "Density", 0.0, 1.0),
+    // Conformance case `lighting/post_effects_clamps`; InFocusRadius has
+    // only a top (-1 reads -1).
+    ("DepthOfFieldEffect", "FarIntensity", 0.0, 1.0),
+    ("DepthOfFieldEffect", "NearIntensity", 0.0, 1.0),
+    ("DepthOfFieldEffect", "FocusDistance", 0.0, 500.0),
+    (
+        "DepthOfFieldEffect",
+        "InFocusRadius",
+        f64::NEG_INFINITY,
+        500.0,
+    ),
 ];
 
 /// Store `value` within its range, if `name` has one on `id`'s class.

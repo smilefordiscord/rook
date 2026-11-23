@@ -31,6 +31,13 @@ impl SceneCache {
         if changes.lighting {
             self.scene.lighting = self.lighting(dom);
         }
+        if changes.post_effects {
+            let post = lighting::post_effects(dom);
+            if post != self.scene.post {
+                self.scene.post = post;
+                self.post_changed = true;
+            }
+        }
         self.lights.apply(dom, changes, &mut self.scene.lights);
         self.with_effects(|effects, drawn, images| effects.changed(dom, changes, drawn, images));
         let mut moved = Vec::new();

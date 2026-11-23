@@ -30,6 +30,7 @@ use pipelines::{BindLayouts, Pipelines};
 use timing::GpuTimer;
 
 use draws::worlds::World;
+use passes::post::{Post, PostView};
 use passes::tonemap::{FRAME_FORMAT, Tonemap};
 use passes::transparent::TransparentParts;
 use passes::viewports::Viewports;
@@ -103,6 +104,8 @@ pub struct Renderer {
     /// The parts Highlights cover, drawn into their mask.
     highlights: HighlightParts,
     lighting: Lighting,
+    /// The post effects, the tone curve among them.
+    post: PostEffects,
     /// The local lights and their spatial hash (group 3).
     pub(crate) lights: GpuLights,
     /// The emitters' particles.
@@ -118,10 +121,12 @@ pub struct Renderer {
     /// speed changes (observed: Studio's water stops where it is at speed
     /// 0 and goes on from there), wrapped at [`WATER_PHASE_PERIOD`].
     pub(crate) water_phase: f64,
-    depth: Option<(wgpu::Texture, wgpu::TextureView, u32, u32)>,
+    depth: Option<DepthBuffer>,
     /// The frame the main pass draws into, and the pass taking it to the
     /// target.
     tonemap: Tonemap,
+    /// The post effects' passes between the two.
+    post_passes: Post,
     gui: GuiPass,
     /// The last frame's draw calls.
     draw_counts: DrawCounts,
@@ -131,6 +136,15 @@ pub struct Renderer {
     /// uploads included.
     record_time: std::time::Duration,
     stage_times: StageTimes,
+}
+
+/// The main pass's depth buffer.
+#[derive(Debug)]
+struct DepthBuffer {
+    view: wgpu::TextureView,
+    /// Its depth alone, which the post effects read.
+    read: wgpu::TextureView,
+    size: (u32, u32),
 }
 
 /// Where the CPU's time recording the last frame went.

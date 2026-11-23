@@ -1,22 +1,39 @@
 //! The frame and the tone pass: the main pass draws light units into the
 //! frame in Studio's encoding (`shaders/tone.wgsl`), blending there as
 //! Studio blends, and the tone pass puts it through the place's tone curve
-//! onto the target (docs/behavior/lighting/tone-mapping.md), Highlights and the
-//! GUI layer over it.
+//! onto the target (docs/behavior/lighting/tone-mapping.md), then the
+//! ColorCorrections' matrix (docs/behavior/lighting/post-processing.md),
+//! Highlights and the GUI layer over it. With no post effect it's the
+//! frame's only pass after the main pass and the Highlights' mask.
 
 use wesl_core::include_wesl;
 
 use super::gui::GUI_FORMAT;
 use super::*;
 use crate::renderer::passes::highlights::{HIGHLIGHT_LIMIT, Looks, MASK_FORMAT};
+use crate::renderer::passes::post::ToneInputs;
+use crate::scene::COLOR_IDENTITY;
 
 /// What the tone pass reads besides the frame and the mask.
 #[repr(C)]
 #[derive(Debug, Clone, Copy, Pod, Zeroable)]
 struct ToneUniform {
     /// x: the curve (0 Default, 1 Retro); y: 1 when the mask holds
-    /// Highlights this frame; z: 1 when the GUI layer holds GUI.
+    /// Highlights this frame; z: 1 when the GUI layer holds GUI; w: 1
+    /// when `color` applies.
     curve: [f32; 4],
+    /// The ColorCorrections' matrix, on sRGB pixel values.
+    color: ColorMatrix,
+    /// x: how much of the blurred frame replaces the frame; y: 1 to add
+    /// the bloom texture's light; z: 1 to add the sun rays'; w: 1 to mix
+    /// in the depth of field's fields.
+    effects: [f32; 4],
+    /// The Blooms added in place: thresholds in light units, then
+    /// intensities.
+    in_place: [[f32; 4]; 2],
+    /// The depth of field's focus: x its distance, y its radius, in
+    /// studs.
+    focus: [f32; 4],
     looks: Looks,
 }
 
@@ -44,7 +61,12 @@ pub(crate) struct Tonemap {
 }
 
 impl Tonemap {
-    pub(crate) fn new(device: &wgpu::Device, color_format: wgpu::TextureFormat) -> Self {
+    /// Its group 1 is `post`'s, the post effects' textures.
+    pub(crate) fn new(
+        device: &wgpu::Device,
+        color_format: wgpu::TextureFormat,
+        post: &wgpu::BindGroupLayout,
+    ) -> Self {
         let layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("rook tone"),
             entries: &[
@@ -96,7 +118,7 @@ impl Tonemap {
         });
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("rook tone"),
-            bind_group_layouts: &[Some(&layout)],
+            bind_group_layouts: &[Some(&layout), Some(post)],
             immediate_size: 0,
         });
         let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -205,31 +227,42 @@ impl Tonemap {
         (view, mask, gui)
     }
 
-    /// The frame through `tonemapper`'s curve onto `target`, with the
-    /// Highlights' `looks` over it when the mask holds any, and the GUI
-    /// layer over that when it holds GUI.
+    /// The frame and the post effects' textures (`inputs`, read through
+    /// `group`) through `post`'s curve and color matrix onto `target`,
+    /// with the Highlights' `looks` over it when the mask holds any, and
+    /// the GUI layer over that when it holds GUI.
     pub(crate) fn record(
         &self,
         queue: &wgpu::Queue,
         encoder: &mut wgpu::CommandEncoder,
         target: &wgpu::TextureView,
-        tonemapper: Tonemapper,
+        (post, group, inputs): (&PostEffects, &wgpu::BindGroup, ToneInputs),
         (looks, gui): (Option<&Looks>, bool),
     ) {
-        let Some(Frame { group, .. }) = &self.frame else {
+        let Some(Frame { group: frame, .. }) = &self.frame else {
             return;
         };
-        let curve = match tonemapper {
+        let curve = match post.tonemapper {
             Tonemapper::Default => 0.0f32,
             Tonemapper::Retro => 1.0,
         };
+        let color = post.color_matrix();
         let uniform = ToneUniform {
             curve: [
                 curve,
                 f32::from(u8::from(looks.is_some())),
                 f32::from(u8::from(gui)),
-                0.0,
+                f32::from(u8::from(color.is_some())),
             ],
+            color: color.unwrap_or(COLOR_IDENTITY),
+            effects: [
+                inputs.blur,
+                inputs.bloom,
+                inputs.rays,
+                inputs.depth_of_field,
+            ],
+            in_place: inputs.in_place,
+            focus: inputs.focus,
             looks: looks.copied().unwrap_or([[0.0; 4]; 2 * HIGHLIGHT_LIMIT]),
         };
         queue.write_buffer(&self.uniform, 0, bytemuck::bytes_of(&uniform));
@@ -250,7 +283,8 @@ impl Tonemap {
             multiview_mask: None,
         });
         pass.set_pipeline(&self.pipeline);
-        pass.set_bind_group(0, group, &[]);
+        pass.set_bind_group(0, frame, &[]);
+        pass.set_bind_group(1, group, &[]);
         pass.draw(0..3, 0..1);
     }
 }

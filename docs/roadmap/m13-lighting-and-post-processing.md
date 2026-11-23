@@ -116,12 +116,90 @@ measured twice.
      ([antialiasing](../behavior/rendering/antialiasing.md) notes it
      blurs edges there), so whether Neon's glow is Bloom or its own pass
      belongs here.
+   - *Evidence*: the creator docs (PostEffect, each effect's class page,
+     the post-processing guide): effects work under Lighting or the
+     current Camera, never on GUI; several ColorCorrections or Blooms
+     compose, and of several Blurs the greatest `Size` wins. Studio's
+     post shaders in the install's `shaders_glsl3.pack` (read
+     2026-11-23) say where each sits and its per-pixel rules
+     ([post-processing](../behavior/lighting/post-processing.md)); what
+     the engine feeds them from the properties is not in them.
    - *Studio questions*: which effects change or turn off by quality
      level (DepthOfField and SunRays in particular), and the level each
      one starts at; Neon's glow with no Bloom in Lighting, at Automatic
-     and at Level21.
-   - *Done when*: one capture per effect at a few settings each, at
-     Automatic and Level21, matches Studio.
+     and at Level21. And for each effect, what its properties become in
+     the shaders: ColorCorrection's luma weights, order of terms and
+     whether it acts on pixels or light (a gray ramp under each property
+     alone, then two effects at once); Blur's Gaussian width for a
+     `Size` and whether it follows the window's size (a lone white
+     pixel-wide line at several Sizes and two window sizes), and whether
+     Bloom and SunRays survive a Blur; Bloom's threshold scale, how its
+     glow spreads with `Size` and how two Blooms add (one Neon square on
+     black at several settings, then two effects); SunRays' halo width
+     for a `Spread` and brightness for an `Intensity` (the sky around the
+     sun, with and without a part across it); DepthOfField's blur radius
+     against distance for each property (a row of checkered boards
+     receding), and which of two wins.
+   - *Design* (2026-11-23):
+     - Established engines run post effects on the HDR scene color
+       before the tone curve, and grade after it. Bloom thresholds the
+       frame into a half-resolution mip chain, filtered down by small
+       box or 13-tap kernels and back up by a 3×3 tent added level by
+       level (Jimenez, "Next Generation Post Processing in Call of
+       Duty: Advanced Warfare", SIGGRAPH 2014; Unreal's and Unity
+       HDRP's bloom; Bjørge's dual filtering). A full-screen blur is a
+       separable Gaussian with paired bilinear taps on a downsampled
+       copy, or dual Kawase. Depth of field turns depth into a circle of
+       confusion per pixel, splits near and far fields and gathers each
+       at half resolution, a sample counting where its own circle
+       covers the pixel (Unreal's Bokeh DOF, Jimenez 2014's
+       scatter-as-gather). God rays radially blur an occlusion mask
+       toward the sun's projected position (GPU Gems 3, chapter 13).
+       Color correction is a per-pixel transform, a 3×4 matrix or a LUT,
+       after the tone curve (Unreal's and Unity's grading).
+     - Studio's shaders are this design. Its last pass decodes the
+       frame, adds Bloom's and SunRays' light units, mixes in the
+       blurred frame, runs the tone curve and multiplies by one 3×4 color
+       matrix. Bloom's chain starts with a thresholded 3×3 average; Blur
+       is a separable Gaussian on the frame's encoding; SunRays march
+       depth toward the sun; DepthOfField gathers near and far fields
+       from 45-tap disks.
+     - Rook: the tone pass becomes that last pass. A frame with no
+       effect enabled runs exactly the passes it did before and
+       allocates nothing more: ColorCorrection is a matrix in the tone
+       pass's uniform, and Bloom with `Size` 0 (no bleed) is a term
+       there too. Each enabled effect adds only its own passes, at a
+       reduced resolution: Blur a downsample and two Gaussian passes,
+       Bloom its chain, SunRays a mask-and-march pass and a radial blur
+       at half resolution, DepthOfField a field pass and two gathers at
+       half resolution. Their textures are made the first frame they're
+       needed and again when the target's size changes.
+     - Scene: `Scene::post` holds every enabled effect's settings,
+       ColorGradingEffect's tone curve included (it moves there from
+       `Lighting`, so effects under the Camera grade too). `rook-scene`
+       reads it from Lighting's and the current Camera's children only
+       when the journal says so (`RenderChanges::post_effects`): a
+       PostEffect under either changed or came or went, or
+       `Workspace.CurrentCamera` changed. That read costs those
+       children, never a scan of the place, and a frame hands the
+       renderer the new settings only when they changed.
+     - Several of one kind: ColorCorrections multiply in order
+       (Lighting's, then the Camera's; Confirmed that they compose,
+       Inference on the order); each Bloom adds its own light
+       (Confirmed that they compose); the greatest Blur wins
+       (Confirmed); of several SunRays the greatest `Intensity` draws,
+       and of several DepthOfFields the first enabled (Inference: their
+       shaders take one set of settings).
+     - Neon's glow: Studio's tone pass has "LQNeon" forms adding a
+       glow from the frame's brightest channel over a threshold, and
+       its glow downsample feeds the bloom chain, so Neon's glow is
+       Bloom's machinery run with the engine's own settings at high
+       quality levels. It belongs with Bloom here, but its settings and
+       the levels it starts at need Studio captures, so Rook doesn't
+       draw it yet.
+     - Cost: nothing per frame without effects; per enabled effect, a
+       few passes at half resolution or less, independent of the place;
+       an edit re-reads a handful of children.
 3. **Studio's one lighting system** (`Lighting.Technology` is gone):
    `LightingStyle`, `PrioritizeLightingQuality`, `ShadowSoftness`,
    `EnvironmentDiffuseScale` and `EnvironmentSpecularScale` for M4's

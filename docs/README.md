@@ -70,6 +70,7 @@
     - [Atmosphere](behavior/lighting/atmosphere.md): haze, glare and aerial perspective, in place of fog
     - [Clouds](behavior/lighting/clouds.md): Terrain's volumetric clouds, their drift with the wind
     - [Tone mapping](behavior/lighting/tone-mapping.md): Studio's HDR blending, Neon's glow, ColorGrading's curves and fog
+    - [Post-processing](behavior/lighting/post-processing.md): ColorCorrection, Blur, Bloom, SunRays and DepthOfField, and where each sits against the tone curve
   - Meshes
     - [Built-in shapes](behavior/meshes/built-in-shapes.md): SpecialMesh types, BlockMesh, CylinderMesh
     - [File meshes](behavior/meshes/file-meshes.md)
