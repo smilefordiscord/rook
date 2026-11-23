@@ -232,3 +232,40 @@ fn a_receipt_whose_callback_errors_comes_back() {
     out.sort();
     assert_eq!(out, ["receipt 42", "receipt 43"]);
 }
+
+/// A LocalScript can't fire MarketplaceService's own messages through a
+/// RemoteEvent's FireServer: a purchase the player never made would
+/// otherwise be owned on the server.
+#[test]
+fn a_client_cannot_forge_a_purchase() {
+    let (mut session, index) = session_with(
+        r#"
+        local market = game:GetService("MarketplaceService")
+        market.PromptGamePassPurchaseFinished:Connect(function(player, pass, bought)
+            print("finished", player.Name, pass, bought)
+        end)
+        "#,
+        r#"
+        local market = game:GetService("MarketplaceService")
+        local fire = Instance.new("RemoteEvent").FireServer
+        print(pcall(fire, market, "bought", "GamePass", 5))
+        print(pcall(fire, market, "finished", "GamePass", 5, true))
+        "#,
+    );
+    session.run_for(0.2);
+    assert_eq!(
+        client_lines(&session, index),
+        [
+            "false Expected ':' not '.' calling member function FireServer",
+            "false Expected ':' not '.' calling member function FireServer",
+        ]
+    );
+    session
+        .server()
+        .run_extra_script(
+            "print(game:GetService('MarketplaceService'):UserOwnsGamePassAsync(1, 5))",
+        )
+        .unwrap();
+    session.run_for(0.1);
+    assert_eq!(lines(session.server()), ["false"]);
+}
