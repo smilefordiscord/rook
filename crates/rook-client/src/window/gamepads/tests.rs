@@ -68,3 +68,25 @@ fn studio_lists_each_key_a_pad_has() {
     }
     assert_eq!(kind(SONY, 0x0ce6), GamepadKind::PlayStation5);
 }
+
+/// A pad is sent its speeds only when they change, and slots without a
+/// pad are skipped.
+#[test]
+fn rumble_is_sent_only_when_it_changes() {
+    let mut slots: [Option<Slot>; 8] = Default::default();
+    slots[1] = Some(Slot {
+        id: PadId::Sony(7),
+        sent: PadState::default(),
+        rumble: [0.0; 2],
+    });
+    let mut speeds: MotorSpeeds = Default::default();
+    let mut sent = Vec::new();
+    rumble_changes(&mut slots, &speeds, |id, r| sent.push((id, r)));
+    assert!(sent.is_empty());
+    speeds[1][VibrationMotor::Small.index()] = 0.5;
+    speeds[1][VibrationMotor::LeftTrigger.index()] = 1.0;
+    speeds[0][VibrationMotor::Large.index()] = 1.0;
+    rumble_changes(&mut slots, &speeds, |id, r| sent.push((id, r)));
+    rumble_changes(&mut slots, &speeds, |id, r| sent.push((id, r)));
+    assert_eq!(sent, [(PadId::Sony(7), [0.0, 0.5])]);
+}

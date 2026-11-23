@@ -3,12 +3,14 @@
 //! reads them as SDL does, each pad's reports parsed by
 //! [`super::sony_reports`]. A thread per pad blocks reading reports; a
 //! device notification marks the pad list stale, so the list is read
-//! again only after a device arrives.
+//! again only after a device arrives. Another thread per pad writes its
+//! motors' output report, on a handle of its own, so neither a frame nor
+//! the reader waits on a write.
 
 use std::ffi::c_void;
-use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 use std::sync::mpsc::{Receiver, Sender, channel};
+use std::sync::{Arc, Condvar, Mutex, PoisonError};
 
 use rustc_hash::FxHashMap;
 use windows_sys::Win32::Devices::DeviceAndDriverInstallation::{
@@ -19,19 +21,20 @@ use windows_sys::Win32::Devices::DeviceAndDriverInstallation::{
     HCMNOTIFICATION,
 };
 use windows_sys::Win32::Devices::HumanInterfaceDevice::{
-    HIDD_ATTRIBUTES, HidD_GetAttributes, HidD_GetFeature, HidD_GetHidGuid,
+    HIDD_ATTRIBUTES, HIDP_CAPS, HIDP_STATUS_SUCCESS, HidD_FreePreparsedData, HidD_GetAttributes,
+    HidD_GetFeature, HidD_GetHidGuid, HidD_GetPreparsedData, HidP_GetCaps,
 };
 use windows_sys::Win32::Foundation::{
     CloseHandle, GENERIC_READ, GENERIC_WRITE, HANDLE, INVALID_HANDLE_VALUE,
 };
 use windows_sys::Win32::Storage::FileSystem::{
-    CreateFileW, FILE_SHARE_READ, FILE_SHARE_WRITE, OPEN_EXISTING, ReadFile,
+    CreateFileW, FILE_SHARE_READ, FILE_SHARE_WRITE, OPEN_EXISTING, ReadFile, WriteFile,
 };
 use windows_sys::Win32::System::IO::CancelIoEx;
 use windows_sys::core::GUID;
 
-use super::sony_reports::{Model, parse};
-use super::{PadChange, PadId, PadState, SONY, STUDIO_KEYS, kind};
+use super::sony_reports::{DUALSENSE_FIRMWARE, Model, parse, rumble_report, rumble_v2};
+use super::{PadChange, PadId, PadState, Rumble, SONY, STUDIO_KEYS, kind};
 
 /// Bluetooth's HID service, in the device path of a pad paired over it.
 const BLUETOOTH_HID: &str = "{00001124-0000-1000-8000-00805f9b34fb}";
@@ -52,11 +55,19 @@ pub(super) struct Sony {
     /// plugged in.
     stale: Arc<AtomicBool>,
     notification: HCMNOTIFICATION,
-    /// Open pads by device path, with their id and handle.
-    open: FxHashMap<Vec<u16>, (u64, Arc<Handle>)>,
+    /// Open pads by device path.
+    open: FxHashMap<Vec<u16>, Pad>,
     next_id: u64,
     reports: Receiver<(u64, Report)>,
     sender: Sender<(u64, Report)>,
+}
+
+#[derive(Debug)]
+struct Pad {
+    id: u64,
+    reader: Arc<Handle>,
+    /// None when the pad can't be written to.
+    motors: Option<Arc<Motors>>,
 }
 
 impl Sony {
@@ -110,7 +121,15 @@ impl Sony {
             match report {
                 Report::State(state) => out.push(PadChange::State(PadId::Sony(id), state)),
                 Report::Gone => {
-                    self.open.retain(|_, (open, _)| *open != id);
+                    self.open.retain(|_, pad| {
+                        if pad.id != id {
+                            return true;
+                        }
+                        if let Some(motors) = &pad.motors {
+                            motors.close();
+                        }
+                        false
+                    });
                     out.push(PadChange::Disconnected(PadId::Sony(id)));
                 }
             }
@@ -122,7 +141,10 @@ impl Sony {
         if !lower.contains("054c") {
             return;
         }
-        let Some(handle) = Handle::open(&path) else {
+        // Reading and writing (feature reports), or reading alone if
+        // another program keeps writing to itself.
+        let Some(handle) = Handle::open(&path, &[GENERIC_READ | GENERIC_WRITE, GENERIC_READ])
+        else {
             return;
         };
         let Some((vendor, product)) = handle.ids() else {
@@ -132,9 +154,11 @@ impl Sony {
             return;
         };
         let bluetooth = lower.contains(BLUETOOTH_HID);
-        if bluetooth {
-            handle.read_feature(model.full_reports_feature());
+        if bluetooth && handle.feature(model.full_reports_feature()).is_none() {
+            tracing::warn!("a PlayStation pad on Bluetooth may send only short reports");
         }
+        let v2 = model == Model::DualSense
+            && rumble_v2(product, handle.feature(DUALSENSE_FIRMWARE).as_deref());
         let id = self.next_id;
         self.next_id += 1;
         let handle = Arc::new(handle);
@@ -148,12 +172,26 @@ impl Sony {
             tracing::warn!("a PlayStation pad won't be read: {e}");
             return;
         }
-        self.open.insert(path, (id, handle));
+        let motors = Motors::open(&path, model, bluetooth, v2);
         out.push(PadChange::Connected {
             id: PadId::Sony(id),
             kind: kind(vendor, product),
             supported: STUDIO_KEYS.to_vec(),
+            rumbles: motors.is_some(),
         });
+        let pad = Pad {
+            id,
+            reader: handle,
+            motors,
+        };
+        self.open.insert(path, pad);
+    }
+
+    pub(super) fn rumble(&self, id: u64, speeds: Rumble) {
+        let pad = self.open.values().find(|p| p.id == id);
+        if let Some(motors) = pad.and_then(|p| p.motors.as_ref()) {
+            motors.set(speeds.map(|s| (s.clamp(0.0, 1.0) * 255.0).round() as u8));
+        }
     }
 }
 
@@ -163,15 +201,121 @@ impl Drop for Sony {
         // SAFETY: registered in `new`; no callback runs after this
         // returns, so `stale` may go.
         unsafe { CM_Unregister_Notification(self.notification) };
-        for (_, handle) in self.open.values() {
-            handle.stopping.store(true, Ordering::Release);
-            handle.cancel();
+        for pad in self.open.values() {
+            pad.reader.stopping.store(true, Ordering::Release);
+            pad.reader.cancel();
+            // A pad keeps rumbling after its program has gone, so its
+            // motors stop here, before the process can end.
+            if let Some(motors) = &pad.motors {
+                motors.close();
+                motors.write([0, 0]);
+            }
         }
     }
 }
 
-/// A HID device open for reading, shared by its reader thread; closed
-/// when both let go.
+/// A pad's motors: the speeds to send next, which a thread of their own
+/// writes, on a handle open for writing alone.
+#[derive(Debug)]
+struct Motors {
+    writer: Handle,
+    model: Model,
+    bluetooth: bool,
+    /// A DualSense takes the newer compatible rumble.
+    v2: bool,
+    /// The device's output report length, which every write fills.
+    length: usize,
+    /// Numbers a DualSense's Bluetooth reports.
+    sequence: AtomicU8,
+    wanted: Mutex<Wanted>,
+    wake: Condvar,
+}
+
+#[derive(Debug, Default)]
+struct Wanted {
+    /// The speeds not yet written, 0 to 255: Large, then Small.
+    speeds: Option<[u8; 2]>,
+    /// The pad is gone or let go, so the thread ends.
+    closed: bool,
+}
+
+impl Motors {
+    /// Open the pad for writing and start its writer; None if it can't
+    /// be written to (another program holds it) or the thread can't
+    /// start.
+    fn open(path: &[u16], model: Model, bluetooth: bool, v2: bool) -> Option<Arc<Self>> {
+        let writer = Handle::open(path, &[GENERIC_WRITE])?;
+        let length = writer.output_length()?;
+        let motors = Arc::new(Self {
+            writer,
+            model,
+            bluetooth,
+            v2,
+            length,
+            sequence: AtomicU8::new(0),
+            wanted: Mutex::default(),
+            wake: Condvar::new(),
+        });
+        let thread = Arc::clone(&motors);
+        let body = move || thread.run();
+        match rook_platform::get()
+            .threads
+            .spawn("rook gamepad motors", Box::new(body))
+        {
+            Ok(()) => Some(motors),
+            Err(e) => {
+                tracing::warn!("a PlayStation pad's motors won't run: {e}");
+                None
+            }
+        }
+    }
+
+    fn set(&self, speeds: [u8; 2]) {
+        let mut wanted = self.wanted.lock().unwrap_or_else(PoisonError::into_inner);
+        wanted.speeds = Some(speeds);
+        self.wake.notify_one();
+    }
+
+    fn close(&self) {
+        let mut wanted = self.wanted.lock().unwrap_or_else(PoisonError::into_inner);
+        wanted.closed = true;
+        self.wake.notify_one();
+    }
+
+    /// The writer thread: the latest speeds, each time they change.
+    fn run(&self) {
+        loop {
+            let speeds = {
+                let mut wanted = self.wanted.lock().unwrap_or_else(PoisonError::into_inner);
+                loop {
+                    if wanted.closed {
+                        return;
+                    }
+                    if let Some(speeds) = wanted.speeds.take() {
+                        break speeds;
+                    }
+                    wanted = self
+                        .wake
+                        .wait(wanted)
+                        .unwrap_or_else(PoisonError::into_inner);
+                }
+            };
+            self.write(speeds);
+        }
+    }
+
+    fn write(&self, speeds: [u8; 2]) {
+        let sequence = self.sequence.fetch_add(1, Ordering::Relaxed) % 16;
+        let mut report = rumble_report(self.model, self.bluetooth, self.v2, sequence, speeds);
+        report.resize(self.length.max(report.len()), 0);
+        if !self.writer.write(&report) {
+            tracing::debug!("a PlayStation pad's motors weren't set; it may have gone");
+        }
+    }
+}
+
+/// A HID device open for reading or writing, shared by its thread;
+/// closed when all its holders let go.
 #[derive(Debug)]
 struct Handle {
     raw: HANDLE,
@@ -180,20 +324,21 @@ struct Handle {
 }
 
 // SAFETY: a file handle may be used from any thread; reads happen on the
-// reader's thread alone, and the others only cancel them.
+// reader's thread alone, and the others only cancel them. Writes come
+// from the motors' thread, and once more as the pads are let go; the
+// handle isn't overlapped, so Windows runs them one at a time.
 #[allow(unsafe_code)]
 unsafe impl Send for Handle {}
 #[allow(unsafe_code)]
 unsafe impl Sync for Handle {}
 
 impl Handle {
-    /// Open for reading and writing (rumble, later), or reading alone if
-    /// another program keeps writing to itself.
+    /// Open with the first of `accesses` the device allows.
     #[allow(unsafe_code)]
-    fn open(path: &[u16]) -> Option<Self> {
+    fn open(path: &[u16], accesses: &[u32]) -> Option<Self> {
         let mut name = path.to_vec();
         name.push(0);
-        for access in [GENERIC_READ | GENERIC_WRITE, GENERIC_READ] {
+        for &access in accesses {
             // SAFETY: `name` is a NUL-terminated device path; no security
             // attributes or template.
             let raw = unsafe {
@@ -230,17 +375,34 @@ impl Handle {
             .then_some((attributes.VendorID, attributes.ProductID))
     }
 
-    /// Read a feature report for its effect on the pad; its contents
-    /// aren't needed.
+    /// The feature report `(id, length)`, or None if the pad didn't give
+    /// it. Reading some has an effect of its own on the pad.
     #[allow(unsafe_code)]
-    fn read_feature(&self, (id, len): (u8, usize)) {
+    fn feature(&self, (id, len): (u8, usize)) -> Option<Vec<u8>> {
         let mut buffer = vec![0u8; len];
         buffer[0] = id;
         // SAFETY: the buffer is valid for its length.
         let read = unsafe { HidD_GetFeature(self.raw, buffer.as_mut_ptr().cast(), len as u32) };
-        if !read {
-            tracing::warn!("a PlayStation pad on Bluetooth may send only short reports");
+        read.then_some(buffer)
+    }
+
+    /// The length every output report written must have; None if the
+    /// device takes none.
+    #[allow(unsafe_code)]
+    fn output_length(&self) -> Option<usize> {
+        let mut data = 0;
+        // SAFETY: the handle is open; `data` is freed below.
+        if !unsafe { HidD_GetPreparsedData(self.raw, &mut data) } {
+            return None;
         }
+        let mut caps = HIDP_CAPS::default();
+        // SAFETY: `data` came from HidD_GetPreparsedData and is freed
+        // only after this read.
+        let status = unsafe { HidP_GetCaps(data, &mut caps) };
+        // SAFETY: as above, and freed once.
+        unsafe { HidD_FreePreparsedData(data) };
+        let length = usize::from(caps.OutputReportByteLength);
+        (status == HIDP_STATUS_SUCCESS && length > 0).then_some(length)
     }
 
     /// One report, or None once the pad is gone or let go.
@@ -259,6 +421,24 @@ impl Handle {
             )
         };
         (ok != 0).then(|| &buffer[..read as usize])
+    }
+
+    /// Write one output report; false if the pad didn't take it.
+    #[allow(unsafe_code)]
+    fn write(&self, report: &[u8]) -> bool {
+        let mut written = 0u32;
+        // SAFETY: the report is valid for its length; the handle isn't
+        // overlapped, so the write finishes (or fails) before returning.
+        let ok = unsafe {
+            WriteFile(
+                self.raw,
+                report.as_ptr(),
+                report.len() as u32,
+                &mut written,
+                std::ptr::null_mut(),
+            )
+        };
+        ok != 0
     }
 
     /// End a read blocked on another thread.

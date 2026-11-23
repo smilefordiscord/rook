@@ -1,11 +1,15 @@
 //! Pads the platform's own API reads, through gilrs. Its filters are off:
 //! Studio passes a stick's raw values, jitter included, with no deadzone.
+//! A pad's motors run through one looping force-feedback effect, made
+//! again at each change of speed: gilrs mutes an effect's gain below 0.05,
+//! so the speeds go in its magnitudes.
 
+use gilrs::ff::{BaseEffect, BaseEffectType, Effect, EffectBuilder, Repeat};
 use gilrs::{Axis, Button, EventType, Gamepad, GamepadId, Gilrs, GilrsBuilder};
 use rook_types::GamepadKey;
 use rustc_hash::FxHashMap;
 
-use super::{PadChange, PadId, PadState, STUDIO_KEYS, kind};
+use super::{PadChange, PadId, PadState, Rumble, STUDIO_KEYS, kind};
 
 pub(super) struct System {
     /// None where the platform has no gamepad API.
@@ -13,6 +17,8 @@ pub(super) struct System {
     states: FxHashMap<GamepadId, PadState>,
     /// Pads gilrs had when it started: it announces only later ones.
     found: Vec<GamepadId>,
+    /// Each rumbling pad's effect; dropping it stops the motors.
+    rumbling: FxHashMap<GamepadId, Effect>,
 }
 
 impl std::fmt::Debug for System {
@@ -38,6 +44,46 @@ impl System {
             gilrs,
             states: FxHashMap::default(),
             found,
+            rumbling: FxHashMap::default(),
+        }
+    }
+
+    /// Run `id`'s strong (Large) and weak (Small) motors at these speeds.
+    /// The new effect is made before the old one goes, so gilrs's
+    /// thread doesn't still the pad between them.
+    pub(super) fn rumble(&mut self, id: GamepadId, [large, small]: Rumble) {
+        let Some(gilrs) = &mut self.gilrs else {
+            return;
+        };
+        if large <= 0.0 && small <= 0.0 {
+            self.rumbling.remove(&id);
+            return;
+        }
+        let magnitude = |speed: f32| (speed.clamp(0.0, 1.0) * f32::from(u16::MAX)).round() as u16;
+        let motor = |kind| BaseEffect {
+            kind,
+            ..Default::default()
+        };
+        // A tick long, repeated: on until dropped.
+        let effect = EffectBuilder::new()
+            .add_effect(motor(BaseEffectType::Strong {
+                magnitude: magnitude(large),
+            }))
+            .add_effect(motor(BaseEffectType::Weak {
+                magnitude: magnitude(small),
+            }))
+            .gamepads(&[id])
+            .repeat(Repeat::Infinitely)
+            .finish(gilrs)
+            .and_then(|effect| effect.play().map(|()| effect));
+        match effect {
+            Ok(effect) => {
+                self.rumbling.insert(id, effect);
+            }
+            Err(e) => {
+                self.rumbling.remove(&id);
+                tracing::debug!("a gamepad's motors won't run: {e}");
+            }
         }
     }
 
@@ -60,6 +106,7 @@ impl System {
             let changed = match event.event {
                 EventType::Disconnected => {
                     self.states.remove(&id);
+                    self.rumbling.remove(&id);
                     out.push(PadChange::Disconnected(PadId::System(id)));
                     continue;
                 }
@@ -114,6 +161,7 @@ fn connect(
         id: PadId::System(id),
         kind: kind(vendor, product),
         supported,
+        rumbles: g.is_ff_supported(),
     });
 }
 

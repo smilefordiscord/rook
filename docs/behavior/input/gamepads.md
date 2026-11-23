@@ -118,6 +118,31 @@ pad connected came from the edit DataModel.
   Gamepad1 and a DualSense connected after it gave ButtonCross for
   ButtonA, before and half a second after pressing the Xbox pad's A.
 
+## Motors
+
+Not measured in Studio yet: these follow the creator docs
+(HapticService, `Enum.VibrationMotor`, the gamepad input guide), with
+Rook's own choices marked Inference.
+
+- `HapticService:SetMotor(inputType, motor, values...)` sets how hard a
+  motor vibrates, from its tuple's first value, a number. `GetMotor`
+  returns the value last set, and nothing before `SetMotor`. Rook returns
+  it as given (Inference: not clamped), and a missing value fails as
+  "Argument 3 missing or nil" (Inference).
+- The motor's output is scaled by the player's haptic intensity,
+  `UserGameSettings.HapticStrength`, which only Roblox's own scripts can
+  set. Rook runs a motor at the value clamped to 0 to 1, times the
+  strength (Inference: a plain product).
+- Most pads have a large and a small motor. `IsVibrationSupported` and
+  `IsMotorSupported` are true for a `GamepadN` whose pad has the motor;
+  Rook answers false with no pad in the slot and for input types that
+  aren't pads (Inference).
+- A slot keeps what was set while pads come and go, so a pad connecting
+  to it runs at it (Inference). Input types that aren't pads keep
+  nothing.
+- HapticService is deprecated in favor of `HapticEffect`, which Rook
+  lacks.
+
 ## How Rook does it
 
 Code: pads are read in `rook-client`'s `window/gamepads.rs` and reach the
@@ -139,6 +164,16 @@ engine as `InputEvent`s; the engine side is
   and LocalScripts start.
 - `GetSupportedGamepadKeyCodes` lists the keys in Studio's order, less
   any gilrs doesn't map on a pad it reads.
+- A pad's Large and Small motors are its compatible rumble: gilrs's
+  strong and weak motors, and on Windows a PlayStation pad's own output
+  report, laid out as Linux's `hid-playstation` writes it (a DualSense on
+  update 2.21 or later gets the newer compatible rumble, as there). The
+  trigger motors aren't reached, so `IsMotorSupported` is false for them
+  (Approximation: whether Studio runs an Xbox pad's trigger motors is
+  unmeasured). The engine decides each motor's speed
+  (`DataModel::motor_speeds`), and the window sends a pad its speeds
+  when they change; gilrs applies them on its next 50 ms tick. Closing
+  the player stops every motor.
 - The CoreScripts bind `MemStorageService`'s `ActiveGamepadConnected`
   key, which none of them set: Roblox's engine does, with a value only
   Roblox's own scripts can read (a plugin's `GetItem` fails, "lacking

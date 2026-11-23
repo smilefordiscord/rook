@@ -1,6 +1,8 @@
-//! Sony pads' HID input reports, DualShock 4 and DualSense, over USB and
-//! Bluetooth, as their published layouts give them. Pure, so it's tested
-//! on every platform; only Windows reads pads with it.
+//! Sony pads' HID reports, DualShock 4 and DualSense, over USB and
+//! Bluetooth, as their published layouts give them (Linux's
+//! `hid-playstation`, SDL's HIDAPI drivers): the input reports read, and
+//! the output report that runs the motors. Pure, so it's tested on every
+//! platform; only Windows reads pads with it.
 
 use rook_types::GamepadKey;
 
@@ -30,6 +32,77 @@ impl Model {
             Self::DualSense => (0x05, 41),
         }
     }
+}
+
+/// The DualSense's feature report with its firmware's versions: (id,
+/// length).
+pub(super) const DUALSENSE_FIRMWARE: (u8, usize) = (0x20, 64);
+
+/// Whether a DualSense takes the newer compatible rumble, which feels
+/// like a DualShock 4's: the Edge always, the others from update 2.21,
+/// as `hid-playstation` decides. Older pads take the first mode, which
+/// a newer pad still runs, so an unread firmware report picks it.
+pub(super) fn rumble_v2(product: u16, firmware: Option<&[u8]>) -> bool {
+    let update = firmware
+        .and_then(|r| r.get(44..46))
+        .map(|b| u16::from_le_bytes([b[0], b[1]]));
+    product == 0x0df2 || update.is_some_and(|v| v >= 0x0215)
+}
+
+/// The output report that runs the motors at `large` and `small` (0 to
+/// 255), touching nothing else (each report's valid flags name only the
+/// motors). `sequence` numbers a DualSense's Bluetooth reports, 0 to 15.
+/// Windows pads the report to the device's output length.
+pub(super) fn rumble_report(
+    model: Model,
+    bluetooth: bool,
+    v2: bool,
+    sequence: u8,
+    [large, small]: [u8; 2],
+) -> Vec<u8> {
+    let mut r = match (model, bluetooth) {
+        (Model::DualShock4, false) => {
+            let mut r = vec![0u8; 32];
+            r[..2].copy_from_slice(&[0x05, 0x01]);
+            r[4..6].copy_from_slice(&[small, large]);
+            r
+        }
+        (Model::DualShock4, true) => {
+            let mut r = vec![0u8; 78];
+            // HID and CRC flags, and SDL's report interval.
+            r[..2].copy_from_slice(&[0x11, 0xc4]);
+            r[3] = 0x01;
+            r[6..8].copy_from_slice(&[small, large]);
+            r
+        }
+        (Model::DualSense, bluetooth) => {
+            let (mut r, base) = match bluetooth {
+                false => (vec![0u8; 63], 1),
+                true => (vec![0u8; 78], 3),
+            };
+            r[0] = if bluetooth { 0x31 } else { 0x02 };
+            if bluetooth {
+                r[1] = (sequence & 0x0f) << 4;
+                r[2] = 0x10;
+            }
+            let common = &mut r[base..];
+            // Compatible rumble, then the newer mode's flag or the older
+            // one's haptics select.
+            common[0] = if v2 { 0x01 } else { 0x03 };
+            common[38] = if v2 { 0x04 } else { 0 };
+            common[2..4].copy_from_slice(&[small, large]);
+            r
+        }
+    };
+    if bluetooth {
+        let end = r.len() - 4;
+        let mut crc = crc32fast::Hasher::new();
+        // Bluetooth HID's output header, which the CRC covers too.
+        crc.update(&[0xa2]);
+        crc.update(&r[..end]);
+        r[end..].copy_from_slice(&crc.finalize().to_le_bytes());
+    }
+    r
 }
 
 /// Where the fields sit after the report's header.
@@ -143,6 +216,54 @@ mod tests {
         for (model, bluetooth, r) in cases {
             check(parse(model, bluetooth, &r).unwrap());
         }
+    }
+
+    /// The motors' bytes, flags and CRCs sit where `hid-playstation`'s
+    /// report structs put them.
+    #[test]
+    fn rumble_reports_follow_the_published_layouts() {
+        let speeds = [200, 100];
+        let r = rumble_report(Model::DualShock4, false, false, 0, speeds);
+        assert_eq!((r.len(), &r[..6]), (32, &[0x05, 0x01, 0, 0, 100, 200][..]));
+
+        let r = rumble_report(Model::DualShock4, true, false, 0, speeds);
+        assert_eq!(
+            (r.len(), &r[..8]),
+            (78, &[0x11, 0xc4, 0, 0x01, 0, 0, 100, 200][..])
+        );
+
+        let r = rumble_report(Model::DualSense, false, false, 0, speeds);
+        assert_eq!((r.len(), &r[..5]), (63, &[0x02, 0x03, 0, 100, 200][..]));
+        assert_eq!(r[39], 0);
+        let r = rumble_report(Model::DualSense, false, true, 0, speeds);
+        assert_eq!((r[1], r[39]), (0x01, 0x04));
+
+        let r = rumble_report(Model::DualSense, true, true, 5, speeds);
+        assert_eq!(
+            (r.len(), &r[..7]),
+            (78, &[0x31, 0x50, 0x10, 0x01, 0, 100, 200][..])
+        );
+        assert_eq!(r[41], 0x04);
+        for (model, id) in [(Model::DualShock4, 0x11), (Model::DualSense, 0x31)] {
+            let r = rumble_report(model, true, false, 0, speeds);
+            let mut covered = vec![0xa2];
+            covered.extend_from_slice(&r[..74]);
+            let crc = crc32fast::hash(&covered).to_le_bytes();
+            assert_eq!((r[0], &r[74..]), (id, &crc[..]));
+        }
+    }
+
+    #[test]
+    fn newer_dualsense_updates_take_the_newer_rumble() {
+        let firmware = |version: u16| {
+            let mut r = vec![0u8; DUALSENSE_FIRMWARE.1];
+            r[44..46].copy_from_slice(&version.to_le_bytes());
+            r
+        };
+        assert!(!rumble_v2(0x0ce6, Some(&firmware(0x0214))));
+        assert!(rumble_v2(0x0ce6, Some(&firmware(0x0215))));
+        assert!(!rumble_v2(0x0ce6, None));
+        assert!(rumble_v2(0x0df2, None));
     }
 
     #[test]

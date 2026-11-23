@@ -3,7 +3,7 @@
 //! slot's own InputObject for the key (docs/behavior/input/gamepads.md).
 
 use rook_lua::gamepads::GamepadKind;
-use rook_types::{GamepadKey, UserInputState, UserInputType, Value, Vector3};
+use rook_types::{GamepadKey, UserInputState, UserInputType, Value, Vector3, VibrationMotor};
 
 use super::input_type::Preferred;
 use crate::DataModel;
@@ -42,6 +42,7 @@ impl DataModel {
         pad: usize,
         kind: GamepadKind,
         supported: Vec<GamepadKey>,
+        motors: Vec<VibrationMotor>,
     ) -> bool {
         let Some(t) = UserInputType::GAMEPADS.get(pad).copied() else {
             return false;
@@ -53,6 +54,7 @@ impl DataModel {
             slot.connected = true;
             slot.kind = kind;
             slot.supported = supported;
+            slot.motors = motors;
             w.input.key_names = kind;
             was
         };

@@ -305,6 +305,7 @@ impl App {
         if let Some(now) = changed.cloned() {
             self.follow(now);
         }
+        self.gamepads.rumble(&self.game.view().motor_speeds());
         if let Some(audio) = &mut self.audio {
             if audio.devices_changed() {
                 self.game

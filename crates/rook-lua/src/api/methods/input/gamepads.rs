@@ -13,7 +13,7 @@ use crate::types::enums::{enum_item, item_value};
 
 /// The slot an argument names: 0 for Gamepad1. None for any other input
 /// type, which every query answers as a pad that isn't there.
-fn pad_arg(lua: &Lua, a: &Args, i: usize) -> ApiResult<Option<usize>> {
+pub(super) fn pad_arg(lua: &Lua, a: &Args, i: usize) -> ApiResult<Option<usize>> {
     let value =
         item_value(lua, a.get(i), "UserInputType").ok_or_else(|| a.wrong(i, "UserInputType"))?;
     Ok(UserInputType::from_u32(value).and_then(UserInputType::gamepad_index))

@@ -59,7 +59,7 @@
     - [GUI selection](behavior/gui/selection.md): what moving SelectedObject fires, what GuiService:Select picks
     - [Proximity prompts](behavior/gui/proximity-prompts.md): which show, keys and holds, the events on both sides, Roblox's prompt GUI
   - Input
-    - [Gamepads](behavior/input/gamepads.md): pads' numbers, their InputObjects, sticks and triggers, which input is in use
+    - [Gamepads](behavior/input/gamepads.md): pads' numbers, their InputObjects, sticks and triggers, which input is in use, their motors
     - [ContextActionService](behavior/input/context-actions.md): bindings before UserInputService, processed input, Cancel
   - Lighting
     - [Local lights](behavior/lighting/local-lights.md): PointLight, SpotLight and SurfaceLight

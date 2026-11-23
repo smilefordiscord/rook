@@ -5,6 +5,7 @@ Every release, newest first. How versions are numbered is in
 
 ## [Unreleased]
 
+- `HapticService` runs gamepads' motors, as in Roblox: scripts can ask whether a pad vibrates, set its large and small motors, which run scaled by the player's haptic strength, and read back what they set. Rook had no HapticService methods, so scripts calling them stopped with an error. See [gamepads](docs/behavior/input/gamepads.md#motors).
 - Light, shadows and the sky's light follow the camera to where it moves on a busy or slow machine. Rook could keep lighting only where the camera had been, for as long as the machine stayed busy. See [local lights](docs/behavior/lighting/local-lights.md).
 - AudioChannelMixer takes sound in through its channel pins, and AudioChannelSplitter's channel pins carry only their channel, as in Roblox. Rook left the mixer unwired, so everything sent through one was silent, and sent the whole sound out of every splitter pin. See [the audio API](docs/behavior/audio/audio-api.md).
 - A part's `CustomPhysicalProperties` reads nil until it's set and can be set back to nil, as in Roblox. Rook read an empty PhysicalProperties value for an unset one and raised an error for nil. See [Faces, Axes and PhysicalProperties](docs/behavior/scripting/faces-and-axes.md).

@@ -11,12 +11,14 @@ mod cursor;
 mod events;
 mod gamepad;
 mod gui;
+mod haptics;
 mod input_type;
 mod keys;
 mod textbox;
 mod world;
 
 pub use gamepad::GamepadAxis;
+pub use haptics::MotorSpeeds;
 pub use rook_lua::gamepads::GamepadKind;
 
 use rook_dom::InstanceId;
@@ -64,11 +66,13 @@ pub enum InputEvent {
     Focus {
         focused: bool,
     },
-    /// A pad took slot `pad` (0 is Gamepad1), with the keys it has.
+    /// A pad took slot `pad` (0 is Gamepad1), with the keys and the
+    /// motors it has.
     GamepadConnected {
         pad: usize,
         kind: GamepadKind,
         supported: Vec<GamepadKey>,
+        motors: Vec<rook_types::VibrationMotor>,
     },
     GamepadDisconnected {
         pad: usize,

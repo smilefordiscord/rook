@@ -3796,6 +3796,7 @@ name = "rook-client"
 version = "0.5.1"
 dependencies = [
  "anyhow",
+ "crc32fast",
  "gilrs",
  "glam 0.33.12",
  "image",

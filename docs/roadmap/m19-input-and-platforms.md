@@ -113,5 +113,39 @@ plumbing, which whichever lands first builds.
 4. ContextActionService and UserInputService in full: the members left
    after steps 1 to 3, ContextActionService's touch buttons, and
    `HapticService`.
+   - *HapticService scope*: `IsVibrationSupported`, `IsMotorSupported`,
+     `SetMotor` and `GetMotor` for `Gamepad1` to `Gamepad8`, running the
+     pad's Large and Small motors, scaled by the player's
+     `HapticStrength` as the creator docs say. Out: `HapticEffect`,
+     which supersedes the service and needs its presets' waveforms; the
+     trigger motors and a VR controller's hands, which neither gilrs nor
+     the pads' compatible rumble reaches.
+   - *HapticService evidence*: creator docs only (HapticService,
+     `Enum.VibrationMotor`, the Gamepad input guide); no Studio
+     measurement yet ([motors](../behavior/input/gamepads.md#motors)).
+   - *HapticService design*: as engines drive rumble (SDL's
+     `SDL_RumbleGamepad(low, high)`, Unity's `SetMotorSpeeds`, gilrs's
+     force-feedback effects): the game keeps each motor's wanted speed
+     as state, and the platform layer sends it to the device when it
+     changes. Scripts never reach the device.
+     - *Engine*: each slot in `rook-lua`'s `InputState` keeps the
+       values `SetMotor` set, which `GetMotor` reads back, and the
+       motors its pad has, which the connect event brings.
+       `DataModel::motor_speeds` is the one owner of what each motor
+       runs at: the value clamped to 0..1, times `HapticStrength`, zero
+       for a motor the pad lacks or a slot with no pad.
+     - *Host*: once a frame, after the step, `window/gamepads.rs` diffs
+       the speeds against what each pad was last sent and sends the
+       changes. A gilrs pad gets one looping force-feedback effect with
+       the speeds as its strong (Large) and weak (Small) magnitudes,
+       made again at each change, since gilrs mutes an effect whose gain
+       is under 0.05. Sony's pads on Windows get their HID output
+       report (DualShock 4 `0x05` on USB and `0x11` on Bluetooth,
+       DualSense `0x02` and `0x31`, Bluetooth's with its CRC-32), laid
+       out as Linux's `hid-playstation` and SDL write them, sent by a
+       thread per pad on a handle of its own, so a frame never waits on
+       the device. Letting a pad go stops its motors.
+     - *Cost*: a fixed compare of sixteen speeds a frame; a device
+       write only when one changes.
 5. Rebindable controls and the keyboard and mouse settings Roblox has.
 6. Linux and macOS builds, checked in CI.
