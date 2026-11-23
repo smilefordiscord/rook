@@ -238,3 +238,52 @@ fn depth_of_field_blurs_outside_the_focus() {
     let near = reds(&mut r, &scene, &camera);
     assert!(at(&near, 21, 16) > 0, "{}", at(&near, 21, 16));
 }
+
+/// More Blooms than a frame draws, each with the longest chain, beside
+/// every other effect, draw without outgrowing the frame's parameter
+/// slots (a place's Blooms once panicked the render thread).
+#[test]
+fn many_blooms_fit_the_frame() {
+    let Ok(mut r) = Renderer::headless() else {
+        return;
+    };
+    let (mut scene, camera) = glow();
+    scene.post.bloom = vec![
+        Bloom {
+            intensity: 1.0,
+            size: 1.0e6,
+            threshold: 0.0,
+        };
+        40
+    ];
+    scene.post.blur = 30.0;
+    scene.post.sun_rays = Some(SunRays {
+        intensity: 1.0,
+        spread: 1.0,
+    });
+    scene.post.depth_of_field = Some(DepthOfField {
+        far_intensity: 1.0,
+        focus_distance: 5.0,
+        in_focus_radius: 1.0,
+        near_intensity: 1.0,
+    });
+    reds(&mut r, &scene, &camera);
+}
+
+/// An effect drawn again at a size the frame left and came back to reads
+/// the new frame, not the one from before (its textures were kept by
+/// size alone, so it showed a stale picture).
+#[test]
+fn effects_read_the_frame_after_a_resize() {
+    let Ok(mut r) = Renderer::headless() else {
+        return;
+    };
+    let (mut scene, camera) = glow();
+    scene.post.blur = 4.0;
+    let lit = reds(&mut r, &scene, &camera);
+    assert!(lit.iter().any(|&c| c > 0));
+    r.set_scene(&Scene::default());
+    r.render_to_image(16, 16, &camera).unwrap();
+    scene.parts.clear();
+    assert!(reds(&mut r, &scene, &camera).iter().all(|&c| c == 0));
+}

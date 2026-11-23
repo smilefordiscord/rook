@@ -21,8 +21,9 @@ use crate::renderer::passes::tonemap::FRAME_FORMAT;
 /// uniform offset alignment.
 const SLOT: u64 = 256;
 
-/// How many passes a frame's effects may run.
-const SLOTS: u64 = 32;
+/// The most passes a frame's effects run: each effect's most, so no
+/// number of effects a place holds can outgrow the slots.
+const SLOTS: u64 = bloom::SLOTS + blur::SLOTS + sun_rays::SLOTS + depth_of_field::SLOTS;
 
 /// Every pass's parameters for a frame, written to the GPU once before
 /// the frame's passes run, each pass reading its own slot by a dynamic

@@ -34,6 +34,11 @@ struct DofPass {
 #[derive(Debug)]
 struct Textures {
     frame_size: (u32, u32),
+    /// The frame and depth buffer the groups read: a resize makes new
+    /// ones, which can come back to this size between two frames with
+    /// the effect.
+    frame: wgpu::TextureView,
+    depth: wgpu::TextureView,
     size: (u32, u32),
     /// The frame halved, in light units, with each texel's far circle.
     field: Target,
@@ -44,6 +49,10 @@ struct Textures {
     from_field_and_depth: wgpu::BindGroup,
 }
 
+/// The passes the depth of field runs in a frame that take parameters:
+/// all three read one slot.
+pub(super) const SLOTS: u64 = 1;
+
 impl Textures {
     fn at<'a>(
         slot: &'a mut Option<Self>,
@@ -51,11 +60,16 @@ impl Textures {
         shared: &Shared,
         view: &PostView,
     ) -> &'a Self {
-        if !slot.as_ref().is_some_and(|t| t.frame_size == view.size) {
+        let fresh = |t: &Self| {
+            t.frame_size == view.size && t.frame == *view.frame && t.depth == *view.depth
+        };
+        if !slot.as_ref().is_some_and(fresh) {
             let size = (view.size.0.div_ceil(2), view.size.1.div_ceil(2));
             let field = Shared::target(device, "rook depth of field", size);
             *slot = Some(Self {
                 frame_size: view.size,
+                frame: view.frame.clone(),
+                depth: view.depth.clone(),
                 size,
                 from_frame: shared.depth_group(device, view.frame, view.depth),
                 from_field: shared.group(device, &field.view, None),

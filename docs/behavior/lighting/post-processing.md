@@ -117,8 +117,10 @@ Approximation). What the properties become is Inference:
   pixels) first covers `Size`: 4 at the default 24.
 - `Size` 0 adds each pixel's own light over the threshold in the tone
   pass, with no chain.
-- Each Bloom runs its own chain into one sum the tone pass adds; the
-  first four with `Size` 0 add in place.
+- Each Bloom runs its own chain into one sum the tone pass adds. The
+  first eight with a `Size` above 0 draw and the first four with `Size`
+  0 add in place (Approximation: Studio's limits, if any, aren't
+  measured; a bound keeps a frame's passes bounded).
 
 ## SunRaysEffect
 

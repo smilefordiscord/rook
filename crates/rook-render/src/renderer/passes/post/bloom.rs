@@ -18,6 +18,16 @@ const MAX_LEVELS: u32 = 8;
 /// How many Blooms with `Size` 0 the tone pass adds in place.
 const IN_PLACE: usize = 4;
 
+/// How many Blooms with a `Size` above 0 a frame draws, in the order
+/// they're read (Approximation: Studio's limit, if any, isn't measured).
+/// Each runs its own chain, so the frame's cost and parameter slots stay
+/// bounded however many a place holds.
+const CHAINED: usize = 8;
+
+/// The most passes the Blooms run in a frame: each chain runs an extract,
+/// a pass down and up for each copy past the first, and the sum.
+pub(super) const SLOTS: u64 = CHAINED as u64 * (2 * MAX_LEVELS as u64 - 1);
+
 /// One bloom pass's parameters (`shaders/post/bloom.wgsl`).
 #[repr(C)]
 #[derive(Debug, Clone, Copy, Pod, Zeroable)]
@@ -66,6 +76,9 @@ pub(super) struct Drawn {
 #[derive(Debug)]
 struct Textures {
     frame_size: (u32, u32),
+    /// The frame `from_frame` reads: a resize makes a new one, which can
+    /// come back to this size between two frames that draw a Bloom.
+    frame: wgpu::TextureView,
     /// Each copy and its size, the half-size one first.
     levels: Vec<(Target, (u32, u32))>,
     sum: Target,
@@ -87,7 +100,9 @@ impl Textures {
         (frame, frame_size): (&wgpu::TextureView, (u32, u32)),
         levels: u32,
     ) -> &'a Self {
-        let fresh = |t: &Self| t.frame_size == frame_size && t.levels.len() >= levels as usize;
+        let fresh = |t: &Self| {
+            t.frame_size == frame_size && t.frame == *frame && t.levels.len() >= levels as usize
+        };
         if !slot.as_ref().is_some_and(fresh) {
             let mut size = frame_size;
             let made: Vec<_> = (0..levels)
@@ -100,6 +115,7 @@ impl Textures {
             let second = made.get(1).map(|(t, _)| &t.view);
             *slot = Some(Self {
                 frame_size,
+                frame: frame.clone(),
                 from_frame: shared.group(device, frame, None),
                 from_level: (made.iter())
                     .map(|(t, _)| shared.group(device, &t.view, None))
@@ -160,8 +176,9 @@ impl BloomPasses {
         blooms: &[Bloom],
     ) -> Drawn {
         let mut drawn = Drawn::default();
-        let (flat, chained): (Vec<&Bloom>, Vec<&Bloom>) =
+        let (flat, mut chained): (Vec<&Bloom>, Vec<&Bloom>) =
             blooms.iter().partition(|b| b.size <= 0.0);
+        chained.truncate(CHAINED);
         for (i, b) in flat.iter().take(IN_PLACE).enumerate() {
             drawn.in_place[0][i] = threshold_units(b.threshold);
             drawn.in_place[1][i] = b.intensity;

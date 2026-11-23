@@ -60,6 +60,9 @@ impl Plan {
 #[derive(Debug)]
 struct Textures {
     frame_size: (u32, u32),
+    /// The frame `from_frame` reads: a resize makes a new one, which can
+    /// come back to this size between two frames that draw the Blur.
+    frame: wgpu::TextureView,
     factor: u32,
     copy: Target,
     across: Target,
@@ -67,6 +70,10 @@ struct Textures {
     from_copy: wgpu::BindGroup,
     from_across: wgpu::BindGroup,
 }
+
+/// The most passes the Blur runs in a frame: a copy, then across and
+/// down.
+pub(super) const SLOTS: u64 = 3;
 
 impl Textures {
     /// `slot`'s textures, made again unless they fit `frame` and `plan`.
@@ -77,12 +84,14 @@ impl Textures {
         (frame, frame_size): (&wgpu::TextureView, (u32, u32)),
         plan: &Plan,
     ) -> &'a Self {
-        let fresh = |t: &Self| t.frame_size == frame_size && t.factor == plan.factor;
+        let fresh =
+            |t: &Self| t.frame_size == frame_size && t.frame == *frame && t.factor == plan.factor;
         if !slot.as_ref().is_some_and(fresh) {
             let copy = Shared::target(device, "rook blur", plan.size);
             let across = Shared::target(device, "rook blur across", plan.size);
             *slot = Some(Self {
                 frame_size,
+                frame: frame.clone(),
                 factor: plan.factor,
                 from_frame: shared.group(device, frame, None),
                 from_copy: shared.group(device, &copy.view, None),

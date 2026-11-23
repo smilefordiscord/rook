@@ -50,12 +50,19 @@ fn sun_on_screen(camera: &Camera, aspect: f32, towards: Vec3) -> Option<[f32; 2]
 #[derive(Debug)]
 struct Textures {
     frame_size: (u32, u32),
+    /// The depth buffer `from_depth` reads: a resize makes a new one,
+    /// which can come back to this size between two frames with rays.
+    depth: wgpu::TextureView,
     size: (u32, u32),
     marched: Target,
     streaked: Target,
     from_depth: wgpu::BindGroup,
     from_marched: wgpu::BindGroup,
 }
+
+/// The passes the rays run in a frame that take parameters: the streak
+/// reads the march's slot.
+pub(super) const SLOTS: u64 = 1;
 
 impl Textures {
     fn at<'a>(
@@ -64,12 +71,13 @@ impl Textures {
         shared: &Shared,
         view: &PostView,
     ) -> &'a Self {
-        if !slot.as_ref().is_some_and(|t| t.frame_size == view.size) {
+        if !(slot.as_ref()).is_some_and(|t| t.frame_size == view.size && t.depth == *view.depth) {
             let size = (view.size.0.div_ceil(2), view.size.1.div_ceil(2));
             let marched = Shared::target(device, "rook sun rays", size);
             let streaked = Shared::target(device, "rook sun rays streaked", size);
             *slot = Some(Self {
                 frame_size: view.size,
+                depth: view.depth.clone(),
                 size,
                 from_depth: shared.depth_group(device, &shared.black, view.depth),
                 from_marched: shared.group(device, &marched.view, None),
