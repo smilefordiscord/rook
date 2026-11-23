@@ -27,6 +27,71 @@ measured twice.
      Clouds draw differently at Level21 than at Automatic (detail, steps
      through the haze, cloud shadows on the ground); how Atmosphere and
      the old fog combine when a place has both.
+   - *Design* (2026-11-23), one per part, in the order they land. Where
+     Studio's rule is in the install's shader pack (`shaders_glsl3.pack`:
+     `AdvSun`, `AdvStars`, `AdvSky`, `Sky`, `Stars` and the surface
+     shaders' fog), Rook takes its form; what the CPU feeds those shaders
+     isn't in the pack, so the constants are Approximations until Studio
+     captures settle them ([sky](../behavior/lighting/sky.md)).
+     - *The sun and moon*: engines draw celestial bodies as camera-facing
+       quads at infinity in the sky pass (Unity's procedural skybox sun,
+       Unreal's `SkyAtmosphere` disc, Godot's `sky` shader suns), not as
+       geometry in the world: they can't be occluded by distance, need no
+       depth and cost two quads. Studio's `AdvSun` draws a textured quad at
+       the far plane (z forced to 0) and blends it over the sky; Rook does
+       the same in its sky pass: two instances of one quad pipeline, each
+       a direction from the clock and latitude Rook already turns into the
+       sun's light (one owner, `sun_direction`), a size from
+       `SunAngularSize`/`MoonAngularSize` and its image from the image
+       table (or bound per draw without one). `SkyboxOrientation` turns
+       only the skybox (creator docs: celestial bodies don't turn): the
+       six faces' axes in the globals turn, and lookups into the
+       reflection cube turn the same way, as Studio's surface shaders turn
+       theirs (`SkyboxRotation`), so the cube is never rebuilt for it.
+     - *Stars and the night sky*: engines draw stars from a seeded point
+       set (Unity's and Godot's procedural skies hash a direction per
+       star; offline renderers bake a cube texture). A cube texture
+       costs memory and resolution; Studio's `AdvStars` draws points two
+       pixels across, so the count is its `StarCount`. Rook makes each
+       star's direction and brightness from a hash of its index in the
+       vertex shader: one instanced draw, no buffer, turned about the
+       sun's axis with the clock. The night gradient and horizon glow are
+       a term of the sky shader that fades in as the time of day's tint
+       fades out.
+     - *Atmosphere*: physically based engines march or precompute
+       scattering (Hillaire 2020's sky-atmosphere LUTs in Unreal's
+       `SkyAtmosphere`; Bruneton 2008), with fog as a separate height
+       fog (Unreal's `ExponentialHeightFog`). Roblox's model is smaller,
+       and its shaders show its form: the sky is mixed towards an
+       ambient-cube haze lit by the sky, plus a glare lobe around the sun
+       with an exponent per channel, by a transmittance
+       `exp2(a / (0.001 + y^b))` that falls to the horizon; surfaces keep
+       `exp2(z × distance)` of themselves and take the sky behind them,
+       read from the prefiltered reflection cube at a blur level of at
+       least `Offset`, in place of `FogColor` (so an Atmosphere replaces
+       Lighting's fog, whose properties Studio hides). Rook takes that
+       form rather than a scattering simulation: it is what Studio draws,
+       and it costs a few terms per pixel and one cube read where fog
+       already reads its color. One owner maps the six properties onto
+       the form's parameters (`rook-scene`), and the shaders read them
+       from the globals.
+     - *Clouds*: engines raymarch a 2D coverage map with 3D noise
+       (Guerrilla's Nubis in Horizon Zero Dawn; Unreal's volumetric
+       clouds), at reduced resolution with temporal reprojection; a
+       cheaper engine draws a scrolling 2D layer. Studio's own pack
+       shows the volumetric kind (`CloudsDist`, `CloudsWind`,
+       `CloudsReprojectFilter`, the install's `sky/clouds.dds`,
+       `cloudDetail3D.dds`). Rook will raymarch the same way at quarter
+       resolution with reprojection, wind advancing the coverage by
+       `GlobalWind`, the Clouds' properties read like the Sky's. It
+       lands after the three above.
+     - *Changes*: everything here is Lighting and its children, so it
+       flows from the change journal as the sky does: a property of
+       Lighting, a Sky or an Atmosphere marks the lighting changed, and
+       the scene reads the Lighting service again (a handful of
+       properties, never the place). A sun or moon image arriving marks it
+       too. Per frame: two quads, `StarCount` tiny quads, and a few terms
+       in the sky and fog; nothing scales with the place.
    - *Done when*: day, dusk and night captures of the Baseplate, with and
      without an Atmosphere and Clouds, match Studio at Automatic and at
      Level21 by the [Match Studio](README.md#match-studio) bar.
