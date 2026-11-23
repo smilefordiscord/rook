@@ -37,10 +37,6 @@ near ChorusSoundEffect Rate -1=-1 21=21
 Priority -5 true -5
 Priority 2.7 true 2
 Priority -2.7 true -2
-Priority 2.147e+09 true -2147483648
-Priority -2.147e+09 true -2147483648
-Priority 1e+12 true -2147483648
-Priority nan true -2147483648
 Priority string ok 3
 Priority bad string ok 
 Enabled number ok true
@@ -50,7 +46,6 @@ SideChain nil
 SideChain Sound ok true
 SideChain SoundGroup ok true
 SideChain Part error CompressorSoundEffect.SideChain must be Sound or SoundGroup
-SideChain string error Unable to assign property SideChain. Instance expected, got string
 SideChain nil ok nil
 SideChain destroyed true
 AudioFilter Frequency 2000 20 2.2e+04 2.2e+04 20 2.2e+04

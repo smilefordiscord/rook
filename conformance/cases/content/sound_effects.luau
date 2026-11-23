@@ -84,7 +84,8 @@ near("ChorusSoundEffect", "Rate", { -1, 21 })
 
 -- Priority and Enabled.
 local chorus = Instance.new("ChorusSoundEffect")
-for _, v in { -5, 2.7, -2.7, 2 ^ 31, -2 ^ 31 - 1, 1e12, 0 / 0 } do
+-- Past int32 and NaN: conformance case content/int_properties.
+for _, v in { -5, 2.7, -2.7 } do
 	local ok = pcall(function()
 		chorus.Priority = v
 	end)
@@ -123,9 +124,7 @@ end))
 log("SideChain Part", caught(function()
 	compressor.SideChain = Instance.new("Part")
 end))
-log("SideChain string", caught(function()
-	compressor.SideChain = "x"
-end))
+-- A string: conformance case content/int_properties.
 log("SideChain nil", caught(function()
 	compressor.SideChain = nil
 	return compressor.SideChain

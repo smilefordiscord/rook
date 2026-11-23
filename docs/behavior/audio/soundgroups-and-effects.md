@@ -117,7 +117,8 @@ or sounds is measured against Studio:
   or SoundGroup that ducks the compressor, isn't followed. It takes
   nothing else (Confirmed: a Part is "CompressorSoundEffect.SideChain
   must be Sound or SoundGroup", a string "Unable to assign property
-  SideChain. Instance expected, got string"), and still points at a Sound
+  SideChain. Instance expected, got string", conformance case
+  `content/int_properties`), and still points at a Sound
   that has been destroyed.
 - **FlangeSoundEffect** (Inference: FMOD's flange, whose controls,
   ranges and 40 ms span it has). One copy of the sound whose delay sweeps
@@ -136,7 +137,8 @@ back whatever was set, however far outside creator-docs' range: -1e9,
 before stays. A NaN saved in a file plays at the property's default
 (Inference). `Priority` is a 32-bit integer: a fraction is cut toward
 zero (2.7 is 2, -2.7 is -2), and NaN or anything outside the integer's
-range reads -2147483648 on either side; a string that reads as a number
+range reads -2147483648 on either side (conformance case
+`content/int_properties`); a string that reads as a number
 is taken. `Enabled` takes any value by truthiness (0 is true, nil
 false).
 
