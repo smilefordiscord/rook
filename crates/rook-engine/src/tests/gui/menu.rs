@@ -319,7 +319,11 @@ fn open_menu_shows_a_hidden_cursor() {
     assert!(matches!(look(&session), crate::CursorLook::Hidden));
 
     set(&session, "MouseIconEnabled", rook_types::Value::Bool(true));
-    set(&session, "MouseIconContent", rook_types::Value::ContentId(blank.into()));
+    set(
+        &session,
+        "MouseIconContent",
+        rook_types::Value::ContentId(blank.into()),
+    );
     assert!(matches!(look(&session), crate::CursorLook::Image(url) if url == blank));
     press(&mut session, index, "Escape");
     assert!(matches!(look(&session), crate::CursorLook::Image(url) if url != blank));
