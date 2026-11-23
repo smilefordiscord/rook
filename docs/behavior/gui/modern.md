@@ -4,8 +4,8 @@ Checked against Studio 0.744 on 2026-10-22.
 
 [M8](../../roadmap/m8-gui.md) step 7: UICorner, UIStroke, UIGradient,
 UIListLayout's flex and `Wraps` with UIFlexItem, UITableLayout,
-UIPageLayout and CanvasGroup. ViewportFrame and WorldModel are a later
-step.
+UIPageLayout, CanvasGroup and Path2D. ViewportFrame and WorldModel are a
+later step.
 
 Measured in Studio 0.744 on 2026-10-22 on Baseplate. Layouts and property
 reads are conformance cases (`gui/flex`, `gui/table_layout`,
@@ -177,3 +177,28 @@ UIListLayout's `HorizontalFlex` and `VerticalFlex` (whichever is along
   texture memory (`DFFlagCanvasGroupIndividualDrawWhenOOM`, off), so this
   looks like a fallback, not how players see it; why it fell back here
   isn't known.
+
+## Path2D
+
+Not measured in Studio but where marked: from the creator docs (Path2D,
+Path2DControlPoint and the 2D paths guide) as of 2026-11-22.
+
+- Scripts set its points with `SetControlPoints`, `InsertControlPoint`,
+  `UpdateControlPoint` and `RemoveControlPoint`, and read them with
+  `GetControlPoints` and `GetControlPoint`; indexes start at 1. Each of
+  the four setters fires `ControlPointChanged`; its other properties
+  don't.
+- Measured: `GetMaxControlPoints()` is 100. `SetControlPoints` with more
+  keeps the first 100 and raises `Path2D:SetControlPoints() only supports
+  100 control points.`; `InsertControlPoint` on a full path raises the
+  same with its own name. An index outside the points raises
+  `Path2D:GetControlPoint() at index 5 access out of bounds` (with the
+  method's name and the index), and anything but a Path2DControlPoint in
+  the array `Variant cast failed`.
+- Measured: `InsertControlPoint` on a path with no parent raises
+  `Attempting to use Path2D with invalid parent`. Rook inserts the point
+  (Approximation).
+- `Thickness` is kept within 0 to 100.
+- Files save the points in `PropertiesSerialize`, a binary blob whose
+  layout isn't documented; Rook doesn't read it yet, so a path saved in a
+  place starts with no points.

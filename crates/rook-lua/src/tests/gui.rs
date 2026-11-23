@@ -1,4 +1,6 @@
-//! GUI (docs/behavior/gui/): GUI objects and what the CoreScripts call.
+//! GUI (docs/behavior/gui/): GUI objects, Path2D and what the CoreScripts
+//! call.
 
 mod core_scripts;
 mod objects;
+mod paths;

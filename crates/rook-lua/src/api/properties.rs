@@ -268,6 +268,16 @@ pub(crate) fn set(
                 Value::Float32(v.clamp(0.0, 10.0) as f32),
             ))
         }
+        // Confirmed: creator-docs Path2D.Thickness, kept within 0 to 100.
+        ("Thickness", v) if w.dom.class_name(id) == "Path2D" => {
+            let v = v.as_number()?;
+            Some(set_named(
+                w,
+                id,
+                "Thickness",
+                Value::Float32(v.clamp(0.0, 100.0) as f32),
+            ))
+        }
         ("ClockTime", Value::Float32(h)) if w.dom.is_a(id, "Lighting") => {
             Some(set_lighting_hours(w, id, f64::from(*h)))
         }

@@ -1,7 +1,8 @@
-//! GUI's methods: GuiService and PlayerGui, StyleRules, text sizes, TextBox focus and TextChatService.
+//! GUI's methods: GuiService and PlayerGui, StyleRules, text sizes, TextBox focus, Path2D and TextChatService.
 
 use crate::api::methods::{RawMethod, first, mutate, ret_instances, true_};
 
+mod path;
 pub(crate) mod screen;
 mod styles;
 mod text;
@@ -14,6 +15,7 @@ pub(super) fn native(owner: &str, name: &str) -> Option<RawMethod> {
             screen::native,
             textbox::native,
             text::native,
+            path::native,
             styles::native,
             text_chat::native,
         ],

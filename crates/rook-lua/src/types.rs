@@ -20,7 +20,7 @@ pub(crate) use color::{LBrickColor, LColor3};
 pub(crate) use content::LContent;
 pub(crate) use format::fmt_f32;
 pub(crate) use gui::font::LFont;
-pub(crate) use gui::udim::{LUDim, LUDim2};
+pub(crate) use gui::udim::{LPath2DControlPoint, LUDim, LUDim2};
 pub(crate) use opaque::{LAxes, LFaces, LOther, LPhysicalProperties};
 pub(crate) use sequences::{LColorSequence, LNumberRange, LNumberSequence};
 pub(crate) use space::cframe::LCFrame;
