@@ -463,11 +463,24 @@ impl ServerHost {
                 rt.deliver_tool_activation(Some(player), activation);
             }
             ToServer::Prompt(action) => rt.deliver_prompt_action(player, action),
-            // A client may move only its own player.
-            ToServer::Teleport(request) => rt.request_teleport(TeleportRequest {
-                players: vec![player],
-                ..request
-            }),
+            // A client may move only its own player, and only as the
+            // legacy methods it can call do: to a public or a running
+            // server, as its own request, with no call of the server's
+            // waiting. The rest is the server's to say.
+            ToServer::Teleport(request) => match request.routing {
+                Routing::Public | Routing::Instance(_) => {
+                    rt.request_teleport(TeleportRequest {
+                        players: vec![player],
+                        call: None,
+                        from_server: false,
+                        ..request
+                    });
+                }
+                _ => tracing::warn!(
+                    "a client asked to teleport by {:?}, which only a server may",
+                    request.routing
+                ),
+            },
             // Inference: a client going away is an Unknown exit, though
             // its own script kicked it.
             ToServer::Leave => self.leave(index, rook_lua::ExitReason::Unknown),

@@ -498,3 +498,42 @@ fn a_spawn_name_picks_the_arriving_character_s_spawn() {
     let (_, root) = character(arena, "Builderman");
     assert!((position(arena, root).x - 100.0).abs() < 1.0);
 }
+
+/// What a client sends to teleport is taken only as its own legacy
+/// methods could make it: its own player, a public or running server, no
+/// call of the server's to resume and not as the server's own request.
+/// A reserved server's route is the server's alone to ask for.
+#[test]
+fn a_client_teleports_only_itself_as_a_client_may() {
+    use crate::session::host::ToServer;
+    use rook_lua::teleport::{Request, Routing, TeleportRequest};
+
+    let mut server = Server::new(&Options::default()).unwrap();
+    server.start();
+    let mut session = Session::new(server, Options::default());
+    let index = session.join("Builderman", 156).unwrap();
+    session.run_for(0.1);
+    let forged = |routing| {
+        ToServer::Teleport(TeleportRequest {
+            players: Vec::new(),
+            place_id: ARENA,
+            routing,
+            data: None,
+            spawn_name: String::new(),
+            call: Some(9),
+            from_server: true,
+        })
+    };
+    let host = session.host_mut();
+    host.deliver(index, forged(Routing::Reserved("x".into())));
+    host.deliver(index, forged(Routing::Instance("job".into())));
+    let taken = session.server().runtime().take_teleport_requests();
+    let [Request::Teleport(request)] = taken.as_slice() else {
+        panic!("{taken:?}");
+    };
+    assert_eq!(request.routing, Routing::Instance("job".into()));
+    assert_eq!(
+        (request.players.len(), request.call, request.from_server),
+        (1, None, false)
+    );
+}

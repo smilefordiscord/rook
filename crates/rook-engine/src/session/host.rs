@@ -21,7 +21,7 @@ pub use teleport::{Carried, Departure, Plan};
 use rustc_hash::FxHashMap;
 
 use rook_dom::InstanceId;
-use rook_lua::teleport::{Failure, JoinData, TeleportRequest, TeleportState};
+use rook_lua::teleport::{Failure, JoinData, Routing, TeleportRequest, TeleportState};
 use rook_lua::{EffectCall, NetValue, RemoteKind, RemoteMessage, ToolActivation, ToolMove};
 use rook_net::{Sink, Snapshot, Source, Update};
 use rook_types::Value;
