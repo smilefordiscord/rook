@@ -1,4 +1,4 @@
-# Luau's libraries
+# Luau libraries
 
 Checked against Studio 0.744 on 2026-11-23, against the creator docs and
 Luau's own reference only: nothing here is measured in Studio yet.

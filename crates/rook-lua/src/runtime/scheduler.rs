@@ -292,8 +292,8 @@ impl<T> Scheduler<T> {
     }
 
     /// The work for a parallel phase, grouped by Actor in the order each
-    /// Actor's first job came. One Actor's work always runs in order, on
-    /// one worker; different Actors' may run at the same time.
+    /// Actor's first job came. One Actor's work always runs in order, as
+    /// one group, which no other Actor's work interleaves with.
     pub fn take_parallel(&mut self) -> Vec<(InstanceId, Vec<T>)> {
         let mut groups: Vec<(InstanceId, Vec<T>)> = Vec::new();
         for (actor, job) in self.parallel.drain(..) {
