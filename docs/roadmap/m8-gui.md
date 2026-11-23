@@ -59,10 +59,31 @@ health bars and leaderboards are GUI.
        translucent line, so a translucent path draws opaque into a group
        texture, faded as it's laid over, as Skia's `saveLayer` does for
        group opacity; the CanvasGroup path already does that.
+     - The points are the path's own state, kept where the engine keeps
+       an object's state, as established engines keep a curve's points:
+       Unreal's spline component holds its curve as a reflected
+       property, Godot's Path2D its `Curve2D` resource with the points in
+       a packed array, Unity's LineRenderer its positions as a
+       serialized field, so copying, saving and networking the object
+       carry them with no code of the curve's own. Roblox's is
+       `PropertiesSerialize`, a hidden BinaryString that saves and
+       replicates, so the points are that property's value in the DOM:
+       `Clone`, saving, replication (`rook-net`'s Source and Sink) and
+       the change journal carry them as they carry any property, and the
+       GUI reads them from the DOM when the journal says they changed,
+       as it reads `Color3`, rather than keeping a copy of its own.
+       Roblox's layout of the blob isn't documented, so Rook encodes the
+       points its own way (a tag, a count, and each point's three
+       UDim2s), with no points as the class default; one codec
+       (`rook-gui`'s `path/codec.rs`) reads and writes it, so Roblox's
+       layout can replace it there alone once a place Studio saved shows
+       it. Decoding is a copy of at most 100 points, made when a path
+       draws again or a script asks, so nothing is cached beside the
+       DOM.
      - Changes flow as other GUI's do: a path is an entry in its
        ScreenGui's stack, among its parent's children by `ZIndex`, and
        holds its parent's box, so its piece is drawn again only when its
-       points (set through `Gui::set_path_points`), its look (`Color3`,
+       points (its `PropertiesSerialize`), its look (`Color3`,
        `Thickness`, `Closed`, a UIGradient under it) or its parent's
        place change; `Visible` restacks the parent's run and `ZIndex`
        its tree, as a GUI object's do. A world canvas holding a path

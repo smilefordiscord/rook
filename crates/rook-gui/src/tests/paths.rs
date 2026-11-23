@@ -7,7 +7,7 @@ use std::sync::Arc;
 use rook_types::{Color3, GuiQuad, Paint};
 
 use super::*;
-use crate::PathPoint;
+use crate::{PathPoint, path_points, set_path_points};
 
 fn point(xs: f32, xo: i32, ys: f32, yo: i32) -> PathPoint {
     PathPoint {
@@ -15,6 +15,10 @@ fn point(xs: f32, xo: i32, ys: f32, yo: i32) -> PathPoint {
         left: UDim2::default(),
         right: UDim2::default(),
     }
+}
+
+fn set_points(dom: &mut Dom, p: InstanceId, points: &[PathPoint]) {
+    set_path_points(dom, p, points).unwrap();
 }
 
 /// A red Path2D in `parent`, `thickness` wide.
@@ -52,7 +56,11 @@ fn a_straight_path_is_one_round_capped_line() {
     let (mut dom, frame) = boxed();
     let p = path(&mut dom, frame, 4.0);
     let mut gui = laid_out(&mut dom);
-    gui.set_path_points(p, vec![point(0.0, 0, 0.5, 0), point(0.25, 0, 0.5, 0)]);
+    set_points(
+        &mut dom,
+        p,
+        &[point(0.0, 0, 0.5, 0), point(0.25, 0, 0.5, 0)],
+    );
     gui.sync(&mut dom);
     let quads = drawn(&mut gui, &dom);
     let lines = lines(&quads);
@@ -83,7 +91,7 @@ fn a_curve_is_flattened_close_to_it() {
         left: UDim2::from_offset(-100, -150),
         ..point(0.0, 300, 0.0, 200)
     };
-    gui.set_path_points(p, vec![start, end]);
+    set_points(&mut dom, p, &[start, end]);
     gui.sync(&mut dom);
     let quads = drawn(&mut gui, &dom);
     let lines: Vec<(Vec2, Vec2)> = lines(&quads).into_iter().map(ends).collect();
@@ -133,7 +141,7 @@ fn a_path_stacks_among_its_siblings() {
     let p = path(&mut dom, frame, 3.0);
     set(&mut dom, p, "ZIndex", Value::Int32(2));
     let mut gui = laid_out(&mut dom);
-    gui.set_path_points(p, vec![point(0.0, 0, 0.5, 0), point(1.0, 0, 0.5, 0)]);
+    set_points(&mut dom, p, &[point(0.0, 0, 0.5, 0), point(1.0, 0, 0.5, 0)]);
     gui.sync(&mut dom);
     // The tags and the path, which have no green; the frame's background
     // and border have.
@@ -158,6 +166,25 @@ fn a_path_stacks_among_its_siblings() {
     assert!(!hit.contains(&p) && hit.len() == 3, "{hit:?}");
 }
 
+/// The points are the path's property: a clone draws the same curve,
+/// and a change to one path's points is drawn from the journal alone.
+#[test]
+fn a_clone_draws_its_points() {
+    let (mut dom, frame) = boxed();
+    let p = path(&mut dom, frame, 2.0);
+    set_points(&mut dom, p, &[point(0.0, 0, 0.5, 0), point(1.0, 0, 0.5, 0)]);
+    let mut gui = laid_out(&mut dom);
+    assert_eq!(lines(&drawn(&mut gui, &dom)).len(), 1);
+    let copy = dom.clone_instance(p).unwrap();
+    assert_eq!(path_points(&dom, copy), path_points(&dom, p));
+    dom.set_parent(copy, Some(frame)).unwrap();
+    gui.sync(&mut dom);
+    assert_eq!(lines(&drawn(&mut gui, &dom)).len(), 2);
+    set_points(&mut dom, copy, &[]);
+    gui.sync(&mut dom);
+    assert_eq!(lines(&drawn(&mut gui, &dom)).len(), 1);
+}
+
 /// Its points, its look and its parent's place each draw the path's piece
 /// again and no other; the result is what a fresh drawing draws.
 #[test]
@@ -166,11 +193,11 @@ fn changes_draw_again_only_the_paths_piece() {
     let p = path(&mut dom, frame, 2.0);
     let points = vec![point(0.0, 0, 0.0, 0), point(1.0, 0, 1.0, 0)];
     let mut gui = laid_out(&mut dom);
-    gui.set_path_points(p, points.clone());
+    set_points(&mut dom, p, &points);
     gui.sync(&mut dom);
     let mut before = gui.draw(&dom);
-    let mut step = |dom: &mut Dom, change: &dyn Fn(&mut Dom, &mut Gui)| {
-        change(dom, &mut gui);
+    let mut step = |dom: &mut Dom, change: &dyn Fn(&mut Dom)| {
+        change(dom);
         gui.sync(dom);
         let now = gui.draw(dom);
         let kept: Vec<bool> = (now.iter())
@@ -178,25 +205,24 @@ fn changes_draw_again_only_the_paths_piece() {
             .collect();
         before = now;
         let mut fresh = laid_out(dom);
-        fresh.set_path_points(p, gui.path_points(p).to_vec());
         fresh.sync(dom);
         assert_eq!(drawn(&mut gui, dom), drawn(&mut fresh, dom));
         kept
     };
     let bent = vec![points[0], point(0.5, 0, 0.0, 0), points[1]];
-    let moved = step(&mut dom, &|_, gui| gui.set_path_points(p, bent.clone()));
+    let moved = step(&mut dom, &|dom| set_points(dom, p, &bent));
     assert_eq!(moved, [true, false]);
     let blue = Value::Color3(Color3::new(0.0, 0.0, 1.0));
-    let recolored = step(&mut dom, &|dom, _| set(dom, p, "Color3", blue.clone()));
+    let recolored = step(&mut dom, &|dom| set(dom, p, "Color3", blue.clone()));
     assert_eq!(recolored, [true, false]);
-    let thick = step(&mut dom, &|dom, _| {
+    let thick = step(&mut dom, &|dom| {
         set(dom, p, "Thickness", Value::Float32(6.0))
     });
     assert_eq!(thick, [true, false]);
     let size = udim2(0.0, 200, 0.0, 100);
-    let resized = step(&mut dom, &|dom, _| set(dom, frame, "Size", size.clone()));
+    let resized = step(&mut dom, &|dom| set(dom, frame, "Size", size.clone()));
     assert_eq!(resized, [false, false]);
-    let closed = step(&mut dom, &|dom, _| set(dom, p, "Closed", Value::Bool(true)));
+    let closed = step(&mut dom, &|dom| set(dom, p, "Closed", Value::Bool(true)));
     assert_eq!(closed, [true, false]);
 }
 
@@ -213,7 +239,7 @@ fn a_translucent_path_is_drawn_as_one() {
         point(0.5, 0, 0.5, 0),
         point(1.0, 0, 0.0, 0),
     ];
-    gui.set_path_points(p, points);
+    set_points(&mut dom, p, &points);
     gui.sync(&mut dom);
     let quads = drawn(&mut gui, &dom);
     let group = quads.last().unwrap();
@@ -234,11 +260,11 @@ fn closing_joins_the_ends() {
     set(&mut dom, p, "Closed", Value::Bool(true));
     let mut gui = laid_out(&mut dom);
     let two = vec![point(0.0, 0, 0.0, 0), point(1.0, 0, 0.0, 0)];
-    gui.set_path_points(p, two.clone());
+    set_points(&mut dom, p, &two);
     gui.sync(&mut dom);
     assert_eq!(lines(&drawn(&mut gui, &dom)).len(), 1);
     let three = [two, vec![point(0.5, 0, 1.0, 0)]].concat();
-    gui.set_path_points(p, three);
+    set_points(&mut dom, p, &three);
     gui.sync(&mut dom);
     assert_eq!(lines(&drawn(&mut gui, &dom)).len(), 3);
 }
@@ -256,7 +282,7 @@ fn queries_read_the_curve_where_it_is_laid_out() {
         point(0.25, 0, 0.0, 0),
         point(0.25, 0, 1.0, 0),
     ];
-    gui.set_path_points(p, points);
+    set_points(&mut dom, p, &points);
     let curve = gui.path_curve(&mut dom, p);
     assert_eq!(curve.segments(), 2);
     assert!((curve.length() - 400.0).abs() < 1e-2);
@@ -279,7 +305,7 @@ fn queries_read_the_curve_where_it_is_laid_out() {
     let (lo, hi) = curve.bounds(2.0).unwrap();
     assert!(lo.abs_diff_eq(Vec2::new(8.0, 18.0), 1e-3), "{lo}");
     assert!(hi.abs_diff_eq(Vec2::new(112.0, 322.0), 1e-3), "{hi}");
-    gui.set_path_points(p, vec![point(0.0, 0, 0.0, 0)]);
+    set_points(&mut dom, p, &[point(0.0, 0, 0.0, 0)]);
     let single = gui.path_curve(&mut dom, p);
     assert_eq!((single.position(0.5), single.length()), (None, 0.0));
 }
@@ -296,7 +322,7 @@ fn points_far_away_or_nowhere_stay_bounded() {
         let mut gui = laid_out(&mut dom);
         let mut end = point(0.25, 0, 0.5, 0);
         end.left = UDim2::new(far, 0, 0.0, 0);
-        gui.set_path_points(p, vec![point(0.0, 0, 0.5, 0), end]);
+        set_points(&mut dom, p, &[point(0.0, 0, 0.5, 0), end]);
         gui.sync(&mut dom);
         let quads = drawn(&mut gui, &dom);
         assert!(lines(&quads).len() < 4096, "{far}: {}", quads.len());

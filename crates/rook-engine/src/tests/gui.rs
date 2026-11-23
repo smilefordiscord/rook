@@ -2,6 +2,7 @@
 //! prompts.
 
 mod legacy_chat;
+mod modern;
 mod objects;
 mod prompts;
 mod text_chat;

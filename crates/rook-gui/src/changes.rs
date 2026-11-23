@@ -115,6 +115,8 @@ impl Watch {
                 ("UIStroke", "Thickness"),
                 ("Path2D", "Closed"),
                 ("Path2D", "Color3"),
+                // Its control points.
+                ("Path2D", "PropertiesSerialize"),
                 ("Path2D", "Thickness"),
                 ("Path2D", "Transparency"),
             ]

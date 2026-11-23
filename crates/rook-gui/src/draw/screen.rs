@@ -14,7 +14,6 @@ use super::{Draw, Focus, Text};
 use crate::images::Images;
 use crate::layout::{GUI_INSET, Layout, top_of};
 use crate::order::{self, Clip, Stacked};
-use crate::path::Paths;
 
 #[derive(Debug)]
 struct Collector {
@@ -125,7 +124,7 @@ impl Screen {
         &mut self,
         dom: &Dom,
         layout: &Layout,
-        (text, images, paths): (&mut Text<'_>, &mut Images, &Paths),
+        (text, images): (&mut Text<'_>, &mut Images),
         focus: Option<Focus>,
         messages: &FxHashSet<InstanceId>,
     ) -> Arc<[Arc<[GuiQuad]>]> {
@@ -148,7 +147,6 @@ impl Screen {
             layout,
             text,
             images,
-            paths,
             out: &mut Vec::new(),
             world: false,
             focus,

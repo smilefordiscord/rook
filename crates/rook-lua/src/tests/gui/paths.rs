@@ -101,3 +101,21 @@ fn path2d_curve_queries() {
         ],
     );
 }
+
+/// The points are the path's `PropertiesSerialize`, which `Clone` copies;
+/// a clone's points are its own after that.
+#[test]
+fn path2d_clone_keeps_its_points() {
+    expect(
+        r#"
+        local p = Instance.new("Path2D")
+        p:SetControlPoints({ Path2DControlPoint.new(UDim2.fromOffset(1, 2)), Path2DControlPoint.new(UDim2.fromScale(1, 1)) })
+        local c = p:Clone()
+        print(#c:GetControlPoints(), c:GetControlPoint(1).Position, c:GetControlPoint(2).Position)
+        c:RemoveControlPoint(1)
+        print(#c:GetControlPoints(), #p:GetControlPoints())
+        "#,
+        0,
+        &["2 {0, 1}, {0, 2} {1, 0}, {1, 0}", "1 2"],
+    );
+}

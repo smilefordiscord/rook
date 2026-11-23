@@ -82,7 +82,7 @@ impl Gui {
             &self.layout,
             &missing,
             &mut text,
-            (&mut self.images, &self.paths),
+            &mut self.images,
             focus,
         );
         let drawn: Vec<Arc<WorldCanvas>> = drawn.into_iter().map(Arc::new).collect();

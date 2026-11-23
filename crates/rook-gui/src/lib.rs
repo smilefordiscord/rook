@@ -29,7 +29,7 @@ pub use images::GuiImage;
 pub use input::hits::WorldHit;
 pub use input::scrolling::BarDrag;
 pub use layout::GUI_INSET;
-pub use path::{PathCurve, PathPoint};
+pub use path::{PathCurve, PathPoint, path_points, set_path_points};
 
 use changes::Watch;
 use layout::{Layout, Turning};
@@ -172,8 +172,6 @@ pub struct Gui {
     fonts: text::Fonts,
     glyphs: text::Glyphs,
     images: images::Images,
-    /// Each Path2D's control points.
-    paths: path::Paths,
 }
 
 impl Default for Gui {
@@ -216,7 +214,6 @@ impl Default for Gui {
             fonts: text::Fonts::default(),
             glyphs: text::Glyphs::default(),
             images: images::Images::default(),
-            paths: FxHashMap::default(),
         }
     }
 }
@@ -315,7 +312,6 @@ impl Gui {
         self.world_rehung.remove(&id);
         self.overheads.forget(id);
         self.tags.remove(&id);
-        self.paths.remove(&id);
     }
 
     /// The TextBox keys type into, which shows its caret and selection:

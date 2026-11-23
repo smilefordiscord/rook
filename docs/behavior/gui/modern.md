@@ -24,9 +24,10 @@ gradients in `rook-render`'s `shaders/gui/gui_paint.wgsl`, ramps in
 `renderer/gui/ramps.rs`, groups' textures in `renderer/gui/groups.rs`;
 layouts in `rook-gui`'s `layout/list.rs`, `layout/table.rs` and
 `layout/page.rs`; UIPageLayout's methods in `rook-lua`'s
-`api/luau/page_layout.luau`. Path2D's curve in `rook-gui`'s `path.rs`
-and `path/curve.rs`, drawn in `draw/objects/path.rs`; its methods in
-`rook-lua`'s `api/methods/gui/path.rs`.
+`api/luau/page_layout.luau`. Path2D's points in `rook-gui`'s `path.rs`
+(their bytes in `path/codec.rs`), its curve in `path/curve.rs`, drawn in
+`draw/objects/path.rs`; its methods in `rook-lua`'s
+`api/methods/gui/path.rs`.
 
 ## UICorner
 
@@ -213,9 +214,16 @@ draws is still to be compared, under [Open questions](#open-questions).
   the array `Variant cast failed`.
 - Inference: `InsertControlPoint` on a path with no parent raises
   `Attempting to use Path2D with invalid parent`. Rook inserts the point.
-- Files save the points in `PropertiesSerialize`, a binary blob whose
-  layout isn't documented; Rook doesn't read it, so a path saved in a
-  place starts with no points.
+- The points are a property of the path, as in Roblox: the hidden
+  `PropertiesSerialize`, a binary blob scripts can't read or set, which
+  files save and which replicates. So `Clone` copies a path's points, a
+  path the server sets up reaches clients with its points, and the
+  server's later changes follow it. Roblox's layout of the blob isn't
+  documented, so Rook writes a layout of its own: Studio can't read the
+  points of a path Rook saved, and a path Studio saved with points
+  starts with none in Rook. Its default, 4 zero bytes, is no points in
+  both. Inference: each change to the points fires `Changed` with
+  `PropertiesSerialize`, as a change to any property does in Rook.
 
 ### Queries
 
@@ -277,4 +285,5 @@ To check side by side in Studio:
 - what a 0 `Thickness` or a single point draws, and whether a path takes
   input;
 - the layout of `PropertiesSerialize`, from a place Studio saves with a
-  path in it.
+  path in it, and whether changing the points fires `Changed`, and
+  `ControlPointChanged` on a client when the server changes them.

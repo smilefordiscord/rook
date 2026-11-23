@@ -20,7 +20,7 @@ use rook_types::{GuiGradient, GuiGroup, GuiQuad, GuiShape, Paint};
 
 use crate::draw::modifiers::gradient;
 use crate::layout::Placed;
-use crate::path::{PathCurve, PathPoint};
+use crate::path::{PathCurve, path_points};
 
 /// How far, in pixels as drawn, the drawn line may stray from the curve:
 /// Skia's tessellation tolerance on the screen; finer on a world canvas,
@@ -36,12 +36,12 @@ const WORLD_TOLERANCE: f32 = 1.0 / 16.0;
 /// [`TOLERANCE`], which only one far bigger than the screen can be.
 const MAX_SPAN: f32 = (1 << 20) as f32;
 
-/// The path `id` with `points` in `frame` (its parent's box), clipped to
-/// `clip`.
+/// The path `id` with its points in `frame` (its parent's box), clipped
+/// to `clip`.
 pub(in crate::draw) fn emit(
     dom: &Dom,
     id: InstanceId,
-    (points, frame): (&[PathPoint], Placed),
+    frame: Placed,
     clip: [f32; 4],
     world: bool,
     out: &mut Vec<GuiQuad>,
@@ -55,11 +55,15 @@ pub(in crate::draw) fn emit(
         * frame.scale;
     // Inference: files save a `Transparency`, which scripts can't set.
     let alpha = 1.0 - dom.float_property(id, "Transparency").unwrap_or(0.0);
-    if width <= 0.0 || alpha <= 0.0 || points.len() < 2 {
+    if width <= 0.0 || alpha <= 0.0 {
+        return;
+    }
+    let points = path_points(dom, id);
+    if points.len() < 2 {
         return;
     }
     let closed = dom.bool_property(id, "Closed") == Some(true);
-    let curve = PathCurve::new(points, closed, frame);
+    let curve = PathCurve::new(&points, closed, frame);
     if !curve.is_finite() {
         return;
     }

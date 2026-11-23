@@ -1,15 +1,16 @@
 //! Path2D: a GUI path of cubic Béziers through control points placed in
-//! its parent's box (docs/behavior/gui/modern.md#path2d). Scripts set the
-//! points with Path2D's methods; they are kept here, beside the layout
-//! they're placed by, not in the DOM, where Roblox's only property for
-//! them is a binary blob of its own (`PropertiesSerialize`). The curve
-//! they make is [`PathCurve`]; drawing it is `draw/objects/path.rs`.
+//! its parent's box (docs/behavior/gui/modern.md#path2d). Its points are
+//! a property like any other, `PropertiesSerialize`, which Roblox keeps
+//! them in: `Clone`, saving and replication carry them, and a change to
+//! them reaches the GUI through the change journal, as a change to its
+//! `Color3` does. Their bytes are read and written only by [`codec`]. The
+//! curve they make is [`PathCurve`]; drawing it is `draw/objects/path.rs`.
 
+mod codec;
 mod curve;
 
-use rook_dom::{Dom, InstanceId};
-use rook_types::UDim2;
-use rustc_hash::FxHashMap;
+use rook_dom::{Dom, DomError, InstanceId};
+use rook_types::{UDim2, Value};
 
 use crate::Gui;
 use crate::layout::{Placed, gui_parent};
@@ -25,27 +26,41 @@ pub struct PathPoint {
     pub right: UDim2,
 }
 
-/// Each Path2D's control points.
-pub(crate) type Paths = FxHashMap<InstanceId, Vec<PathPoint>>;
+/// The property a Path2D keeps its points in.
+const POINTS: &str = "PropertiesSerialize";
+
+/// Path2D `id`'s control points; none until a script sets them, or when
+/// they're saved in Roblox's own layout, which is logged.
+// TODO: read the points Studio saves in `PropertiesSerialize`, in
+// `codec`, once a place Studio saved with a Path2D in it shows that
+// blob's layout.
+pub fn path_points(dom: &Dom, id: InstanceId) -> Vec<PathPoint> {
+    let decoded = dom.read_by_name(id, POINTS, |v| match v {
+        Value::BinaryString(b) => Some(codec::decode(b.as_ref())),
+        _ => None,
+    });
+    match decoded {
+        Some(Ok(points)) => points,
+        Some(Err(e)) => {
+            tracing::debug!("Path2D {} has no points Rook reads: {e}", dom.full_name(id));
+            Vec::new()
+        }
+        None => Vec::new(),
+    }
+}
+
+/// Make `points` Path2D `id`'s: its `PropertiesSerialize` changes, which
+/// draws it again and replicates.
+pub fn set_path_points(
+    dom: &mut Dom,
+    id: InstanceId,
+    points: &[PathPoint],
+) -> Result<(), DomError> {
+    let bytes = codec::encode(points);
+    dom.set_property_by_name(id, POINTS, Value::BinaryString(bytes.into()))
+}
 
 impl Gui {
-    /// A Path2D's control points; none until a script sets them.
-    // TODO: read the points a file saves in `PropertiesSerialize` once a
-    // place Studio saved with a Path2D in it shows that blob's layout.
-    pub fn path_points(&self, id: InstanceId) -> &[PathPoint] {
-        self.paths.get(&id).map_or(&[], Vec::as_slice)
-    }
-
-    /// Set a Path2D's control points; it draws again.
-    pub fn set_path_points(&mut self, id: InstanceId, points: Vec<PathPoint>) {
-        if points.is_empty() {
-            self.paths.remove(&id);
-        } else {
-            self.paths.insert(id, points);
-        }
-        self.restyled.insert(id);
-    }
-
     /// Path2D `id`'s curve where its parent is laid out now, laying the
     /// parent's tree out first if it changed. Confirmed (creator-docs 2D
     /// paths): points are placed in the path's parent, not the screen.
@@ -61,6 +76,6 @@ impl Gui {
             None => Placed::NOWHERE,
         };
         let closed = dom.bool_property(id, "Closed") == Some(true);
-        PathCurve::new(self.path_points(id), closed, frame)
+        PathCurve::new(&path_points(dom, id), closed, frame)
     }
 }

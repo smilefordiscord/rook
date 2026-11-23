@@ -1,6 +1,6 @@
 //! Path2D's methods (docs/behavior/gui/modern.md#path2d): its control
-//! points, which live in the GUI ([`rook_gui::Gui::path_points`]), and
-//! where its curve runs as laid out now ([`rook_gui::PathCurve`]). The cap
+//! points, kept in its `PropertiesSerialize` ([`rook_gui::path_points`]),
+//! and where its curve runs as laid out now ([`rook_gui::PathCurve`]). The cap
 //! is creator-docs'; the setters' errors are Inference.
 
 use mlua::{Lua, Value as LuaValue};
@@ -64,14 +64,15 @@ fn from_point(p: &PathPoint) -> LPath2DControlPoint {
 }
 
 fn points(lua: &Lua, this: InstanceId) -> Vec<PathPoint> {
-    with_world(lua, |w| w.gui.path_points(this).to_vec())
+    with_world(lua, |w| rook_gui::path_points(&w.dom, this))
 }
 
 /// Keep `points` as the path's and fire `ControlPointChanged`
 /// (Confirmed: creator-docs, for each of the four setters).
-fn store(lua: &Lua, this: InstanceId, points: Vec<PathPoint>) {
-    with_world(lua, |w| w.gui.set_path_points(this, points));
+fn store(lua: &Lua, this: InstanceId, points: &[PathPoint]) -> ApiResult<()> {
+    with_world(lua, |w| rook_gui::set_path_points(&mut w.dom, this, points))?;
     fire(lua, &SignalKey::event(this, "ControlPointChanged"), &[]);
+    Ok(())
 }
 
 /// Inference: `Path2D:GetControlPoint() at index 5 access out of bounds`.
@@ -123,7 +124,7 @@ fn set_points(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> {
     }
     let over = out.len() > MAX_POINTS;
     out.truncate(MAX_POINTS);
-    store(lua, this, out);
+    store(lua, this, &out)?;
     if over {
         return Err(too_many("SetControlPoints"));
     }
@@ -146,7 +147,7 @@ fn insert_point(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> {
         return Err(too_many("InsertControlPoint"));
     }
     list.insert(i, to_point(&point));
-    store(lua, this, list);
+    store(lua, this, &list)?;
     Outcome::ret(lua, ())
 }
 
@@ -154,7 +155,7 @@ fn remove_point(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> {
     let mut list = points(lua, this);
     let i = index(a, "RemoveControlPoint", list.len())?;
     list.remove(i);
-    store(lua, this, list);
+    store(lua, this, &list)?;
     Outcome::ret(lua, ())
 }
 
@@ -163,7 +164,7 @@ fn update_point(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> {
     let i = index(a, "UpdateControlPoint", list.len())?;
     let point = a.userdata::<LPath2DControlPoint>(1, "Path2DControlPoint")?;
     list[i] = to_point(&point);
-    store(lua, this, list);
+    store(lua, this, &list)?;
     Outcome::ret(lua, ())
 }
 
