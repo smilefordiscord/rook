@@ -43,15 +43,14 @@ struct BloomPass {
 
 /// The threshold in light units for `BloomEffect.Threshold`, which the
 /// creator docs put at 1 for only pure white and 0 for every color: the
-/// frame's encoded value (the light's square root over the frame's 4
-/// units) at which light blooms (Inference: Studio's in-place Neon glow
-/// thresholds the encoded value; its bloom chain the light).
+/// light itself, so 1 is about what a white face in full sun holds
+/// (Inference from a Studio 0.748 screenshot at Threshold 0.8: a white
+/// part of about 0.95 units glows strongly and the sky beside it, about
+/// 0.75, not at all; the frame's encoded value, 4 × 0.8² = 2.56 units,
+/// would have bloomed neither).
 fn threshold_units(threshold: f32) -> f32 {
-    FRAME_UNITS * threshold.max(0.0).powi(2)
+    threshold.max(0.0)
 }
-
-/// The light the frame holds at its brightest (`shaders/tone.wgsl`).
-const FRAME_UNITS: f32 = 4.0;
 
 /// How many copies a Bloom of `size` (`BloomEffect.Size`, pixels) makes,
 /// so its glow reaches about `size` pixels (Approximation: how Studio's
@@ -269,13 +268,13 @@ impl BloomPasses {
 mod tests {
     use super::*;
 
-    /// Threshold 1 keeps only light the frame holds at its brightest, 0
-    /// keeps all of it.
+    /// Threshold 1 keeps only light over a white face in full sun, 0
+    /// keeps all of it; below 0 is as 0.
     #[test]
-    fn thresholds_follow_the_frames_values() {
-        assert_eq!(threshold_units(1.0), FRAME_UNITS);
+    fn thresholds_are_light_units() {
+        assert_eq!(threshold_units(1.0), 1.0);
         assert_eq!(threshold_units(0.0), 0.0);
-        assert_eq!(threshold_units(0.5), 1.0);
+        assert_eq!(threshold_units(-1.0), 0.0);
     }
 
     /// The default Size (24 pixels) makes four copies, reaching about 32

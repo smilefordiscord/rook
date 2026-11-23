@@ -2,7 +2,9 @@
 
 Checked against Studio 0.748 on 2026-11-23. Only the
 [properties](#their-properties) as scripts see them are measured in
-Studio; the rest is from its shaders and the creator docs.
+Studio, and the look compared with Studio screenshots
+([against Studio](#against-studio)); the rest is from its shaders and
+the creator docs.
 
 The PostEffects (ColorCorrectionEffect, BlurEffect, BloomEffect,
 SunRaysEffect, DepthOfFieldEffect and ColorGradingEffect) change the
@@ -130,11 +132,11 @@ from the smallest up, each copy's light weighted 1 / *n* (*n* copies;
 Approximation). What the properties become is Inference:
 
 - *K* is `Intensity`.
-- *T* is the light the frame holds where its encoded value (the light's
-  square root, over the frame's 4 units) equals `Threshold`: 4 ×
-  Threshold² units, so 1 blooms only the brightest the frame holds and 0
-  everything. Studio's in-place glow (`ImageProcessLQNeonBloomFS`)
-  thresholds the encoded value too.
+- *T* is `Threshold` in light units, so 1 blooms only light over a white
+  face in full sun and 0 everything ([against Studio](#against-studio)).
+  Rook first read it as the frame's encoded value (4 × Threshold²
+  units), as Studio's in-place glow (`ImageProcessLQNeonBloomFS`)
+  thresholds; Studio's screenshot rules that out.
 - *n* is the number of copies whose reach (2 to the power of *n* + 1
   pixels) first covers `Size`: 4 at the default 24.
 - `Size` 0 adds each pixel's own light over the threshold in the tone
@@ -274,6 +276,36 @@ enabled, into textures made the first frame they're needed and again
 when the window's size changes; the tone pass reads them, or a black
 texel when they're off.
 
+## Against Studio
+
+Compared with Studio 0.748 screenshots on 2026-11-23: Lighting at
+ClockTime 16.5, Brightness 2, with a white, a red and a blue part, a Neon
+cube and a Neon bar on green ground; plain, then with ColorCorrection
+(Saturation 0.4, Contrast 0.15, Brightness 0.02, TintColor (1, 0.92,
+0.8)), Bloom (Intensity 1, Size 40, Threshold 0.8) and SunRays
+(Intensity 0.3, Spread 0.6), then with Blur 12 alone. The cameras
+differ, so these compare looks and region averages, not pixels.
+
+- **ColorCorrection.** Studio's last pass applies its matrix after the
+  curve, as Rook does (`ImageProcessFS`). Rook's matrix, fed Studio's
+  own plain pixels, gives Studio's graded ground and sky within about 10
+  levels (ground (72, 152, 90) to (50, 157, 56) against Studio's (63, 165,
+  67)); what's left is the SunRays' haze, which lifts Studio's whole frame
+  near the sun.
+- **The white part.** Studio's turns near-white with a strong halo; Rook's
+  turns beige. The plain frames differ already: Studio lights the white
+  part blue-white by the sky ((174, 206, 221)), Rook draws it a neutral
+  gray (183), and the tint takes a neutral gray to beige ([the
+  sky's light](sky.md#what-it-reaches) is another page's). Its halo is
+  Bloom: at about 0.95 light units it blooms at Threshold 0.8 while the
+  sky at about 0.75 doesn't, which is why *T* is the light itself.
+  Rook's sky is brighter than Studio's in this place (about 1 unit), so
+  it blooms too, a glow along the horizon Studio's frame doesn't have.
+- **Blur 12.** Both blur the view about alike: Studio's frame keeps half
+  its edge contrast, its colors unchanged.
+- **Neon's glow.** Studio glows Neon without a Bloom; Rook doesn't
+  ([Neon's glow](#neons-glow)).
+
 ## What Studio must settle
 
 - ColorCorrection: Rec. 709 or other luma weights; the order of
@@ -284,8 +316,8 @@ texel when they're off.
   several Sizes), whether it follows the window's size (the same at two
   window sizes), the mix factor at small Sizes, and whether Bloom and
   SunRays show through a Blur.
-- Bloom: what `Threshold` means in light (Neon squares of several
-  grays on black at several Thresholds), how far the glow reaches for a
+- Bloom: `Threshold` against light beyond the one screenshot (Neon
+  squares of several grays on black at several Thresholds), how far the glow reaches for a
   `Size` and how it falls off (one Neon square at several Sizes), how
   `Intensity` scales it, and whether two Blooms add or one wins.
 - Neon's glow with no Bloom, at Automatic and Level21: whether it shows,
