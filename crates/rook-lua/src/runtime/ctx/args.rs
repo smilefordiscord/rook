@@ -223,6 +223,24 @@ impl Args {
         )
     }
 
+    /// A `float` argument of a reflected method: a number, or a string
+    /// that reads as one.
+    pub(crate) fn float(&self, i: usize) -> ApiResult<f32> {
+        (number_of(self.get(i)).map(|n| n as f32)).ok_or_else(|| self.cast_error(i, "float"))
+    }
+
+    /// An `Array` argument's items from 1 to its length, nils in holes
+    /// included, cast as [`Args::array`] casts it. Measured on
+    /// `Path2D:SetControlPoints`: a table with no first item but other keys
+    /// is `Unable to cast Dictionary to Array`, a string `Unable to cast
+    /// string to Array`.
+    pub(crate) fn array_items(&self, i: usize) -> ApiResult<Vec<LuaValue>> {
+        let t = self.array(i)?;
+        (1..=t.raw_len())
+            .map(|k| Ok(t.raw_get::<LuaValue>(k)?))
+            .collect()
+    }
+
     pub(crate) fn number(&self, i: usize) -> ApiResult<f64> {
         match self.get(i) {
             LuaValue::Nil => Err(self.missing(i)),

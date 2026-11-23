@@ -5,7 +5,7 @@ use super::*;
 
 /// The GUI object or LayerCollector placing `id`: its parent, past
 /// Folders.
-pub(super) fn gui_parent(dom: &Dom, id: InstanceId) -> Option<InstanceId> {
+pub(crate) fn gui_parent(dom: &Dom, id: InstanceId) -> Option<InstanceId> {
     let mut at = dom.parent(id);
     while let Some(p) = at {
         if dom.class_name(p) != "Folder" {
@@ -17,7 +17,7 @@ pub(super) fn gui_parent(dom: &Dom, id: InstanceId) -> Option<InstanceId> {
 }
 
 /// The top of the GUI tree holding `id` (a GUI object, or a UI component
-/// in one): its LayerCollector, or its topmost GUI ancestor.
+/// or Path2D in one): its LayerCollector, or its topmost GUI ancestor.
 pub(crate) fn top_of(dom: &Dom, id: InstanceId) -> Option<InstanceId> {
     top_along(dom, std::iter::successors(Some(id), |&i| dom.parent(i)))
 }
@@ -36,7 +36,7 @@ pub(crate) fn top_along(
             return Some(i);
         } else if dom.is_a(i, "GuiBase2d") {
             top = Some(i);
-        } else if dom.class_name(i) != "Folder" && !dom.is_a(i, "UIComponent") {
+        } else if !matches!(dom.class_name(i), "Folder" | "Path2D") && !dom.is_a(i, "UIComponent") {
             break;
         }
     }

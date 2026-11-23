@@ -3916,6 +3916,7 @@ version = "0.5.1"
 dependencies = [
  "glam 0.33.12",
  "harfrust",
+ "kurbo",
  "profiling",
  "rook-content",
  "rook-dom",
@@ -3925,6 +3926,7 @@ dependencies = [
  "serde",
  "serde_json",
  "skrifa",
+ "tracing",
  "zeno",
 ]
 

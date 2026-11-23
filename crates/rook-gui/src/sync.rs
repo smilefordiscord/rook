@@ -29,6 +29,7 @@ impl Gui {
     /// SurfaceGui sized by its part) lay out again on their own.
     pub fn sync(&mut self, dom: &mut Dom) {
         self.note_changes(dom);
+        self.rebuild_path_splines(dom);
         rook_types::gauge!(GuiNodes, self.layout.placed.len());
         if self.stale {
             self.lay_out_screens(dom);

@@ -1,4 +1,4 @@
-//! GUI's methods: GuiService and PlayerGui, StyleRules, text sizes, TextBox focus and TextChatService.
+//! GUI's methods: GuiService and PlayerGui, StyleRules, text sizes, TextBox focus, Path2D and TextChatService.
 
 use crate::api::methods::{RawMethod, first, mutate, ret_instances, true_};
 

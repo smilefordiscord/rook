@@ -3,6 +3,7 @@
 
 mod legacy_chat;
 mod menu;
+mod modern;
 mod objects;
 mod prompts;
 mod text_chat;

@@ -21,8 +21,12 @@ pub struct WorldHit {
 }
 
 /// Whether `s` is drawn at `at`: inside its turned rectangle and what its
-/// ancestors leave of it.
+/// ancestors leave of it. Inference: a Path2D, a GuiBase that no
+/// GuiObject method lists, takes no input.
 fn covers(s: &Stacked, at: Vec2) -> bool {
+    if s.path {
+        return false;
+    }
     let c = s.clip;
     if at.x < c[0] || at.y < c[1] || at.x > c[2] || at.y > c[3] {
         return false;

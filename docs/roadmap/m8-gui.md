@@ -32,9 +32,68 @@ health bars and leaderboards are GUI.
    [UIStroke](../behavior/gui/modern.md#uistroke) 212,
    [UIPageLayout](../behavior/gui/modern.md#uipagelayout) 69,
    [CanvasGroup](../behavior/gui/modern.md#canvasgroup) 34 and
-   [UITableLayout](../behavior/gui/modern.md#uitablelayout) 7. Corners,
-   strokes and gradients are parameters of the GUI quad drawn in its
-   shader; a CanvasGroup is drawn to a texture of its own.
+   [UITableLayout](../behavior/gui/modern.md#uitablelayout) 7, and
+   [Path2D](../behavior/gui/modern.md#path2d), from the creator docs and
+   its methods measured in Studio 0.748.
+   Corners, strokes and gradients are parameters of the GUI quad drawn in
+   its shader; a CanvasGroup is drawn to a texture of its own.
+   - *Design* (2026-11-22), Path2D:
+     - Established vector renderers stroke a Bézier in two stages: they
+       flatten it to a polyline within a tolerance (Skia's quarter pixel
+       by Wang's formula, Lyon and kurbo by Levien's parabola
+       integral), then turn the polyline into triangles with joins and
+       caps and an antialiased fringe (Skia's and Lyon's stroke
+       tessellators, NanoVG's strips). Others skip the triangles: GPU
+       line renderers draw one instance per segment extruded in the
+       vertex shader, with round joins from the overlap (Mapbox GL,
+       deck.gl's PathLayer), and SDF renderers find the distance to the
+       curve per pixel (Loop-Blinn for fills, distance-to-segment
+       shaders for strokes).
+     - Rook's GUI pass draws instanced quads, each with a rounded
+       rectangle its shader cuts it to and smooths the edge of over a
+       pixel (UICorner, UIStroke). So a path is kurbo's flattening, at a
+       quarter of a pixel on the screen and a sixteenth on world
+       canvases, then one quad per line of it cut to a capsule (a
+       rounded rectangle whose radius is half the width): the instanced-
+       segment design, needing nothing new in the renderer. Round joins
+       and ends come from the overlap. The overlap would show through a
+       translucent line, so a translucent path draws opaque into a group
+       texture, faded as it's laid over, as Skia's `saveLayer` does for
+       group opacity; the CanvasGroup path already does that.
+     - The points are the path's own state, kept where the engine keeps
+       an object's state, as established engines keep a curve's points:
+       Unreal's spline component holds its curve as a reflected
+       property, Godot's Path2D its `Curve2D` resource with the points in
+       a packed array, Unity's LineRenderer its positions as a
+       serialized field, so copying, saving and networking the object
+       carry them with no code of the curve's own. Roblox's is
+       `PropertiesSerialize`, a hidden BinaryString that saves and
+       replicates, so the points are that property's value in the DOM:
+       `Clone`, saving, replication (`rook-net`'s Source and Sink) and
+       the change journal carry them as they carry any property, and the
+       GUI reads them from the DOM when the journal says they changed,
+       as it reads `Color3`, rather than keeping a copy of its own.
+       Roblox's layout of the blob isn't documented, so Rook encodes the
+       points its own way (a tag, a count, and each point's three
+       UDim2s), with no points as the class default; one codec
+       (`rook-gui`'s `path/codec.rs`) reads and writes it, so Roblox's
+       layout can replace it there alone once a place Studio saved shows
+       it. Decoding is a copy of at most 100 points, made when a path
+       draws again or a script asks, so nothing is cached beside the
+       DOM.
+     - Changes flow as other GUI's do: a path is an entry in its
+       ScreenGui's stack, among its parent's children by `ZIndex`, and
+       holds its parent's box, so its piece is drawn again only when its
+       points (its `PropertiesSerialize`), its look (`Color3`,
+       `Thickness`, `Closed`, a UIGradient under it) or its parent's
+       place change; `Visible` restacks the parent's run and `ZIndex`
+       its tree, as a GUI object's do. A world canvas holding a path
+       draws again whole, as it does for any change.
+     - Cost: with nothing changed, nothing. A path drawn again costs its
+       flattening and a quad per line: at most 99 segments, each a few
+       dozen lines at most at the screen's sizes. Queries flatten
+       nothing: they measure the segments with kurbo's arc lengths,
+       laying out only the path's tree first, as other layout reads do.
 8. ✅ [ViewportFrame](../behavior/gui/viewport-frames.md) (251 files) and
    [WorldModel](../behavior/physics/queries.md#worldmodels) (46).
    - *Scope*: its own Camera (`CurrentCamera`), `Ambient`, `LightColor`,
@@ -163,7 +222,9 @@ health bars and leaderboards are GUI.
       `OpenTypeFeatures`, localization, real small caps and fallback
       faces; text stroke, underline, Hint and Message measured; the
       TextBox's scrolling caret, Up and Down, composition and
-      selection color; `AutomaticSize` with scaled children; the
+      selection color; `AutomaticSize` with scaled children; Path2D's
+      line, its spline's rebuilding and saved points
+      ([open questions](../behavior/gui/modern.md#open-questions)); the
       Inferences in the GUI pages. Out: touch and gamepad (M19).
     - *Evidence*: the [stubs](../guide/stubs.md) rows taken over by this
       step, and the open Approximations and Inferences

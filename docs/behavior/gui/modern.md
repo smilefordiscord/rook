@@ -1,11 +1,11 @@
 # GUI modern UI objects
 
-Checked against Studio 0.744 on 2026-10-22.
+Checked against Studio 0.748 on 2026-11-23.
 
 [M8](../../roadmap/m8-gui.md) step 7: UICorner, UIStroke, UIGradient,
 UIListLayout's flex and `Wraps` with UIFlexItem, UITableLayout,
-UIPageLayout and CanvasGroup. ViewportFrame and WorldModel are a later
-step.
+UIPageLayout, CanvasGroup and Path2D. ViewportFrame and WorldModel are a
+later step.
 
 Measured in Studio 0.744 on 2026-10-22 on Baseplate. Layouts and property
 reads are conformance cases (`gui/flex`, `gui/table_layout`,
@@ -24,7 +24,10 @@ gradients in `rook-render`'s `shaders/gui/gui_paint.wgsl`, ramps in
 `renderer/gui/ramps.rs`, groups' textures in `renderer/gui/groups.rs`;
 layouts in `rook-gui`'s `layout/list.rs`, `layout/table.rs` and
 `layout/page.rs`; UIPageLayout's methods in `rook-lua`'s
-`api/luau/page_layout.luau`.
+`api/luau/page_layout.luau`. Path2D's points in `rook-gui`'s `path.rs`
+(their bytes in `path/codec.rs`), its curve in `path/curve.rs`, drawn in
+`draw/objects/path.rs`; its methods in `rook-lua`'s
+`api/methods/gui/path.rs`.
 
 ## UICorner
 
@@ -190,3 +193,179 @@ UIListLayout's `HorizontalFlex` and `VerticalFlex` (whichever is along
   texture memory (`DFFlagCanvasGroupIndividualDrawWhenOOM`, off), so this
   looks like a fallback, not how players see it; why it fell back here
   isn't known.
+
+## Path2D
+
+From the creator docs (Path2D, Path2DControlPoint and the 2D paths
+guide) as of 2026-11-22, and measured in Studio 0.748 on 2026-11-23 by
+the conformance case `gui/path2d` (a server script, the path under a
+400 × 300 Frame in a ScreenGui that isn't shown), which Rook passes.
+What isn't marked Confirmed is Inference. What Studio draws is still to
+be compared, under [Open questions](#open-questions).
+
+### Path2DControlPoint
+
+- `Path2DControlPoint.new()`, `.new(position)` or `.new(position,
+  leftTangent, rightTangent)`: any other count of arguments (a method
+  call's too) raises `Trying to create a Path2DControlPoint with wrong
+  number of arguments` before the arguments are looked at, and each one
+  given must be a UDim2, nil included: `invalid argument #1 to 'new'
+  (UDim2 expected, got nil)` (Confirmed). The `Path2DControlPoint` table
+  is read-only (Confirmed).
+- `tostring` gives `Path2DControlPoint { Position = {0.5, 10}, {0.25,
+  -20}, LeftTangent = {0, -5}, {0, 0}, RightTangent = {0.100000001, 3},
+  {0, 4} }` (Confirmed). Points with equal members are `==`; comparing,
+  joining and arithmetic raise as for other datatypes (Confirmed).
+- Assigning `Position` or a tangent doesn't raise (Confirmed); Rook
+  changes that value (Inference).
+
+### Points and the curve
+
+- A point's `Position` is a UDim2 in the path's parent: its scale of the
+  parent's size, plus its offset in pixels. The tangents are UDim2s too,
+  added to it. Rook places the points in the parent's box as laid out,
+  turned and scaled with it (Inference: the box, not a ScrollingFrame's
+  canvas or the area inside a UIPadding).
+- Each pair of neighboring points makes a segment (Confirmed): a
+  straight line when both tangents between them (the first's
+  `RightTangent`, the second's `LeftTangent`) are zero; a quadratic
+  Bézier through the one handle when only one is (at the zero end it
+  leaves towards that handle); otherwise a cubic Bézier from the first
+  `Position`, through it plus its `RightTangent` and the second's
+  `Position` plus its `LeftTangent`, to the second's `Position`. With
+  `Closed` and 3 points or more, the last point joins the first the same
+  way (creator-docs).
+- Scripts set its points with `SetControlPoints`, `InsertControlPoint`,
+  `UpdateControlPoint` and `RemoveControlPoint`, and read them with
+  `GetControlPoints` (a new table each call) and `GetControlPoint`;
+  indexes start at 1. Each setter fires `ControlPointChanged`, with no
+  arguments, once it has finished; one that raises fires nothing, even
+  where it changed the points first (Confirmed). Its other properties
+  don't fire it.
+- A path has a parent when it's in a GUI object or LayerCollector (Rook
+  looks past Folders, Inference). Without one, `InsertControlPoint`,
+  `UpdateControlPoint`, `GetLength` and `GetBoundingRect` raise
+  `Attempting to use Path2D with invalid parent` (Confirmed), the
+  setters changing nothing; `SetControlPoints`, `RemoveControlPoint` and
+  `GetControlPoint` work. Rook raises it from the position and tangent
+  queries too, after their own check (Inference).
+- Studio keeps the points twice, as the path's own and in a spline that
+  places them, and the two can disagree (Confirmed):
+  `SetControlPoints` leaves the spline empty, and `InsertControlPoint`
+  and `RemoveControlPoint` change the points, then raise from the spline
+  when it hasn't that place (`Spline inserting control point at index 1
+  access out of bounds`, its index counting from 0), keeping the points
+  as changed. So straight after `SetControlPoints`, inserting past the
+  first point or removing raises. Rook builds the spline again when the
+  path's tree is laid out for a frame or a curve query reads it
+  (Inference), and `UpdateControlPoint` doesn't consult it (Inference).
+- The points are a property of the path, as in Roblox: the hidden
+  `PropertiesSerialize`, a binary blob scripts can't read or set, which
+  files save and which replicates. So `Clone` copies a path's points
+  (Confirmed, with `Closed` and `Thickness`), a path the server sets up
+  reaches clients with its points, and the server's later changes follow
+  it. Roblox's layout of the blob isn't documented, so Rook writes a
+  layout of its own: Studio can't read the points of a path Rook saved,
+  and a path Studio saved with points starts with none in Rook. Its
+  default, 4 zero bytes, is no points in both. Changing the points
+  fires no `Changed` that a script sees (Confirmed).
+
+### Setters' arguments
+
+All Confirmed:
+
+- An index is cast to an `int`: a number or numeric string, rounded
+  (1.5 is 2, 3.9 is 4); NaN and anything past an `int32` are
+  -2147483648; `"a"` raises `Unable to cast string to int`, nil
+  `Argument 1 missing or nil`. An index outside the points raises
+  `Path2D:GetControlPoint() at index 4 access out of bounds`, with the
+  method's name and the index as cast; `InsertControlPoint` takes 1 to
+  one past the last.
+- A point must be a Path2DControlPoint: `Unable to cast UDim2 to
+  Path2DControlPoint`, `Argument 2 missing or nil`.
+- `SetControlPoints` takes an Array: nil is `Argument 1 missing or nil`,
+  a string `Unable to cast string to Array`, a table with keys but no
+  first item `Unable to cast Dictionary to Array`, none of which change
+  the points. Otherwise it empties the points and adds the items in
+  turn, nils in holes included, raising `Variant cast failed` at the
+  first that isn't a point, with those before it kept.
+- `GetMaxControlPoints()` is 100 (creator-docs). `SetControlPoints`
+  with more keeps the first 100 and raises `Path2D:SetControlPoints()
+  only supports 100 control points.`; `InsertControlPoint` on a full
+  path raises the same with its own name.
+
+### Queries
+
+All Confirmed but where marked:
+
+- `GetPositionOnCurve(t)` and `GetTangentOnCurve(t)` read the curve at
+  `t` from 0 to 1 by its parameter: each segment takes an equal share of
+  `t`, a point where two meet belonging to the later one. The
+  `ArcLength` versions read it at `t` of its length, by the segments'
+  true arc lengths, a point where two meet belonging to the earlier one.
+  `t` is a `float`, held to 0 to 1, NaN reading as 0; nil is
+  `Argument 1 missing or nil`.
+- With no segments they raise `Path2D:GetPositionOnCurve() attempting
+  to query with zero segments` (with the method's name).
+- A position is a UDim2 in scale alone: where the curve is in the
+  parent's pixels over the parent's size (a quarter of the way along a
+  100-pixel line in a 400-wide parent is `{0.0625, 0}`).
+- A tangent is the segment's derivative by its own parameter, in the
+  parent's pixels: `(100, 0)` all along a 100-pixel line, 3 times the
+  handle at a cubic's end, twice the handle at a quadratic's zero end,
+  and `(0, 0)` along a segment of no length.
+- `GetLength()` is the curve's length in the parent's pixels (Inference:
+  0 with no segments): infinite through a point at an infinite place,
+  NaN through one at NaN.
+- `GetBoundingRect()` is the box round the points' positions, not the
+  curve between them, in the pixels `AbsolutePosition` is in, grown by
+  half `Thickness` and half a pixel each way (by 1 at 1, 5.5 at 10), and
+  not at all at `Thickness` 0.
+- Studio finds the place a share of the length along a curve to within
+  about a millionth of its parameter, so the third decimal of a tangent
+  there can differ from the exact place's (the case prints those to two
+  places); Rook's is the exact place, within kurbo's error bound.
+
+### Drawing
+
+- A visible path draws a line `Thickness` pixels wide (1 by default,
+  kept within 0 to 100, NaN kept as it is, Confirmed) along its curve in `Color3` (black by default),
+  among its parent's children by `ZIndex`, as a GUI object would, and
+  clipped as they are. It takes no input (Inference).
+- A UIGradient under it colors the line in place of `Color3`
+  (Inference: over the line's bounding box). UIScales widen the line, as
+  they do a UIStroke's (Inference).
+- `Transparency` isn't scriptable (Confirmed: `The current thread cannot
+  read 'Transparency' (lacking capability RobloxScript)`); a file can save one, which Rook draws
+  (Inference). A translucent line is drawn whole and then faded, so its
+  joints don't show darker.
+- Rook draws the line with round joins and round ends, its edge smoothed
+  over a pixel, the curve kept within a quarter of a pixel (a sixteenth
+  on a SurfaceGui or BillboardGui, seen up close); a curve over a million
+  times that across is kept within that share of its size instead, so it
+  draws a bounded number of lines. Approximation: Studio's joins, ends,
+  smoothing and curve steps aren't compared with Rook's. Inference: a
+  path with a point or tangent at an infinite or NaN place draws
+  nothing.
+
+### Open questions
+
+To check side by side in Studio:
+
+- the line's shape: its joins at sharp corners, its ends, how its edge
+  is smoothed and how finely the curve is stepped, at thin and thick
+  widths;
+- when Studio builds the spline again after `SetControlPoints`, whether
+  `UpdateControlPoint` raises from it as inserting and removing do, and
+  whether the position and tangent queries need a parent;
+- whether a tangent counts as zero by its UDim2 or by the pixels it
+  comes to, and which pixels the queries count in under a UIScale or a
+  turned parent;
+- points in a ScrollingFrame or under a UIPadding, a UIScale's effect on
+  the width, a UIGradient's box, and whether a path stops drawing past a
+  SurfaceGui's edge;
+- what a 0 `Thickness` or a single point draws, and whether a path takes
+  input;
+- the layout of `PropertiesSerialize`, from a place Studio saves with a
+  path in it, and `ControlPointChanged` on a client when the server
+  changes the points.

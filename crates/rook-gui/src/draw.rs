@@ -1,7 +1,8 @@
 //! What the local player's ScreenGuis draw, in order, over any Hint or
 //! Message: each visible GUI object's background and border (or legacy
 //! style), a ScrollingFrame's bars, then its image or text, cut by its
-//! UICorner and colored by its UIGradient, then its UIStroke; CanvasGroups
+//! UICorner and colored by its UIGradient, then its UIStroke; each
+//! Path2D's curve; CanvasGroups
 //! drawn apart and laid over as one; what each world GUI's canvas draws,
 //! the same way; the names and health bars over heads; and the
 //! disconnect prompt over everything. Order and
@@ -16,7 +17,7 @@ mod screen;
 use crate::*;
 use glam::Vec2;
 use modifiers::{corner, gradient, stroke};
-use objects::{caret, frame, group, image, scrolling, style, text, viewport};
+use objects::{caret, frame, group, image, path, scrolling, style, text, viewport};
 use rook_dom::{Dom, InstanceId};
 use rook_types::{GuiQuad, WorldCanvas};
 
@@ -135,6 +136,12 @@ impl Draw<'_, '_> {
     }
 
     fn emit(&mut self, d: &Stacked) {
+        if d.path {
+            // Inference: drawn wherever its points are, even off a world
+            // canvas (its parent's box isn't its extent).
+            path::emit(self.dom, d.id, d.placed, d.clip, self.world, self.out);
+            return;
+        }
         if !touches(d.placed, self.canvas) {
             return;
         }

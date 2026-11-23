@@ -11,6 +11,7 @@ mod images;
 mod input;
 mod layout;
 mod order;
+mod path;
 mod selection;
 mod style;
 mod sync;
@@ -29,6 +30,7 @@ pub use images::GuiImage;
 pub use input::hits::WorldHit;
 pub use input::scrolling::BarDrag;
 pub use layout::GUI_INSET;
+pub use path::{PathCurve, PathPoint, path_is_placed, path_points, path_segments, set_path_points};
 pub use text::{TextFailure, TextQuery};
 
 use changes::Watch;
@@ -183,20 +185,11 @@ pub struct Gui {
     fonts: text::Fonts,
     glyphs: text::Glyphs,
     images: images::Images,
-    /// Each Path2D's control points, which scripts set with its methods
-    /// (they're no property Roblox exposes).
-    paths: FxHashMap<InstanceId, Vec<PathPoint>>,
     /// The prompt shown over everything, if any.
     prompt: Option<draw::overlays::prompt::Shown>,
-}
-
-/// A Path2D's control point: where it is and its tangents, each against
-/// the path's parent (creator-docs Path2DControlPoint).
-#[derive(Debug, Clone, Copy, PartialEq, Default)]
-pub struct PathPoint {
-    pub position: rook_types::UDim2,
-    pub left: rook_types::UDim2,
-    pub right: rook_types::UDim2,
+    /// Path2Ds whose spline holds fewer points than they do, and how many:
+    /// see `path/spline.rs`.
+    splines: FxHashMap<InstanceId, usize>,
 }
 
 impl Default for Gui {
@@ -242,8 +235,8 @@ impl Default for Gui {
             fonts: text::Fonts::default(),
             glyphs: text::Glyphs::default(),
             images: images::Images::default(),
-            paths: FxHashMap::default(),
             prompt: None,
+            splines: FxHashMap::default(),
         }
     }
 }
@@ -254,21 +247,6 @@ impl Gui {
     pub fn set_content(&mut self, resolver: Arc<rook_content::Resolver>) {
         self.fonts.set_resolver(resolver);
         self.screen_changed();
-    }
-
-    /// A Path2D's control points; none until a script sets them.
-    pub fn path_points(&self, id: InstanceId) -> &[PathPoint] {
-        self.paths.get(&id).map_or(&[], Vec::as_slice)
-    }
-
-    /// Set a Path2D's control points; it draws again.
-    pub fn set_path_points(&mut self, id: InstanceId, points: Vec<PathPoint>) {
-        if points.is_empty() {
-            self.paths.remove(&id);
-        } else {
-            self.paths.insert(id, points);
-        }
-        self.restyled.insert(id);
     }
 
     /// Everything lays out again, on the screen as it is now.

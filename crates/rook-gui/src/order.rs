@@ -6,7 +6,7 @@ use glam::Vec2;
 use rook_dom::{Dom, InstanceId};
 use rook_types::GuiQuad;
 
-use crate::layout::{Layout, Placed, gui_children, through_folders, visible};
+use crate::layout::{Layout, Placed, through_folders, visible};
 
 /// The local player's ScreenGuis that show, bottom first, then CoreGui's
 /// over them all (what Roblox's CoreScripts draw). Measured: ScreenGuis
@@ -74,7 +74,10 @@ pub(crate) fn max_distance(dom: &Dom, gui: InstanceId) -> f32 {
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) struct Stacked {
     pub(crate) id: InstanceId,
+    /// Its box, or a Path2D's parent's, which its points are placed in.
     pub(crate) placed: Placed,
+    /// A Path2D: it draws its curve in `placed` and takes no input.
+    pub(crate) path: bool,
     pub(crate) clip: [f32; 4],
     /// An ancestor is turned (which turns clipping off below it).
     pub(crate) turned: bool,
@@ -119,8 +122,12 @@ fn collect(
     out: &mut Vec<Node>,
     hidden: &mut impl FnMut(InstanceId),
 ) {
-    for kid in gui_children(dom, parent) {
-        let Some(&placed) = layout.placed.get(&kid) else {
+    // Confirmed (creator-docs Path2D.ZIndex): a Path2D stacks among the
+    // GUI objects beside it as one does.
+    let held = |id| dom.is_a(id, "GuiObject") || dom.class_name(id) == "Path2D";
+    for kid in through_folders(dom, parent, held) {
+        let path = dom.class_name(kid) == "Path2D";
+        let Some(&placed) = layout.placed.get(if path { &parent } else { &kid }) else {
             continue;
         };
         if !visible(dom, kid) {
@@ -130,13 +137,16 @@ fn collect(
         let stacked = Stacked {
             id: kid,
             placed,
+            path,
             clip: clip.rect,
             turned: clip.turned,
             depth,
         };
         let mut kids = Vec::new();
-        let inner = (inside(dom, layout, &stacked), depth + 1);
-        collect(dom, layout, kid, inner, &mut kids, hidden);
+        if !path {
+            let inner = (inside(dom, layout, &stacked), depth + 1);
+            collect(dom, layout, kid, inner, &mut kids, hidden);
+        }
         out.push(Node {
             stacked,
             z: dom.number_property(kid, "ZIndex").unwrap_or(1.0) as i64,
