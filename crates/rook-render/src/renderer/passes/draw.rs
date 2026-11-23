@@ -289,6 +289,9 @@ impl Renderer {
             sky_faces,
             sky_turn: [row(back.row(0)), row(back.row(1)), row(back.row(2))],
             discs: disc_rows,
+            night_top: rgb(l.night_sky.top, l.night_sky.shown),
+            night_horizon: rgb(l.night_sky.horizon, 0.0),
+            stars: [l.stars.count as f32, l.stars.turn, l.stars.light, 0.0],
             ..self.view_globals(camera, aspect)
         };
         self.queue
@@ -609,9 +612,15 @@ impl Renderer {
         );
     }
 
-    /// The sky, then the sun and the moon over it.
+    /// The sky, then the stars, the sun and the moon over it.
     fn record_sky(&self, pass: &mut wgpu::RenderPass<'_>) {
         self.record_skybox(pass);
+        let stars = self.lighting.stars;
+        if stars.count > 0 && stars.light > 0.0 {
+            // They read no image; the sky left an image group bound.
+            pass.set_pipeline(&self.pipelines.stars);
+            pass.draw(0..6, 0..stars.count);
+        }
         let discs = self.shown_discs();
         if discs.iter().all(Option::is_none) {
             return;

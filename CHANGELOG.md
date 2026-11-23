@@ -5,6 +5,7 @@ Every release, newest first. How versions are numbered is in
 
 ## [Unreleased]
 
+- The night sky shows a dark gradient with a glow along the horizon, and a Sky's `StarCount` stars, which turn with the time of day. Rook drew the night sky black. See [the sky](docs/behavior/lighting/sky.md#the-night-sky).
 - The sun and moon are drawn in the sky, rising and setting with the time of day, with a Sky's images, sizes and `CelestialBodiesShown`, and `SkyboxOrientation` turns the skybox. Rook drew neither and ignored the orientation. See [the sky](docs/behavior/lighting/sky.md#the-sun-and-moon).
 - Light, shadows and the sky's light follow the camera to where it moves on a busy or slow machine. Rook could keep lighting only where the camera had been, for as long as the machine stayed busy. See [local lights](docs/behavior/lighting/local-lights.md).
 - AudioChannelMixer takes sound in through its channel pins, and AudioChannelSplitter's channel pins carry only their channel, as in Roblox. Rook left the mixer unwired, so everything sent through one was silent, and sent the whole sound out of every splitter pin. See [the audio API](docs/behavior/audio/audio-api.md).

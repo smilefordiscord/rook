@@ -50,6 +50,9 @@ pub struct Lighting {
     /// horizon, `CelestialBodiesShown` off, or its image still loading).
     pub sun_disc: Option<Disc>,
     pub moon_disc: Option<Disc>,
+    /// The stars; a count of 0 draws none.
+    pub stars: Stars,
+    pub night_sky: NightSky,
     /// `Lighting.GlobalShadows`: false draws no shadows at all.
     pub global_shadows: bool,
     /// `Lighting.PrioritizeLightingQuality`: on, the sun casts sharp
@@ -108,6 +111,16 @@ impl Default for Lighting {
             skybox_turn: Mat3::IDENTITY,
             sun_disc: None,
             moon_disc: None,
+            stars: Stars {
+                count: 0,
+                turn: 0.0,
+                light: 0.0,
+            },
+            night_sky: NightSky {
+                top: [0.0; 3],
+                horizon: [0.0; 3],
+                shown: 0.0,
+            },
             global_shadows: true,
             prioritize_quality: false,
             environment_specular: 0.0,

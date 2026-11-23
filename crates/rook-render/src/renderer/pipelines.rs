@@ -95,6 +95,8 @@ pub(crate) struct Pipelines {
     pub(crate) sky: wgpu::RenderPipeline,
     /// The plain sky color, before (or without) the skybox.
     pub(crate) plain_sky: wgpu::RenderPipeline,
+    /// The stars, added over the sky.
+    pub(crate) stars: wgpu::RenderPipeline,
     /// The sun and the moon, added over the sky.
     pub(crate) discs: wgpu::RenderPipeline,
     /// Emitters' particles, over everything.
@@ -421,7 +423,7 @@ impl Pipelines {
 
         // The skybox: one full-screen triangle per image, each keeping the
         // pixels whose direction its face covers; nothing written to depth,
-        // so everything draws over it. The sun and moon are added over it
+        // so everything draws over it. The stars, sun and moon are added over it
         // (their color added, the frame's alpha kept).
         let sky_pipeline = |vertex, fragment, blend| {
             device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -487,6 +489,7 @@ impl Pipelines {
             on_top,
             sky: sky_pipeline("vs_sky", "fs_sky", None),
             plain_sky: sky_pipeline("vs_sky", "fs_plain_sky", None),
+            stars: sky_pipeline("vs_star", "fs_star", Some(ADD_COLOR)),
             discs: sky_pipeline("vs_disc", "fs_disc", Some(ADD_COLOR)),
         }
     }

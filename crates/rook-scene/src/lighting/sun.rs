@@ -15,9 +15,15 @@ pub(super) fn sun_now(dom: &Dom, lighting: InstanceId) -> Vec3 {
 /// +Z by the latitude less 23.5° (Confirmed: `Lighting:GetSunDirection()`
 /// in Studio 0.742 for latitudes 0, 41.733 and -30, 2026-10-13).
 pub(super) fn sun_direction(hours: f32, latitude_degrees: f32) -> Vec3 {
-    let h = (hours - 12.0) / 24.0 * std::f32::consts::TAU;
+    let h = day_turn(hours);
     let tilt = (latitude_degrees - 23.5).to_radians();
     Vec3::new(-h.sin() * tilt.cos(), h.cos() * tilt.cos(), tilt.sin())
+}
+
+/// How far the sun has turned about the Z axis at `hours`, in radians: 0
+/// at noon, once a day.
+pub(super) fn day_turn(hours: f32) -> f32 {
+    (hours - 12.0) / 24.0 * std::f32::consts::TAU
 }
 
 /// The sun's light in Studio's light units on a white face square to it,

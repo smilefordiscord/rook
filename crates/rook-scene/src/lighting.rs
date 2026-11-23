@@ -6,7 +6,7 @@ mod sun;
 pub(super) use local::LightCache;
 
 use super::*;
-use sky::{sky_of, sky_tint};
+use sky::{night_sky, sky_of, sky_tint};
 use sun::{sun_and_moon, sun_now};
 
 pub(super) fn lighting(dom: &Dom) -> Lighting {
@@ -72,6 +72,7 @@ pub(super) fn lighting(dom: &Dom) -> Lighting {
         .exp2();
     l.tonemapper = tonemapper(dom, id);
     l.sky_tint = sky_tint(hours);
+    l.night_sky = night_sky(l.sky_tint);
     l.sky_bottom = l.sky_horizon;
     l
 }
@@ -96,7 +97,8 @@ impl SceneCache {
         let sky = sky_of(dom);
         self.sky(dom, sky, &mut l);
         if let Some(id) = dom.find_service("Lighting") {
-            self.celestial(dom, sky, sun_now(dom, id), &mut l);
+            let hours = dom.clock_time(id) as f32;
+            self.celestial(dom, sky, (hours, sun_now(dom, id)), &mut l);
         }
         l
     }

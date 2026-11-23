@@ -60,6 +60,12 @@ pub(crate) struct Globals {
     /// direction and the tangent of half its size; its light and what it
     /// draws (0 nothing, 1 its image, 2 Rook's own disc).
     pub(crate) discs: [[f32; 4]; 4],
+    /// `Lighting::night_sky`: the gradient's top (w how much shows) and
+    /// horizon, sRGB.
+    pub(crate) night_top: [f32; 4],
+    pub(crate) night_horizon: [f32; 4],
+    /// `Lighting::stars`: the count, turn and light.
+    pub(crate) stars: [f32; 4],
 }
 
 impl Upload for Mesh {

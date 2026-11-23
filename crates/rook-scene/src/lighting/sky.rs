@@ -1,3 +1,5 @@
+use rook_render::NightSky;
+
 use super::*;
 
 /// The skybox images of a Sky, in the order Up, Back, Front, Left, Right,
@@ -59,6 +61,28 @@ pub(super) fn sky_tint(hours: f32) -> [f32; 3] {
     let ((h0, a), (h1, b)) = (TINTS[i - 1], TINTS[i]);
     let t = (h - h0) / (h1 - h0);
     [0, 1, 2].map(|c| a[c] + (b[c] - a[c]) * t)
+}
+
+/// Above this tint (its brightest channel) the night doesn't show.
+const NIGHT_FROM: f32 = 0.25;
+
+/// The night's gradient, shown as the tint `tint` fades out: none while
+/// its brightest channel is above 0.25, all of it at 0, smoothly between,
+/// so it comes in over dusk's last minutes and leaves over dawn's first,
+/// as Studio's night shows only once the skybox has gone.
+/// Approximation, unmeasured: Studio's night sky is a dark gradient with a
+/// purple glow along the horizon (observed in Studio 0.745,
+/// docs/behavior/lighting/sky.md#the-night-sky); its colors here are
+/// a look until a capture of the default sky at midnight sets them.
+pub(super) fn night_sky(tint: [f32; 3]) -> NightSky {
+    NightSky {
+        top: [0.02, 0.03, 0.08],
+        horizon: [0.17, 0.12, 0.25],
+        shown: {
+            let t = (tint.iter().copied().fold(0.0, f32::max) / NIGHT_FROM).clamp(0.0, 1.0);
+            1.0 - t * t * (3.0 - 2.0 * t)
+        },
+    }
 }
 
 /// The turn `SkyboxOrientation` gives the skybox: its degrees about Y

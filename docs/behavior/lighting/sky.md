@@ -151,10 +151,47 @@ To settle in Studio: the discs' brightness and color at noon, at dusk and
 through the horizon; whether a positive `SkyboxOrientation` angle turns
 as Rook's; whether a place without a Sky shows the sun.
 
+## The night sky
+
+Observed in Studio 0.745 with the tint above: where the tint reaches 0 the
+skybox's images are gone and a dark gradient shows, with a purple glow
+along the horizon, and stars. Its colors weren't measured.
+
+Studio's install has the pieces: `Sky`, `SkyLinearVColor` and their `Adv`
+variants draw a mesh with vertex colors times a gradient by height (mixed
+between two colors over the first 1,700 studs up), so the gradient is
+geometry colored per vertex; `Stars` and `AdvStars` draw points two pixels
+across, each its own color, the `Adv` one added over the sky. The stars'
+colors and the gradient's are data the CPU feeds them, not in the pack.
+`StarCount` sets how many there are, and only with `CelestialBodiesShown`
+on (Confirmed: creator docs; default 3,000).
+
+Rook (`night_sky` in `crates/rook-scene/src/lighting/sky.rs`,
+`shaders/sky/night.wgsl`, `vs_star` in `shaders/sky/sky.wgsl`):
+
+- The gradient shows as the tint fades out, none while its brightest
+  channel is above 0.25 and all of it at 0 (smoothly between), under
+  whatever is left of the skybox, and the stars with it: from sRGB (0.02, 0.03, 0.08)
+  overhead to (0.17, 0.12, 0.25) at and below the horizon, the glow falling
+  to 1/e by 0.15 of the way up (the sine of the elevation). Approximation:
+  a look to match the description until a capture of the default sky at
+  midnight sets the colors and the glow's height.
+- `StarCount` stars, each a square two pixels across at a direction spread
+  evenly over the sky and a brightness from a tenth of the brightest up,
+  both made from its index, so they stay put from frame to frame. The
+  field turns with the time of day about the axis the sun turns about
+  (Inference), and doesn't turn with `SkyboxOrientation` (Confirmed:
+  creator docs). The brightest is 1 light unit at night, faded in with the
+  gradient (Approximation). Rook draws at most 100,000.
+
+To settle in Studio: the gradient's colors at midnight overhead, 10° up and
+at the horizon; when it shows against the tint between 18.0 and 18.3; the
+stars' count on screen, their brightness and whether they turn with the
+clock.
+
 ## Not done
 
-- The night sky: the dark gradient, its purple horizon glow and the stars
-  (M13 step 1). Rook draws black there.
-- The sun and moon in reflections (Studio's reflection cube may hold
-  them; unmeasured).
+- The sun, moon, stars and night gradient in reflections (Studio's
+  reflection cube may hold them; unmeasured). Rook's reflections of the
+  sky go black at night.
 - 18.0 to 18.3 wasn't sampled between its ends.

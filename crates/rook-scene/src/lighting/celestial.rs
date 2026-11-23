@@ -1,10 +1,10 @@
-//! The Sky's sun and moon: where they are, how big, what they show
+//! The Sky's sun, moon and stars: where they are, how big, what they show
 //! (docs/behavior/lighting/sky.md#the-sun-and-moon).
 
-use rook_render::{Disc, DiscImage};
+use rook_render::{Disc, DiscImage, Stars};
 
 use super::sky::SkyImage;
-use super::sun::{moon_direction, moon_fade, sun_color};
+use super::sun::{day_turn, moon_direction, moon_fade, sun_color};
 use super::*;
 
 /// What a Sky's celestial bodies are without a Sky, or before its
@@ -13,6 +13,7 @@ use super::*;
 const SUN_TEXTURE: &str = "rbxasset://sky/sun.jpg";
 const MOON_TEXTURE: &str = "rbxasset://sky/moon.jpg";
 const SUN_SIZE: f32 = 21.0;
+const STAR_COUNT: f64 = 3000.0;
 const MOON_SIZE: f32 = 11.0;
 
 /// The light units the sun's image draws at, by day, at its white
@@ -24,16 +25,24 @@ const SUN_LIGHT: f32 = 4.0;
 /// The moon's, at its white (Approximation, as for the sun: a gray disc).
 const MOON_LIGHT: f32 = 1.0;
 
+/// The brightest star's light units at night (Approximation: Studio's
+/// `AdvStars` scales its points' colors by values the pack doesn't hold).
+const STAR_LIGHT: f32 = 1.0;
+
+/// The most stars Rook draws, whatever `StarCount` says: a bound on their
+/// cost (Studio's own limit, if any, is unmeasured).
+const MOST_STARS: f64 = 100_000.0;
+
 impl SceneCache {
-    /// The sun and moon over the sky of the Sky `sky` (a new Sky's without
-    /// one), for the sun at `sun`, into `l`. None with
+    /// The sun, moon and stars over the sky of the Sky `sky` (a new Sky's
+    /// without one), at `hours` with the sun at `sun`, into `l`. None with
     /// `CelestialBodiesShown` off, at an angular size of 0 (both Confirmed:
     /// creator-docs Sky), or while its image loads.
     pub(super) fn celestial(
         &mut self,
         dom: &Dom,
         sky: Option<InstanceId>,
-        sun: Vec3,
+        (hours, sun): (f32, Vec3),
         l: &mut Lighting,
     ) {
         let bool_of = |name, default| {
@@ -43,6 +52,13 @@ impl SceneCache {
         if !bool_of("CelestialBodiesShown", true) {
             return;
         }
+        // Only at night, faded in as the night's gradient is (Inference).
+        let count = sky.and_then(|s| dom.number_property(s, "StarCount"));
+        l.stars = Stars {
+            count: count.unwrap_or(STAR_COUNT).clamp(0.0, MOST_STARS) as u32,
+            turn: day_turn(hours),
+            light: STAR_LIGHT * l.night_sky.shown,
+        };
         // The sun takes its light's hue: white by day, yellow in the last
         // degrees above the horizon, gone below it (Inference).
         let hue = sun_color(sun.y).map(|c| c * 2.0 * SUN_LIGHT);
@@ -149,6 +165,8 @@ mod tests {
         let (_, _, cache) = place("14:00:00");
         let l = cache.scene.lighting;
         let sun = l.sun_disc.expect("the sun by day");
+        assert_eq!(l.stars.light, 0.0, "no stars by day");
+        assert_eq!(l.night_sky.shown, 0.0);
         assert!(l.moon_disc.is_none());
         assert!((sun.size - 21f32.to_radians()).abs() < 1e-5);
         assert_eq!(sun.direction, l.sun_direction);
@@ -159,6 +177,9 @@ mod tests {
         assert!(l.sun_disc.is_none());
         let moon = l.moon_disc.expect("the moon at night");
         assert!((moon.size - 11f32.to_radians()).abs() < 1e-5);
+        assert_eq!(l.stars.count, 3000);
+        assert!(l.stars.light > 0.0, "stars shine at night");
+        assert_eq!(l.night_sky.shown, 1.0);
     }
 
     /// Scripts' changes to the Sky reach the scene through the journal.
@@ -185,5 +206,19 @@ mod tests {
             .unwrap();
         changed(&dom, &mut cache);
         assert!(cache.scene.lighting.sun_disc.is_none());
+        assert_eq!(cache.scene.lighting.stars.count, 0);
+    }
+
+    #[test]
+    fn star_count_sets_the_stars() {
+        let (mut dom, sky, mut cache) = place("23:00:00");
+        dom.set_property_by_name(sky, "StarCount", Value::Int32(0))
+            .unwrap();
+        changed(&dom, &mut cache);
+        assert_eq!(cache.scene.lighting.stars.count, 0);
+        dom.set_property_by_name(sky, "StarCount", Value::Int32(500))
+            .unwrap();
+        changed(&dom, &mut cache);
+        assert_eq!(cache.scene.lighting.stars.count, 500);
     }
 }

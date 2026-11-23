@@ -1,5 +1,5 @@
-//! What the sky draws besides its skybox: the sun and moon
-//! (docs/behavior/lighting/sky.md).
+//! What the sky draws besides its skybox: the sun and moon, the stars and
+//! the night's gradient (docs/behavior/lighting/sky.md).
 
 use super::*;
 
@@ -27,4 +27,29 @@ pub enum DiscImage {
     /// Rook's own soft white disc, for a texture that won't load (no
     /// Roblox install).
     Own,
+}
+
+/// The stars: `count` points two pixels across, as Studio's `AdvStars`
+/// draws them, each at a direction and brightness made from its index.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Stars {
+    /// `Sky.StarCount`.
+    pub count: u32,
+    /// How far the sky has turned about the Z axis with the time of day,
+    /// in radians, as the sun turns.
+    pub turn: f32,
+    /// The light units the brightest star draws at, the night's share
+    /// included.
+    pub light: f32,
+}
+
+/// The night sky's gradient, under the skybox's tinted images: sRGB
+/// colors overhead and along the horizon (fitted looks, through the tone
+/// curve's inverse as the plain sky is), and how much of it shows.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct NightSky {
+    pub top: [f32; 3],
+    pub horizon: [f32; 3],
+    /// 0 by day to 1 at night.
+    pub shown: f32,
 }

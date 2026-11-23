@@ -52,6 +52,13 @@ struct Globals {
     // tangent of half its size; its light units and what it draws in w (0
     // nothing, 1 its image, 2 Rook's own disc).
     discs: array<vec4<f32>, 4>,
+    // The night sky's gradient overhead (w: how much of it shows, 0 by day
+    // to 1 at night) and along the horizon, sRGB looks.
+    night_top: vec4<f32>,
+    night_horizon: vec4<f32>,
+    // The stars: x = how many, y = how far the sky has turned about Z
+    // (radians), z = the brightest one's light units.
+    stars: vec4<f32>,
 };
 
 // A world direction in the skybox's own axes, as the reflection cube holds

@@ -693,3 +693,70 @@ fn a_turned_skybox_turns_its_reflections() {
     // the sky it reflects is the turned sky's horizon.
     assert!(shots[0][2] > shots[1][2] + 10, "{shots:?}");
 }
+
+/// Stars are points over the night sky: a count of 0 draws none, and they
+/// don't show by day (no light).
+#[test]
+fn star_count_zero_draws_no_stars() {
+    let Ok(mut r) = Renderer::headless() else {
+        return;
+    };
+    const SIZE: usize = 128;
+    let camera = Camera::look_at(Vec3::ZERO, Vec3::new(0.0, 1.0, -0.5));
+    let mut lit = Vec::new();
+    for (count, light) in [(0, 1.0), (3000, 1.0), (3000, 0.0)] {
+        r.set_scene(&Scene {
+            lighting: Lighting {
+                sky_tint: [0.0; 3],
+                stars: Stars {
+                    count,
+                    turn: 0.3,
+                    light,
+                },
+                ..Lighting::default()
+            },
+            ..Scene::default()
+        });
+        let image = r
+            .render_to_image(SIZE as u32, SIZE as u32, &camera)
+            .unwrap();
+        lit.push(lit_middle(&image, SIZE).1);
+    }
+    assert_eq!(lit[0], 0);
+    assert!(lit[1] > 40, "{} star pixels", lit[1]);
+    assert_eq!(lit[2], 0);
+}
+
+/// The night's gradient shows only as far as `shown` says, and glows
+/// along the horizon more than overhead.
+#[test]
+fn the_night_sky_glows_at_the_horizon() {
+    let Ok(mut r) = Renderer::headless() else {
+        return;
+    };
+    let camera = Camera::look_at(Vec3::ZERO, Vec3::new(0.0, 0.6, -1.0));
+    let mut shots = Vec::new();
+    for shown in [0.0, 1.0] {
+        r.set_scene(&Scene {
+            lighting: Lighting {
+                sky_tint: [0.0; 3],
+                night_sky: NightSky {
+                    top: [0.02, 0.03, 0.08],
+                    horizon: [0.17, 0.12, 0.25],
+                    shown,
+                },
+                ..Lighting::default()
+            },
+            ..Scene::default()
+        });
+        shots.push(r.render_to_image(32, 32, &camera).unwrap());
+    }
+    let at = |image: &[u8], y: usize| image[(y * 32 + 16) * 4..][..3].to_vec();
+    assert_eq!(at(&shots[0], 31), [0, 0, 0]);
+    let (low, high) = (at(&shots[1], 31), at(&shots[1], 0));
+    assert!(
+        low[0] > high[0] && low[2] > high[2],
+        "{low:?} over {high:?}"
+    );
+    assert!(low[2] > low[1], "purple: {low:?}");
+}
