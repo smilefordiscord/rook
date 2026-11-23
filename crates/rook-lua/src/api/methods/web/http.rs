@@ -256,7 +256,7 @@ fn to_json(v: &LuaValue, depth: usize) -> ApiResult<serde_json::Value> {
     })
 }
 
-fn from_json(lua: &Lua, v: &serde_json::Value) -> mlua::Result<LuaValue> {
+pub(crate) fn from_json(lua: &Lua, v: &serde_json::Value) -> mlua::Result<LuaValue> {
     use serde_json::Value as J;
     Ok(match v {
         J::Null => LuaValue::Nil,

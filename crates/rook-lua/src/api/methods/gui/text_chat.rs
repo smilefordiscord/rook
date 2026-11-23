@@ -1,14 +1,13 @@
 //! TextChatService: channels' members and the messages between server and
 //! clients, written in `luau/text_chat.luau`. Messages travel as remote
-//! firings of TextChatService itself, which `Runtime::deliver_event` hands
-//! to that file instead of to scripts. See docs/behavior/gui/chat.md.
+//! firings of TextChatService itself (`std.service_send`), which
+//! `Runtime::deliver_event` hands to that file instead of to scripts. See
+//! docs/behavior/gui/chat.md.
 
-use mlua::{Lua, MultiValue, Table, Value as LuaValue};
+use mlua::{Lua, Table, Value as LuaValue};
 
 use super::RawMethod;
-use crate::net::{RemoteKind, RemoteMessage, to_net};
-use crate::runtime::ctx::args::Args;
-use crate::runtime::ctx::{ApiResult, Outcome, api_fn, with_world};
+use crate::runtime::ctx::with_world;
 
 pub(crate) fn native(owner: &str, name: &str) -> Option<RawMethod> {
     Some(match (owner, name) {
@@ -36,26 +35,8 @@ pub(crate) fn luau_source(owner: &str, name: &str) -> Option<&'static str> {
     })
 }
 
-/// `std.chat_send(to, ...)`: "server" from a client, "all" or a Player
-/// from the server.
-fn chat_send(lua: &Lua, args: MultiValue) -> ApiResult<Outcome> {
-    let a = Args::new(args, "chat_send");
-    let kind = match a.opt_instance(0).ok().flatten() {
-        Some(player) => RemoteKind::FireClient { player },
-        None if a.string(0)? == "server" => RemoteKind::FireServer,
-        None => RemoteKind::FireAllClients,
-    };
-    let args = a.rest(1).iter().map(|v| to_net(v, 0)).collect();
-    with_world(lua, |w| {
-        let remote = w.dom.find_service("TextChatService");
-        w.outbox.push(RemoteMessage { remote, kind, args });
-    });
-    Outcome::ret(lua, ())
-}
-
 pub(crate) fn install(lua: &Lua) -> mlua::Result<()> {
     let std: Table = lua.named_registry_value("rook.std")?;
-    std.set("chat_send", api_fn(lua, chat_send)?)?;
     let g = lua.globals();
     for name in ["game", "Enum", "DateTime"] {
         std.set(name, g.get::<LuaValue>(name)?)?;

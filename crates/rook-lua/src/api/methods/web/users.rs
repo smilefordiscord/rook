@@ -54,7 +54,7 @@ fn session_users(lua: &Lua) -> Vec<(i64, String, String)> {
     })
 }
 
-fn id(a: &Args, i: usize) -> ApiResult<i64> {
+pub(super) fn id(a: &Args, i: usize) -> ApiResult<i64> {
     Ok(a.number(i)? as i64)
 }
 
@@ -64,7 +64,7 @@ fn data(answer: WebAnswer) -> Result<Vec<Json>, String> {
     Ok(json["data"].as_array().cloned().unwrap_or_default())
 }
 
-fn values(lua: &Lua, v: impl mlua::IntoLuaMulti) -> Result<MultiValue, String> {
+pub(super) fn values(lua: &Lua, v: impl mlua::IntoLuaMulti) -> Result<MultiValue, String> {
     v.into_lua_multi(lua).map_err(|e| e.to_string())
 }
 
@@ -218,13 +218,13 @@ fn user_infos(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
     )
 }
 
-fn player_id(lua: &Lua, player: InstanceId) -> i64 {
+pub(super) fn player_id(lua: &Lua, player: InstanceId) -> i64 {
     with_world(lua, |w| w.dom.number_property(player, "UserId")).unwrap_or(0.0) as i64
 }
 
 /// Ask `domain` for `path` and answer with what `decode` makes of its
 /// `data` array, or with `local` when the domain has no endpoint.
-fn ask<T: mlua::IntoLuaMulti + 'static>(
+pub(super) fn ask<T: mlua::IntoLuaMulti + 'static>(
     lua: &Lua,
     domain: &str,
     path: &str,
@@ -301,14 +301,10 @@ fn user_has_badge(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
 /// `GET inventory/v1/users/{id}/items/GamePass/{pass}`.
 fn owns_game_pass(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
     let (user, pass) = (id(a, 0)?, id(a, 1)?);
-    let path = format!("/v1/users/{user}/items/GamePass/{pass}");
-    ask(lua, "inventory", &path, false, |d| !d.is_empty())
+    super::marketplace::owns(lua, super::marketplace::Item::GamePass, user, pass)
 }
 
 /// `GET inventory/v1/users/{id}/items/Asset/{asset}` for a Player.
 fn player_owns_asset(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
-    let player = a.instance(0)?;
-    let asset = id(a, 1)?;
-    let path = format!("/v1/users/{}/items/Asset/{asset}", player_id(lua, player));
-    ask(lua, "inventory", &path, false, |d| !d.is_empty())
+    super::marketplace::player_owns(lua, a, super::marketplace::Item::Asset)
 }

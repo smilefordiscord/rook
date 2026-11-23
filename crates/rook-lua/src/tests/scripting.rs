@@ -5,6 +5,7 @@ mod datatypes;
 mod errors;
 mod instances;
 mod json;
+mod marketplace;
 mod members;
 mod object_arguments;
 mod scheduling;

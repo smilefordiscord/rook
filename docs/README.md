@@ -89,6 +89,7 @@
     - [Datatype errors](behavior/scripting/datatype-errors.md): their messages in `pcall`
     - [Faces, Axes and PhysicalProperties](behavior/scripting/faces-and-axes.md): their `typeof` and printing
     - [JSON](behavior/scripting/json.md): which tables `JSONEncode` writes as arrays
+    - [Marketplace](behavior/scripting/marketplace.md): item info, ownership, purchase prompts and receipts, as Studio's test purchases
     - [Member lookup](behavior/scripting/member-lookup.md): lowercase first letters, and what a child of that name beats
     - [Nil Instance arguments](behavior/scripting/nil-arguments.md): what each method does with the null object
     - [Random](behavior/scripting/random.md): Luau's generator and each method's draws

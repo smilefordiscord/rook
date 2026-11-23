@@ -324,6 +324,13 @@ fn install_engine_helpers(lua: &Lua) -> mlua::Result<()> {
                     "MessageReceived" => "MessageReceived",
                     "SendingMessage" => "SendingMessage",
                     "Chatted" => "Chatted",
+                    "PromptPurchaseFinished" => "PromptPurchaseFinished",
+                    "PromptGamePassPurchaseFinished" => "PromptGamePassPurchaseFinished",
+                    "PromptProductPurchaseFinished" => "PromptProductPurchaseFinished",
+                    "PromptBundlePurchaseFinished" => "PromptBundlePurchaseFinished",
+                    "PromptSubscriptionPurchaseFinished" => "PromptSubscriptionPurchaseFinished",
+                    "PromptPremiumPurchaseFinished" => "PromptPremiumPurchaseFinished",
+                    "UserSubscriptionStatusChanged" => "UserSubscriptionStatusChanged",
                     _ => {
                         return Err(mlua::Error::RuntimeError(format!(
                             "unknown engine event {name}"

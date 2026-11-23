@@ -133,10 +133,35 @@ fn invoke(lua: &Lua, args: MultiValue) -> ApiResult<Outcome> {
     Ok(Outcome::Yield)
 }
 
+/// `std.service_send(service, to, ...)`: a firing of `service` itself,
+/// for the services whose messages travel that way (TextChatService,
+/// MarketplaceService; `Runtime::deliver_event` hands them to their
+/// Luau). `to` is "server" from a client, "all" or a Player from the
+/// server.
+fn service_send(lua: &Lua, args: MultiValue) -> ApiResult<Outcome> {
+    let a = Args::new(args, "service_send");
+    let service = a.instance(0)?;
+    let kind = match a.opt_instance(1).ok().flatten() {
+        Some(player) => RemoteKind::FireClient { player },
+        None if a.string(1)? == "server" => RemoteKind::FireServer,
+        None => RemoteKind::FireAllClients,
+    };
+    let args = a.rest(2).iter().map(|v| to_net(v, 0)).collect();
+    with_world(lua, |w| {
+        w.outbox.push(RemoteMessage {
+            remote: Some(service),
+            kind,
+            args,
+        });
+    });
+    Outcome::ret(lua, ())
+}
+
 pub(crate) fn install(lua: &Lua) -> mlua::Result<()> {
     let std: mlua::Table = lua.named_registry_value("rook.std")?;
     super::instances::bindables::install(lua, &std)?;
     std.set("invoke", api_fn(lua, invoke)?)?;
+    std.set("service_send", api_fn(lua, service_send)?)?;
     std.set(
         "reply",
         lua.create_function(

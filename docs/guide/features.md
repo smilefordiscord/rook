@@ -36,6 +36,7 @@ Everything Rook supports today. What's coming next is in the [roadmap](../roadma
 - Replication follows Roblox's rules: `NotReplicated` classes and properties stay on the server, a `PlayerGui` reaches only its player, server `Script` source is withheld, references are remapped, attributes and tags replicate, and client changes stay on the client (FilteringEnabled).
 - Joining creates the `Player`, `Backpack` and `PlayerGui` from `StarterPack` and `StarterGui`, fires `PlayerAdded`, sets `Players.LocalPlayer` and starts **LocalScripts** where Roblox allows them.
 - `RemoteEvent`, `UnreliableRemoteEvent` and `RemoteFunction`: arguments are copied between VMs the way Roblox copies them, and invokes yield until the reply.
+- MarketplaceService's purchase prompts, from a server or client, make Studio's test purchases: the player answers Rook's own prompt, the session owns what was bought, and developer products' receipts go to `ProcessReceipt` ([marketplace](../behavior/scripting/marketplace.md)).
 
 ## Physics
 
