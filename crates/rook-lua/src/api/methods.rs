@@ -23,6 +23,7 @@ pub(crate) mod characters;
 pub(crate) mod content;
 mod context_actions;
 pub(crate) mod core;
+pub(crate) mod data_stores;
 mod effects;
 mod encoding;
 pub(crate) mod gui;
@@ -87,6 +88,7 @@ pub(crate) fn native(owner: &str, name: &str) -> Option<RawMethod> {
             content::native,
             web::native,
             teleport::native,
+            data_stores::native,
             localization::native,
             core::native,
         ],
@@ -109,6 +111,7 @@ pub(crate) fn luau_source(owner: &str, name: &str) -> Option<&'static str> {
             gui::luau_source,
             remotes::luau_source,
             web::luau_source,
+            data_stores::luau_source,
         ],
         owner,
         name,

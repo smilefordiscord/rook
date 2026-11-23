@@ -1,11 +1,11 @@
 //! Members Roblox answers from its servers: HttpService, users, groups,
-//! badges, text filtering, DataStores, MemoryStores, MessagingService and
+//! badges, text filtering, MemoryStores, MessagingService and
 //! MarketplaceService, through [`requests`] where Rook has an endpoint.
+//! DataStores have their own topic (`super::data_stores`).
 
 use crate::api::methods::{RawMethod, first};
 
 mod badges;
-pub(crate) mod data_stores;
 pub(crate) mod filtering;
 mod groups;
 pub(crate) mod http;
@@ -21,7 +21,6 @@ pub(super) fn native(owner: &str, name: &str) -> Option<RawMethod> {
     first(
         &[
             marketplace::native,
-            data_stores::native,
             http::native,
             users::native,
             groups::native,
@@ -39,7 +38,6 @@ pub(super) fn native(owner: &str, name: &str) -> Option<RawMethod> {
 pub(super) fn luau_source(owner: &str, name: &str) -> Option<&'static str> {
     first(
         &[
-            data_stores::luau_source,
             http::luau_source,
             memory_stores::luau_source,
         ],

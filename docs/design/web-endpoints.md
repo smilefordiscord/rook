@@ -61,7 +61,7 @@ These answer locally only, with no endpoint path yet:
 | Members | Roblox's domain | Local answer |
 |---|---|---|
 | `PolicyService:GetPolicyInfoForPlayerAsync` | Roblox's own policy service | No restrictions |
-| DataStores (`DataStoreService`, `GlobalDataStore`, ordered stores) | Roblox's game servers | Kept in memory for the run |
+| DataStores (`DataStoreService`, `GlobalDataStore`, ordered stores) | Roblox's game servers | Kept in memory for the run ([data stores](../behavior/scripting/data-stores.md)) |
 | MemoryStoreService | Roblox's game servers | Kept in memory for the session ([memory stores](../behavior/scripting/memory-stores.md)) |
 | MessagingService | Roblox's game servers | Delivered to the session's own subscribers ([messaging](../behavior/scripting/messaging.md)) |
 | `Player:GetJoinData`, `TeleportService:GetLocalPlayerTeleportData` | Roblox's game servers | What the session's own teleports carried; empty and nil for a direct join ([teleports](../behavior/scripting/teleports.md)) |

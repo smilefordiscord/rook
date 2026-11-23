@@ -235,6 +235,8 @@ pub struct World {
     pub assets: crate::api::methods::content::assets::AssetRequests,
     /// Web requests waiting for the engine to send them.
     pub web: crate::api::methods::web::requests::WebRequests,
+    /// DataStoreService's stores, budgets and objects.
+    pub(crate) data_stores: crate::data_stores::DataStores,
     /// What each TextFilterResult holds.
     pub(crate) filter_results: FxHashMap<InstanceId, crate::api::methods::web::filtering::Filtered>,
     /// Badges awarded in this session, as (user, badge), when no badges
@@ -376,6 +378,7 @@ impl World {
             content: Default::default(),
             assets: Default::default(),
             web: Default::default(),
+            data_stores: Default::default(),
             filter_results: FxHashMap::default(),
             badges_awarded: FxHashSet::default(),
             memory_stores: Default::default(),
@@ -457,6 +460,7 @@ impl World {
             .chain(self.input.mouse_object)
             .chain(self.audio.scheduled.iter().map(|s| s.player))
             .chain(self.local_sounds.iter().copied())
+            .chain(self.data_stores.objects.held())
             .chain(self.effect_calls.iter().map(|(id, _)| *id))
             .chain(self.input.tool_mice.iter().map(|&(_, mouse)| mouse))
             .chain(
@@ -475,6 +479,7 @@ impl World {
         self.filter_results.remove(&id);
         self.memory_stores.objects.remove(&id);
         self.pages.remove(&id);
+        self.data_stores.objects.forget(id);
         self.prompts.forget(id);
         self.modules.results.remove(&id);
         self.modules.loading.remove(&id);

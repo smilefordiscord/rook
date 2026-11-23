@@ -8,8 +8,10 @@
 mod api;
 pub mod audio_api;
 mod calls;
+mod data_stores;
 pub mod gamepads;
 mod memory_stores;
+mod json;
 mod net;
 pub mod runtime;
 mod styles;

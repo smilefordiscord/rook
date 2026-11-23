@@ -16,6 +16,7 @@ use rook_platform::network::{NetworkError, Reach, Response};
 
 use super::RawMethod;
 use super::requests::{self as web, WebAnswer, WebRequest};
+use crate::json;
 use crate::runtime::ctx::args::{Args, display_value, format_number, number_of};
 use crate::runtime::ctx::{ApiResult, Outcome, ScriptError, api_fn, with_world};
 
@@ -231,43 +232,28 @@ pub(crate) fn to_json(v: &LuaValue, depth: usize, strict: bool) -> ApiResult<ser
     Ok(match v {
         LuaValue::Boolean(b) => J::Bool(*b),
         LuaValue::Integer(_) | LuaValue::Number(_) => {
-            let n = crate::runtime::ctx::args::number_of(v).unwrap_or(0.0);
-            if n.fract() == 0.0 && n.abs() < 9.0e15 {
-                J::Number((n as i64).into())
-            } else {
-                serde_json::Number::from_f64(n).map_or(J::Null, J::Number)
-            }
+            json::number(crate::runtime::ctx::args::number_of(v).unwrap_or(0.0))
         }
         LuaValue::String(s) => J::String(s.to_string_lossy()),
-        LuaValue::Table(t) => {
-            // Measured in Studio 0.748: a table with a length (`#t`) is an
-            // array of 1 to that length, nil as null and other keys
-            // dropped; an empty one is `[]`; the rest are objects.
-            let len = t.raw_len();
-            if len > 0 || t.is_empty() {
+        LuaValue::Table(t) => match json::array_length(t) {
+            Some(len) => {
                 let mut out = Vec::with_capacity(len);
                 for i in 1..=len {
                     out.push(to_json(&t.raw_get::<LuaValue>(i)?, depth + 1, strict)?);
                 }
                 J::Array(out)
-            } else {
+            }
+            None => {
                 let mut out = serde_json::Map::new();
                 for pair in t.clone().pairs::<LuaValue, LuaValue>() {
                     let (k, v) = pair?;
-                    let key = match &k {
-                        LuaValue::String(s) => s.to_string_lossy(),
-                        LuaValue::Integer(_) | LuaValue::Number(_) => {
-                            crate::runtime::ctx::args::format_number(
-                                crate::runtime::ctx::args::number_of(&k).unwrap_or(0.0),
-                            )
-                        }
-                        _ => return Err(ScriptError("Can't convert to JSON".into())),
-                    };
+                    let key = json::object_key(&k)
+                        .ok_or_else(|| ScriptError("Can't convert to JSON".into()))?;
                     out.insert(key, to_json(&v, depth + 1, strict)?);
                 }
                 J::Object(out)
             }
-        }
+        },
         LuaValue::Nil => J::Null,
         _ if strict => return Err(ScriptError("Can't convert to JSON".into())),
         _ => J::Null,

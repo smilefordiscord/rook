@@ -88,6 +88,7 @@
     - [Badges and groups](behavior/scripting/badges-and-groups.md): awarding and checking badges, group roles and GroupService's lookups
     - [Bindables](behavior/scripting/bindables.md): the copies arguments arrive as
     - [Content](behavior/scripting/content.md): the `Content` datatype and its constructors
+    - [Data stores](behavior/scripting/data-stores.md): versions, key info, listings, budgets and limits
     - [Datatype errors](behavior/scripting/datatype-errors.md): their messages in `pcall`
     - [Encoding](behavior/scripting/encoding.md): EncodingService's Base64 and zstd, and their errors
     - [Faces, Axes and PhysicalProperties](behavior/scripting/faces-and-axes.md): their `typeof` and printing

@@ -99,18 +99,16 @@ pub(crate) fn install(lua: &Lua) -> mlua::Result<()> {
     g.set("time", time_fn.clone())?;
     g.set("elapsedTime", time_fn.clone())?;
     g.set("ElapsedTime", time_fn)?;
-    let start_epoch = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map_or(0.0, |d| d.as_secs_f64());
-    // Fixed clocks keep tick() consistent with game time.
     g.set(
         "tick",
-        api_ret(lua, move |lua, _| Ok(start_epoch + now(lua)))?,
+        api_ret(lua, |lua, _| {
+            Ok(with_world(lua, |w| w.scheduler.unix_time()))
+        })?,
     )?;
     g.set("getfenv", getfenv::getfenv(lua, std.get("error")?)?)?;
     std.set(
         "datastore",
-        super::methods::web::data_stores::datastore_helpers(lua)?,
+        super::methods::data_stores::helpers(lua, &std)?,
     )?;
     g.set(
         "version",
