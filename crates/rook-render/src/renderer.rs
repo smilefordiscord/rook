@@ -102,6 +102,8 @@ pub struct Renderer {
     /// The parts Highlights cover, drawn into their mask.
     highlights: HighlightParts,
     lighting: Lighting,
+    /// The post effects, the tone curve among them.
+    post: PostEffects,
     /// The local lights and their spatial hash (group 3).
     pub(crate) lights: GpuLights,
     /// The emitters' particles.

@@ -67,6 +67,7 @@
     - [The sun](behavior/lighting/sun.md)
     - [The sky over the day](behavior/lighting/sky.md): its tint at dawn and dusk, and what it reaches
     - [Tone mapping](behavior/lighting/tone-mapping.md): Studio's HDR blending, Neon's glow, ColorGrading's curves and fog
+    - [Post-processing](behavior/lighting/post-processing.md): ColorCorrection, Blur, Bloom, SunRays and DepthOfField, and where each sits against the tone curve
   - Meshes
     - [Built-in shapes](behavior/meshes/built-in-shapes.md): SpecialMesh types, BlockMesh, CylinderMesh
     - [File meshes](behavior/meshes/file-meshes.md)

@@ -172,13 +172,8 @@ impl Renderer {
         let gui = self
             .gui
             .record(&self.queue, &mut encoder, &gui_layer, (width, height));
-        self.tonemap.record(
-            &self.queue,
-            &mut encoder,
-            target,
-            l.tonemapper,
-            (looks, gui),
-        );
+        self.tonemap
+            .record(&self.queue, &mut encoder, target, &self.post, (looks, gui));
         if let Some(timer) = &mut self.timer {
             timer.resolve(&mut encoder, shadow.is_some());
         }

@@ -182,6 +182,7 @@ impl Renderer {
             waiting: crate::renderer::draws::waiting::Waiting::default(),
             highlights: HighlightParts::default(),
             lighting: Lighting::default(),
+            post: PostEffects::default(),
             lights,
             particles: GpuParticles::default(),
             ribbons: GpuRibbons::default(),

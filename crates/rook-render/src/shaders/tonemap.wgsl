@@ -1,13 +1,18 @@
 // The last pass: the frame (Studio's encoding of light units, `tone.wgsl`)
-// through the place's tone curve, onto the screen, with Highlights and then
-// the GUI over it.
+// through the place's tone curve and the ColorCorrections' matrix, onto
+// the screen, with Highlights and then the GUI over it
+// (docs/behavior/lighting/post-processing.md).
 
 import package::tone::{FRAME_LIGHT, linear_to_srgb, srgb_to_linear, studio_light3};
 
 struct Tone {
     // x: the curve (0 Default, 1 Retro); y: 1 when the mask holds
-    // Highlights; z: 1 when the GUI layer holds GUI.
+    // Highlights; z: 1 when the GUI layer holds GUI; w: 1 when `color`
+    // applies.
     curve: vec4<f32>,
+    // The ColorCorrections' matrix: each row times the sRGB pixel, plus
+    // its w.
+    color: array<vec4<f32>, 3>,
     // Each Highlight's fill and outline (sRGB, and their opacity), by its
     // number - 1 (`renderer/passes/highlights.rs`).
     looks: array<vec4<f32>, 62>,
@@ -38,6 +43,14 @@ fn fs_tonemap(@builtin(position) at: vec4<f32>) -> @location(0) vec4<f32> {
         out = srgb_to_linear(min(sqrt(units), vec3(1.0)));
     } else {
         out = studio_light3(units);
+    }
+    // After the curve, on the pixel's values, as Studio's last pass
+    // multiplies its output (`shaders_glsl3.pack`); PostEffects leave
+    // Highlights and the GUI alone.
+    if tone.curve.w == 1.0 {
+        let c = vec4(linear_to_srgb(out), 1.0);
+        let graded = vec3(dot(tone.color[0], c), dot(tone.color[1], c), dot(tone.color[2], c));
+        out = srgb_to_linear(clamp(graded, vec3(0.0), vec3(1.0)));
     }
     if tone.curve.y == 1.0 {
         out = highlighted(p, out);

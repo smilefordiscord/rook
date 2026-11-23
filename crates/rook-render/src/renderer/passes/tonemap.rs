@@ -1,22 +1,28 @@
 //! The frame and the tone pass: the main pass draws light units into the
 //! frame in Studio's encoding (`shaders/tone.wgsl`), blending there as
 //! Studio blends, and the tone pass puts it through the place's tone curve
-//! onto the target (docs/behavior/lighting/tone-mapping.md), Highlights and the
-//! GUI layer over it.
+//! onto the target (docs/behavior/lighting/tone-mapping.md), then the
+//! ColorCorrections' matrix (docs/behavior/lighting/post-processing.md),
+//! Highlights and the GUI layer over it. With no post effect it's the
+//! frame's only pass after the main pass and the Highlights' mask.
 
 use wesl_core::include_wesl;
 
 use super::gui::GUI_FORMAT;
 use super::*;
 use crate::renderer::passes::highlights::{HIGHLIGHT_LIMIT, Looks, MASK_FORMAT};
+use crate::scene::COLOR_IDENTITY;
 
 /// What the tone pass reads besides the frame and the mask.
 #[repr(C)]
 #[derive(Debug, Clone, Copy, Pod, Zeroable)]
 struct ToneUniform {
     /// x: the curve (0 Default, 1 Retro); y: 1 when the mask holds
-    /// Highlights this frame; z: 1 when the GUI layer holds GUI.
+    /// Highlights this frame; z: 1 when the GUI layer holds GUI; w: 1
+    /// when `color` applies.
     curve: [f32; 4],
+    /// The ColorCorrections' matrix, on sRGB pixel values.
+    color: ColorMatrix,
     looks: Looks,
 }
 
@@ -205,31 +211,33 @@ impl Tonemap {
         (view, mask, gui)
     }
 
-    /// The frame through `tonemapper`'s curve onto `target`, with the
-    /// Highlights' `looks` over it when the mask holds any, and the GUI
-    /// layer over that when it holds GUI.
+    /// The frame through `post`'s curve and color matrix onto `target`,
+    /// with the Highlights' `looks` over it when the mask holds any, and
+    /// the GUI layer over that when it holds GUI.
     pub(crate) fn record(
         &self,
         queue: &wgpu::Queue,
         encoder: &mut wgpu::CommandEncoder,
         target: &wgpu::TextureView,
-        tonemapper: Tonemapper,
+        post: &PostEffects,
         (looks, gui): (Option<&Looks>, bool),
     ) {
         let Some(Frame { group, .. }) = &self.frame else {
             return;
         };
-        let curve = match tonemapper {
+        let curve = match post.tonemapper {
             Tonemapper::Default => 0.0f32,
             Tonemapper::Retro => 1.0,
         };
+        let color = post.color_matrix();
         let uniform = ToneUniform {
             curve: [
                 curve,
                 f32::from(u8::from(looks.is_some())),
                 f32::from(u8::from(gui)),
-                0.0,
+                f32::from(u8::from(color.is_some())),
             ],
+            color: color.unwrap_or(COLOR_IDENTITY),
             looks: looks.copied().unwrap_or([[0.0; 4]; 2 * HIGHLIGHT_LIMIT]),
         };
         queue.write_buffer(&self.uniform, 0, bytemuck::bytes_of(&uniform));

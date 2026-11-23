@@ -153,7 +153,8 @@ The main pass draws into a frame (`renderer/passes/tonemap.rs`, Rgba16Float to
 avoid the 8-bit frame's banding) holding Studio's encoding, `frame` in
 `shaders/tone.wgsl`, and every pipeline blends there as before. The tone
 pass then decodes it and applies the default curve or Retro's, from the
-first enabled ColorGradingEffect in Lighting.
+first enabled ColorGradingEffect under Lighting or the Camera
+([post-processing](post-processing.md)).
 
 Light adds up in light units (`diffuse_light` in `shaders/lighting.wgsl`):
 the ambient as its color squared, the sky's diffuse light and the local
@@ -178,5 +179,5 @@ near-black see-through covers by up to 5 levels with Roblox's defaults
 (FogStart 0, FogEnd 100000); the fog below tints less at a given
 distance.
 
-Not done: ColorGradingEffects under the Camera, the other presets, and
-Bloom and ColorCorrection (M13).
+Not done: the other presets (M13). The post effects around the curve
+are in [post-processing](post-processing.md).

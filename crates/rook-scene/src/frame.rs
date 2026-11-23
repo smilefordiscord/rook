@@ -4,7 +4,7 @@ use glam::Vec3;
 use rook_content::Resolver;
 use rook_content::decode::image::Image;
 use rook_engine::{DataModel, RenderChanges};
-use rook_render::{EffectSlots, ImageHash, MeshHash, Renderer, TerrainVoxels};
+use rook_render::{EffectSlots, ImageHash, MeshHash, PostEffects, Renderer, TerrainVoxels};
 
 use crate::gui::GuiUpdate;
 use crate::{Floors, SceneCache, SceneChange};
@@ -127,6 +127,7 @@ impl SceneCache {
             lights: self.lights.take_changes(),
             viewports: self.take_viewport_changes(),
             terrain: self.take_light_voxels(),
+            post: self.take_post_change(),
             effects: self.effects.take_changes(),
             dropped: self.take_dropped_meshes(),
             images: self.images.take_fresh(),
@@ -178,6 +179,8 @@ pub struct ToRender {
     viewports: Vec<u64>,
     /// What changed of the terrain's voxels, for the light voxels.
     terrain: Option<TerrainVoxels>,
+    /// The post effects, when they changed.
+    post: Option<PostEffects>,
     effects: EffectSlots,
     dropped: Vec<MeshHash>,
     /// Images loaded since the last hand-over: the renderer takes their
@@ -192,6 +195,7 @@ impl ToRender {
             || !self.lights.is_empty()
             || !self.viewports.is_empty()
             || self.terrain.is_some()
+            || self.post.is_some()
             || !self.effects.is_empty()
     }
 
@@ -237,6 +241,9 @@ impl ToRender {
             if !self.viewports.is_empty() {
                 renderer.update_viewports(scene, &self.viewports);
             }
+        }
+        if let Some(post) = &self.post {
+            renderer.update_post_effects(post);
         }
         // A new scene keeps the terrain's voxels the renderer has.
         if let Some(voxels) = self.terrain {

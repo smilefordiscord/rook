@@ -125,6 +125,8 @@ pub struct SceneCache {
     /// The lighting changed outside [`SceneCache::apply`] (a skybox image
     /// arrived).
     lighting_changed: bool,
+    /// `scene.post` changed since the renderer last took it.
+    post_changed: bool,
     terrain: TerrainCache,
     lights: LightCache,
     effects: EffectCache,
@@ -173,6 +175,7 @@ impl SceneCache {
             free: Vec::new(),
             sky_files: FxHashSet::default(),
             lighting_changed: false,
+            post_changed: false,
             terrain: TerrainCache::default(),
             lights: LightCache::default(),
             effects: EffectCache::new(textures),
@@ -235,6 +238,7 @@ impl SceneCache {
         let index = &self.index;
         self.shown.retain(|id, _| index.contains_key(id));
         self.scene.lighting = self.lighting(dom);
+        self.scene.post = lighting::post_effects(dom);
         self.lights.build(dom, &mut self.scene.lights);
         self.with_effects(|effects, drawn, images| effects.build(dom, drawn, images));
     }
@@ -262,5 +266,10 @@ impl SceneCache {
 
     pub(crate) fn take_lighting_change(&mut self) -> bool {
         std::mem::take(&mut self.lighting_changed)
+    }
+
+    /// The post effects, if they changed since the last call.
+    pub(crate) fn take_post_change(&mut self) -> Option<rook_render::PostEffects> {
+        std::mem::take(&mut self.post_changed).then(|| self.scene.post.clone())
     }
 }

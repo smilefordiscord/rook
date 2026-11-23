@@ -13,20 +13,23 @@ use crate::*;
 /// may have entered or left the tree (parented, moved between parents or
 /// destroyed), `parts` changed in any other way, `moved` only in their
 /// CFrame (what physics does to every moving part every step), plus
-/// Lighting if `lighting`, the terrain's look (a Terrain's properties,
-/// `Workspace.GlobalWind`) if `terrain`, the local lights (and
-/// Attachments, which may carry one) whose properties changed in `lights`,
-/// and the lights entering or leaving the tree in `lights_placed`; the
-/// same for the visual effects ([`is_effect_class`]) in `effects` and
-/// `effects_placed`, plus the effect methods scripts called. A FloorWire
-/// is both an adornment of its `From` part (its wire) and an effect (its
-/// moving images); moving either of its parts redraws its wire. Instances
-/// freed since are in `collected` alone: a renderer drops what it keeps of
-/// them without reading them.
+/// Lighting if `lighting`, the post effects if `post_effects`, the
+/// terrain's look (a Terrain's properties, `Workspace.GlobalWind`) if
+/// `terrain`, the local lights (and Attachments, which may carry one)
+/// whose properties changed in `lights`, and the lights entering or
+/// leaving the tree in `lights_placed`; the same for the visual effects
+/// ([`is_effect_class`]) in `effects` and `effects_placed`, plus the
+/// effect methods scripts called. A FloorWire is both an adornment of its
+/// `From` part (its wire) and an effect (its moving images); moving either
+/// of its parts redraws its wire. Instances freed since are in `collected`
+/// alone: a renderer drops what it keeps of them without reading them.
 #[derive(Debug, Clone, Default)]
 pub struct RenderChanges {
     pub full: bool,
     pub lighting: bool,
+    /// A PostEffect under Lighting or the current Camera changed, came or
+    /// went, or `Workspace.CurrentCamera` did ([`post_effect_holders`]).
+    pub post_effects: bool,
     pub terrain: bool,
     /// The Terrain's voxels were written whole (its `SmoothGrid`).
     pub terrain_voxels: bool,
@@ -61,6 +64,7 @@ impl RenderChanges {
         Self {
             full: true,
             lighting: true,
+            post_effects: true,
             ..Self::default()
         }
     }
@@ -68,6 +72,7 @@ impl RenderChanges {
     pub fn is_empty(&self) -> bool {
         !self.full
             && !self.lighting
+            && !self.post_effects
             && !self.terrain
             && !self.terrain_voxels
             && self.terrain_edits.is_empty()
@@ -127,6 +132,13 @@ pub fn is_effect_class(class: &str) -> bool {
         class,
         "Fire" | "Smoke" | "Sparkles" | "ParticleEmitter" | "Beam" | "Trail" | "Explosion"
     )
+}
+
+/// What a PostEffect works under, directly: Lighting and the current
+/// Camera (Confirmed: creator-docs PostEffect). Lighting's come first.
+pub fn post_effect_holders(dom: &Dom) -> [Option<InstanceId>; 2] {
+    let camera = (dom.find_service("Workspace")).and_then(|w| dom.ref_property(w, "CurrentCamera"));
+    [dom.find_service("Lighting"), camera]
 }
 
 /// Whether `id` adorns a part, drawn with it: the classes with an
@@ -280,6 +292,9 @@ pub(crate) struct RenderIds {
     /// What a ViewportFrame's look is read from (`rook-scene`).
     viewport_look: [PropertyId; 6],
     camera: ClassId,
+    post_effect: ClassId,
+    /// `Workspace.CurrentCamera`: which Camera's PostEffects apply.
+    current_camera: PropertyId,
 }
 
 impl RenderIds {
@@ -344,6 +359,11 @@ impl RenderIds {
                         .id
                 }),
                 camera: class("Camera"),
+                post_effect: class("PostEffect"),
+                current_camera: db
+                    .find_property(class("Workspace"), "CurrentCamera")
+                    .expect("Workspace.CurrentCamera")
+                    .id,
             }
         });
         &IDS

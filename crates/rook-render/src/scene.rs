@@ -14,13 +14,16 @@ use rook_types::{
 
 mod emitters;
 mod lighting;
+mod post;
 mod ribbons;
 mod terrain;
 pub use emitters::{
     Curve, Emitter, EmitterLook, EmitterShape, Flipbook, FlipbookMode, InOut, Orientation,
     Sequence, Spawn,
 };
-pub use lighting::{LightShape, Lighting, LocalLight, SKYBOX_FACES, Tonemapper};
+pub use lighting::{LightShape, Lighting, LocalLight, SKYBOX_FACES};
+pub(crate) use post::IDENTITY as COLOR_IDENTITY;
+pub use post::{ColorCorrection, ColorMatrix, PostEffects, Tonemapper};
 pub use ribbons::{Anchor, Beam, FloorWire, RibbonLook, TextureMode, Trail};
 pub use terrain::{TerrainLook, TerrainVoxels};
 
@@ -446,6 +449,8 @@ pub struct Scene {
     /// The FloorWires' moving images (their wires are `parts`).
     pub floor_wires: Vec<Option<FloorWire>>,
     pub lighting: Lighting,
+    /// The post effects, the tone curve among them.
+    pub post: PostEffects,
     pub terrain: TerrainLook,
     /// The Highlights' looks, by the key parts name them by: changing one
     /// changes no part.

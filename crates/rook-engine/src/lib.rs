@@ -23,7 +23,9 @@ pub use bridges::input::{
     CursorLook, GamepadAxis, GamepadKind, InputEvent, ScreenPoint, SystemCursor,
 };
 
-pub use bridges::render_changes::{RenderChanges, adorned_part, is_effect_class};
+pub use bridges::render_changes::{
+    RenderChanges, adorned_part, is_effect_class, post_effect_holders,
+};
 
 use rustc_hash::FxHashMap;
 use std::sync::Arc;

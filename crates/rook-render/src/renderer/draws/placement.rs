@@ -62,6 +62,7 @@ impl Renderer {
         self.update_highlights(scene);
         self.lights.clear_blockers();
         self.update_lighting(scene);
+        self.update_post_effects(&scene.post);
         self.lights.replace(&self.device, &scene.lights);
         self.particles.sim.replace(&scene.emitters);
         self.ribbons
@@ -88,6 +89,11 @@ impl Renderer {
         for hash in scene.lighting.skybox.into_iter().flatten() {
             self.image_readiness(hash);
         }
+    }
+
+    /// Take the post effects again.
+    pub fn update_post_effects(&mut self, post: &PostEffects) {
+        self.post.clone_from(post);
     }
 
     /// Take the scene's Highlight looks again.

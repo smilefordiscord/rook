@@ -1,8 +1,10 @@
 mod local;
+mod post;
 mod sky;
 mod sun;
 
 pub(super) use local::LightCache;
+pub(super) use post::post_effects;
 
 use super::*;
 use sky::sky_tint;
@@ -72,24 +74,9 @@ pub(super) fn lighting(dom: &Dom) -> Lighting {
         .float_property(id, "ExposureCompensation")
         .unwrap_or(0.0)
         .exp2();
-    l.tonemapper = tonemapper(dom, id);
     l.sky_tint = sky_tint(hours);
     l.sky_bottom = l.sky_horizon;
     l
-}
-
-/// The tone curve of the first enabled ColorGradingEffect in Lighting
-/// (`TonemapperPreset`: Default 0, Retro 1); without one, Studio's default
-/// curve (measured: the Ambient ramp of places without one follows it;
-/// docs/behavior/lighting/tone-mapping.md).
-fn tonemapper(dom: &Dom, lighting: InstanceId) -> rook_render::Tonemapper {
-    let grading = dom.children(lighting).iter().copied().find(|&c| {
-        dom.class_name(c) == "ColorGradingEffect" && dom.bool_property(c, "Enabled").unwrap_or(true)
-    });
-    match grading.and_then(|c| dom.enum_item_property(c, "TonemapperPreset")) {
-        Some("Retro") => rook_render::Tonemapper::Retro,
-        _ => rook_render::Tonemapper::Default,
-    }
 }
 
 impl SceneCache {
