@@ -1,6 +1,7 @@
 //! Teleports at the session's two ends (docs/behavior/scripting/teleports.md):
-//! the server routes its scripts' requests into [`Plan`]s, and a plan its
-//! host can carry out sends the players away as [`Departure`]s; a client
+//! the server routes its scripts' requests into [`Plan`]s, and a plan
+//! sends the players away as [`Departure`]s, both for the
+//! [`Router`](crate::session::router::Router), the one caller; a client
 //! hears how its player's teleport goes, and [`Carried`] is what it takes
 //! to the next server's client.
 
@@ -13,21 +14,14 @@ use super::*;
 use crate::universe::Universe;
 use crate::universe::routing::{self, Refusal, Route, RunningServer, Target};
 
-/// A routed teleport, for the host to carry out: once its server is there
-/// (started, for [`Target::New`]), [`ServerHost::depart`]; if it can't
-/// be, [`ServerHost::refuse`].
+/// A routed teleport, which [`ServerHost::depart`] carries out
+/// ([`crate::session::router`]).
 #[derive(Debug)]
-pub struct Plan {
+pub(crate) struct Plan {
     request: TeleportRequest,
     /// The clients of the players going.
     clients: Vec<usize>,
-    pub route: Route,
-}
-
-impl Plan {
-    pub fn place_id(&self) -> i64 {
-        self.request.place_id
-    }
+    pub(crate) route: Route,
 }
 
 /// A player who left for another server.
@@ -38,7 +32,6 @@ pub struct Departure {
     pub name: String,
     pub user_id: i64,
     pub place_id: i64,
-    pub target: Target,
     /// What the destination's server holds for the player.
     pub join: JoinData,
     /// The teleport data the arriving client gets.
@@ -79,24 +72,11 @@ impl ServerHost {
         }
     }
 
-    /// [`ServerHost::teleports`] for a server that runs alone, outside a
-    /// universe's servers (a session of its own, or Run mode): lookups
-    /// find only its own players, and every teleport is refused.
-    pub fn teleports_alone(&mut self) {
-        if !self.server.runtime().wants_teleports() {
-            return;
-        }
-        let mut running = vec![self.running()];
-        for plan in self.teleports(&Universe::default(), &mut running) {
-            self.refuse(plan, not_started(&"no universe holds this server"));
-        }
-    }
-
     /// Route the teleports this server's scripts asked for since the last
     /// call, and answer their lookups. `running` is every server of the
     /// universe; the plans' new servers and joining players are added to
     /// it, so later requests see them. Refused teleports fail here.
-    pub fn teleports(
+    pub(crate) fn teleports(
         &mut self,
         universe: &Universe,
         running: &mut Vec<RunningServer>,
@@ -179,16 +159,6 @@ impl ServerHost {
         plans
     }
 
-    /// The plan's teleport can't go (its server didn't start): it fails
-    /// for each of its players.
-    #[expect(
-        clippy::needless_pass_by_value,
-        reason = "a refused plan is spent, as a departed one is"
-    )]
-    pub fn refuse(&mut self, plan: Plan, refusal: Refusal) {
-        self.refuse_clients(&plan.request, &plan.clients, refusal);
-    }
-
     fn refuse_clients(&mut self, request: &TeleportRequest, clients: &[usize], refusal: Refusal) {
         let players: Vec<(Option<usize>, InstanceId)> = (clients.iter())
             .filter_map(|&i| Some((Some(i), self.player(i)?)))
@@ -234,7 +204,7 @@ impl ServerHost {
     /// `SourceGameId`, `TeleportData` and, for a group, `Members`
     /// (creator-docs Player:GetJoinData); a client's own legacy teleport
     /// carries its data to the client only.
-    pub fn depart(&mut self, plan: Plan) -> Vec<Departure> {
+    pub(crate) fn depart(&mut self, plan: Plan) -> Vec<Departure> {
         let Plan {
             request,
             clients,
@@ -296,7 +266,6 @@ impl ServerHost {
                 name,
                 user_id,
                 place_id: request.place_id,
-                target: route.target.clone(),
                 join,
                 teleport_data: request.data.clone(),
                 messages,
@@ -309,7 +278,7 @@ impl ServerHost {
 impl ClientHost {
     /// What the client takes to its next server: the teleport's data, its
     /// teleport GUI and its teleport settings.
-    pub fn carry(&self, teleport_data: Option<NetValue>) -> Carried {
+    pub(crate) fn carry(&self, teleport_data: Option<NetValue>) -> Carried {
         let rt = self.client.runtime();
         let gui = rt.teleport_gui().map(|gui| {
             let w = rt.world();
@@ -378,12 +347,4 @@ impl ClientHost {
             })
             .collect()
     }
-}
-
-/// What a refusal for a plan's routing says when its server didn't start.
-pub(crate) fn not_started(e: &impl std::fmt::Display) -> Refusal {
-    (
-        rook_lua::teleport::TeleportResult::Failure,
-        format!("The place couldn't start: {e}"),
-    )
 }

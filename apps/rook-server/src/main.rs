@@ -8,6 +8,7 @@ use std::time::{Duration, Instant};
 use clap::Parser;
 use rook_content::Resolver;
 use rook_engine::session::server_thread::{Placement, ServerThread};
+use rook_engine::universe::PlaceSource;
 use rook_engine::{Options, settings};
 
 #[derive(Debug, Parser)]
@@ -63,8 +64,14 @@ fn serve(args: &Args) -> anyhow::Result<()> {
         content: Some(Arc::new(Resolver::new(settings::content_config(true)))),
         ..Options::default()
     };
-    let (server, _) =
-        ServerThread::spawn(place.into(), options, script, placement, None)?.wait()?;
+    let (server, _) = ServerThread::spawn(
+        PlaceSource::Bytes(place.into()),
+        options,
+        script,
+        placement,
+        None,
+    )?
+    .wait()?;
     server.run(true);
     #[cfg(feature = "repl")]
     let mut repl = if args.no_repl {

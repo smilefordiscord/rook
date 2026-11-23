@@ -93,10 +93,23 @@ the target counts only errors Rook causes, checked against Studio.
        one thread (tests, and later a dedicated host running several
        places), starting a destination server from the universe and
        moving the player's client to it. The player runs one server at
-       a time: the old client keeps running while the destination loads
-       on a new server thread, as Roblox's does until it switches, then
-       the window switches to the new client and the old server closes,
-       empty.
+       a time: the old client keeps running while the destination reads
+       and loads its place on a new server thread, as Roblox's does
+       until it switches, then the window switches to the new client and
+       the old server closes, empty, on its own thread, without the
+       frame waiting for it.
+     - One router (`session::router::Router`) for every host, as a
+       matchmaker is one service however many machines host servers:
+       after a server's step, a host hands it the server and the servers
+       it runs; the router routes, answers lookups, fails what can't go
+       and sends each player who goes off the server as a move (the same
+       server again, another running one, or one to start). A host only
+       carries moves out: the client hears its departure and packs what
+       it carries, then joins where the move says; a move that can't
+       finish ends the client with a prompt, in every host alike. So
+       `Session`, `Servers`, the server thread and the player run the
+       same routing, and the tests of `Servers` and of the player's game
+       cover one path.
      - Cost: nothing per frame without a teleport but taking an empty
        queue. A teleport costs what joining costs, plus loading the
        destination place when no server of it runs.

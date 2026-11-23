@@ -1,22 +1,22 @@
 //! Every running server of a universe in one thread, and the players
 //! teleporting between them (docs/behavior/scripting/teleports.md): each
 //! server is a hosted [`Session`] with its clients. After every server
-//! has stepped, the teleports their scripts asked for are routed against
-//! all of them, destination servers start from the universe's files, and
-//! each departing player's client is replaced by a new one on its new
-//! server, with what the old one carried.
+//! has stepped, the [`Router`] routes the teleports their scripts asked
+//! for against all of them, and each player it sends off is carried to its
+//! destination's session, started from the universe's files if it must
+//! be, as the player carries one to a new server thread.
 
 use std::sync::Arc;
 
 use crate::session::Session;
-use crate::session::host::not_started;
-use crate::universe::routing::{RunningServer, Target};
+use crate::session::router::{Move, Router, To};
+use crate::universe::routing::RunningServer;
 use crate::universe::{ServerIdentity, Universe};
 use crate::{DataModel, EngineError, Options};
 
 #[derive(Debug)]
 pub struct Servers {
-    universe: Arc<Universe>,
+    router: Router,
     options: Options,
     /// In the order they started.
     sessions: Vec<Session>,
@@ -25,25 +25,25 @@ pub struct Servers {
 impl Servers {
     pub fn new(universe: Arc<Universe>, options: Options) -> Self {
         Self {
-            universe,
+            router: Router::new(universe),
             options,
             sessions: Vec::new(),
         }
     }
 
     pub fn universe(&self) -> &Universe {
-        &self.universe
+        self.router.universe()
     }
 
     /// Start a public server of `place_id`, as a player joining the game
     /// there would. Returns its index.
     pub fn start(&mut self, place_id: i64) -> Result<usize, EngineError> {
-        let identity = ServerIdentity::new_server(&self.universe, place_id, String::new());
+        let identity = ServerIdentity::new_server(self.universe(), place_id, String::new());
         self.start_server(&identity)
     }
 
     fn start_server(&mut self, identity: &ServerIdentity) -> Result<usize, EngineError> {
-        let bytes = (self.universe.place_bytes(identity.place_id)).map_err(|source| {
+        let bytes = (self.universe().place_bytes(identity.place_id)).map_err(|source| {
             EngineError::PlaceFile {
                 place_id: identity.place_id,
                 source,
@@ -117,9 +117,9 @@ impl Servers {
         }
     }
 
-    /// Route and carry out the teleports every server asked for. A server
-    /// whose last player left keeps running (Approximation: Roblox closes
-    /// it once its `BindToClose` callbacks have run).
+    /// Route the teleports every server asked for and carry them out. A
+    /// server whose last player left keeps running (Approximation: Roblox
+    /// closes it once its `BindToClose` callbacks have run).
     fn teleport(&mut self) {
         let asked = (self.sessions.iter()).any(|s| s.server().runtime().wants_teleports());
         if !asked {
@@ -128,49 +128,40 @@ impl Servers {
         let mut running: Vec<RunningServer> =
             self.sessions.iter().map(|s| s.host().running()).collect();
         for from in 0..self.sessions.len() {
-            let plans = self.sessions[from]
-                .host_mut()
-                .teleports(&self.universe, &mut running);
-            for plan in plans {
-                let to = match &plan.route.target {
-                    Target::Running(job) => self.find(job).ok_or_else(|| "it stopped".to_owned()),
-                    Target::New(identity) => match self.find(&identity.job_id) {
-                        Some(to) => Ok(to),
-                        None => self.start_server(identity).map_err(|e| e.to_string()),
-                    },
-                };
-                let to = match to {
-                    Ok(to) => to,
-                    Err(e) => {
-                        tracing::warn!("a teleport to place {} failed: {e}", plan.place_id());
-                        self.sessions[from].host_mut().refuse(plan, not_started(&e));
-                        continue;
-                    }
-                };
-                for departure in self.sessions[from].host_mut().depart(plan) {
-                    let source = &mut self.sessions[from];
-                    for msg in &departure.messages {
-                        source.deliver(departure.client, msg);
-                    }
-                    let carried = source
-                        .take_client(departure.client)
-                        .map(|c| c.carry(departure.teleport_data.clone()))
-                        .unwrap_or_default();
-                    let arrived = self.sessions[to].arrive(
-                        &departure.name,
-                        departure.user_id,
-                        departure.join,
-                        carried,
-                    );
-                    if let Err(e) = arrived {
-                        tracing::warn!(
-                            "{} couldn't join place {}: {e}",
-                            departure.name,
-                            departure.place_id
-                        );
-                    }
+            let router = self.router.clone();
+            for m in router.route(self.sessions[from].host_mut(), &mut running) {
+                self.carry(from, &m);
+            }
+        }
+    }
+
+    /// Carry `m`, a move off server `from`, to its destination's session.
+    fn carry(&mut self, from: usize, m: &Move) {
+        let Some(carried) = self.sessions[from].send_off(&m.departure) else {
+            return;
+        };
+        let d = &m.departure;
+        let to = match &m.to {
+            To::Same => Ok(from),
+            To::Running(job) => self
+                .find(job)
+                .ok_or_else(|| "the server isn't running".to_owned()),
+            To::Start(placement) => match self.find(&placement.identity.job_id) {
+                Some(to) => Ok(to),
+                None => (self.start_server(&placement.identity)).map_err(|e| e.to_string()),
+            },
+        };
+        match to {
+            Ok(to) if to == from => self.sessions[from].rejoin(d, carried),
+            Ok(to) => {
+                self.sessions[from].take_client(d.client);
+                let arrived =
+                    (self.sessions[to]).arrive(&d.name, d.user_id, d.join.clone(), carried);
+                if let Err(e) = arrived {
+                    tracing::warn!("{} couldn't join place {}: {e}", d.name, d.place_id);
                 }
             }
+            Err(e) => self.sessions[from].fail_move(d.client, &e),
         }
     }
 }

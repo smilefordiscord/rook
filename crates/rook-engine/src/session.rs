@@ -3,17 +3,20 @@
 //! The ends are the same [`ServerHost`] and [`ClientHost`] a threaded host
 //! runs apart. A session alone is a place outside any universe, whose
 //! teleports find no place; [`servers::Servers`] holds the sessions of a
-//! universe and moves players between them.
+//! universe and moves players between them. Both route through
+//! [`router::Router`], as every host does.
 
 pub mod ended;
 pub mod host;
+pub mod router;
 pub mod server_thread;
 pub mod servers;
 pub mod threads;
 
 use rook_dom::InstanceId;
 
-use crate::session::host::{Carried, ClientHost, ServerHost};
+use crate::session::host::{Carried, ClientHost, Departure, ServerHost};
+use crate::session::router::{Router, To};
 use crate::{DataModel, EngineError, Options};
 
 #[derive(Debug)]
@@ -24,6 +27,8 @@ pub struct Session {
     options: Options,
     /// Held by a [`servers::Servers`], which routes its teleports.
     hosted: bool,
+    /// Routes a session alone's teleports, outside any universe.
+    alone: Router,
 }
 
 impl Session {
@@ -34,6 +39,7 @@ impl Session {
             clients: Vec::new(),
             options,
             hosted: false,
+            alone: Router::alone(),
         }
     }
 
@@ -102,6 +108,29 @@ impl Session {
         self.clients.get_mut(index)?.take()
     }
 
+    /// The departure's client hears it and packs what it carries; `None`
+    /// if it's gone.
+    pub(crate) fn send_off(&mut self, departure: &Departure) -> Option<Carried> {
+        let client = self.clients.get_mut(departure.client)?.as_mut()?;
+        Some(client.send_off(departure))
+    }
+
+    /// The departed player joins this server again, on a new client.
+    pub(crate) fn rejoin(&mut self, d: &Departure, carried: Carried) {
+        self.take_client(d.client);
+        if let Err(e) = self.arrive(&d.name, d.user_id, d.join.clone(), carried) {
+            tracing::warn!("{} couldn't join place {}: {e}", d.name, d.place_id);
+        }
+    }
+
+    /// The departed client `index` can't reach its destination: it stays,
+    /// ended with a prompt saying why.
+    pub(crate) fn fail_move(&mut self, index: usize, why: &str) {
+        if let Some(Some(client)) = self.clients.get_mut(index) {
+            client.teleport_failed(why);
+        }
+    }
+
     pub(crate) fn host_mut(&mut self) -> &mut ServerHost {
         &mut self.server
     }
@@ -139,7 +168,19 @@ impl Session {
     /// changes go to the clients.
     pub(crate) fn after_server_step(&mut self) {
         if !self.hosted {
-            self.server.teleports_alone();
+            for m in self.alone.route_alone(&mut self.server) {
+                let Some(carried) = self.send_off(&m.departure) else {
+                    continue;
+                };
+                let d = &m.departure;
+                match m.to {
+                    To::Same => self.rejoin(d, carried),
+                    // A session alone runs no other server.
+                    To::Running(_) | To::Start(_) => {
+                        self.fail_move(d.client, "the server isn't running");
+                    }
+                }
+            }
         }
         self.route();
         for (index, updates) in self.server.updates() {

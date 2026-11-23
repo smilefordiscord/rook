@@ -93,11 +93,14 @@ As Roblox's matchmaking chooses (creator-docs TeleportOptions):
   to one server.
 
 A teleport moves the players to a running server, or starts the place's
-server from the universe's file. While the player's destination starts,
-its old client keeps running; then the window switches to the new client
-and the old server, empty, closes. Several servers held in one process
-(tests) keep running empty (Approximation: Roblox closes an empty server
-once its `BindToClose` callbacks have run).
+server from the universe's file. While the player's destination reads and
+loads its place on its own thread, its old client keeps running; then the
+window switches to the new client and the old server, empty, closes on
+its own thread. Several servers held in one process (tests) keep running
+empty (Approximation: Roblox closes an empty server once its
+`BindToClose` callbacks have run). Every host routes and sends players
+off the same way, in `rook-engine`'s `session/router.rs`; only where a
+destination's server runs differs.
 
 ## Failures
 
@@ -108,13 +111,13 @@ player, on the server and on that player's client, and the players stay
 the original routing field and teleport data. Results Rook gives:
 `GameNotFound` (a place not in the universe), `GameEnded`, `GameFull`,
 `Unauthorized`, `IsTeleporting` (the player is already in another teleport
-asked for in the same frame) and `Failure` (the player has no client, or
-the destination's file wouldn't load). Inference: `TeleportAsync` itself
-returns then rather than raising, and the messages are Rook's own words.
+asked for in the same frame) and `Failure` (the player has no client).
+Inference: `TeleportAsync` itself returns then rather than raising, and
+the messages are Rook's own words.
 
-A destination that fails to load after the player left (the player's
-window only) ends the old client with a `Teleport Failed` prompt and a
-Leave button, Rook's own.
+A destination that fails to load after the player left (its file can't be
+read or loaded, or the player can't join it) ends the old client with a
+`Teleport Failed` prompt and a Leave button, Rook's own.
 
 ## Player.OnTeleport
 

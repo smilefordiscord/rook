@@ -15,8 +15,7 @@ mod teleport;
 
 pub use client::ClientHost;
 pub use server::{STARTER_PLAYER_COPIES, ServerHost};
-pub(crate) use teleport::not_started;
-pub use teleport::{Carried, Departure, Plan};
+pub use teleport::{Carried, Departure};
 
 use rustc_hash::FxHashMap;
 

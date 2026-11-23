@@ -556,9 +556,10 @@ fn a_server_alone_answers_lookups() {
     let mut server = server;
     server.start();
     let mut host = crate::session::host::ServerHost::new(server);
+    let router = crate::session::router::Router::alone();
     for _ in 0..3 {
         host.step();
-        host.teleports_alone();
+        assert!(router.route_alone(&mut host).is_empty());
     }
     assert_eq!(
         lines(host.server()),

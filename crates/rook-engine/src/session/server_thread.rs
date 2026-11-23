@@ -9,10 +9,10 @@
 //! give the same results every run), or by itself at 60 Hz of real time
 //! ([`ServerThread::run`]), as a server does for players.
 //!
-//! The thread is one server of a universe. Its scripts' teleports are
-//! routed there against the one server it knows, itself: a player sent to
-//! another server leaves in a [`Teleported`] the app carries out by
-//! starting that server's thread (docs/behavior/scripting/teleports.md).
+//! The thread is one server of a universe, whose teleports the shared
+//! [`Router`] routes against itself: a player sent elsewhere leaves in a
+//! [`Teleported`] the app carries out by starting that server's thread,
+//! which reads and loads its place (docs/behavior/scripting/teleports.md).
 
 use std::sync::Arc;
 use std::sync::mpsc::{Receiver, RecvTimeoutError, Sender, TryRecvError, channel};
@@ -23,9 +23,9 @@ use rook_lua::teleport::JoinData;
 #[cfg(feature = "repl")]
 use rook_lua::MessageType;
 
-use crate::session::host::{Departure, Joined, ServerHost, ToClient, ToServer, not_started};
-use crate::universe::routing::Target;
-use crate::universe::{ServerIdentity, Universe};
+use crate::session::host::{Joined, ServerHost, ToClient, ToServer};
+use crate::session::router::{Move, Router, To};
+use crate::universe::{PlaceSource, ServerIdentity, Universe};
 use crate::{DataModel, EngineError, Options, SavedCamera, console};
 
 #[derive(Debug)]
@@ -37,12 +37,12 @@ pub struct Frame {
     pub teleports: Vec<Teleported>,
 }
 
-/// The player left for another server by teleport.
+/// The player left its server by teleport.
 #[derive(Debug)]
 pub struct Teleported {
-    pub departure: Departure,
-    /// For a teleport back into this same server, how the player joined
-    /// it again; otherwise the app starts the departure's server.
+    pub sent: Move,
+    /// For a teleport back into this same server ([`To::Same`]), how the
+    /// player joined it again; otherwise the app carries the move out.
     pub joined: Option<Joined>,
 }
 
@@ -131,11 +131,11 @@ impl Starting {
 }
 
 impl ServerThread {
-    /// Load `place` on a new thread as the server `placement` names, start
-    /// its scripts, run `script` (the `--script` file) and let `player`
-    /// join, if given.
+    /// Read and load `place` on a new thread as the server `placement`
+    /// names, start its scripts, run `script` (the `--script` file) and let
+    /// `player` join, if given.
     pub fn spawn(
-        place: Arc<[u8]>,
+        place: PlaceSource,
         options: Options,
         script: Option<String>,
         placement: Placement,
@@ -149,7 +149,10 @@ impl ServerThread {
             // Dropped as the thread ends, however it ends.
             let _ended = ended_tx;
             let host = (|| -> Result<Hosted, EngineError> {
-                let mut server = DataModel::load_place(&place, &options)?;
+                let place_id = placement.identity.place_id;
+                let bytes =
+                    (place.read()).map_err(|source| EngineError::PlaceFile { place_id, source })?;
+                let mut server = DataModel::load_place(&bytes, &options)?;
                 placement.identity.apply(&server);
                 server.start();
                 let mut host = ServerHost::new(server);
@@ -172,7 +175,7 @@ impl ServerThread {
                 let _ = started_tx.send(Ok(Started { joined, camera }));
                 Ok(Hosted {
                     host,
-                    placement,
+                    router: Router::new(placement.universe),
                     client,
                 })
             })();
@@ -230,6 +233,18 @@ impl ServerThread {
     pub fn repl(&self, line: &str) {
         self.send(Command::Repl(line.to_owned()));
     }
+
+    /// Let the thread end without waiting for it: [`ServerThread::ended`]
+    /// says when it has, and dropping it then doesn't wait.
+    pub fn close(&mut self) {
+        let (dead, _) = channel();
+        self.commands = dead;
+    }
+
+    /// Whether the thread has ended, its DataModel dropped.
+    pub fn ended(&self) -> bool {
+        matches!(self.ended.try_recv(), Err(TryRecvError::Disconnected))
+    }
 }
 
 impl Drop for ServerThread {
@@ -237,8 +252,7 @@ impl Drop for ServerThread {
         // Closing the command channel ends the thread; wait until it has,
         // so its DataModel is gone (and its last output printed) when this
         // returns. A panic was reported where it happened.
-        let (dead, _) = channel();
-        self.commands = dead;
+        self.close();
         let _ = self.ended.recv();
     }
 }
@@ -249,10 +263,11 @@ fn print_logs(server: &DataModel) {
     }
 }
 
-/// The thread's server, where it is, and the index of the app's client.
+/// The thread's server, its universe's router, and the index of the
+/// app's client.
 struct Hosted {
     host: ServerHost,
-    placement: Placement,
+    router: Router,
     client: usize,
 }
 
@@ -346,30 +361,16 @@ fn frame(hosted: &mut Hosted) -> Frame {
     }
 }
 
-/// Route the teleports the server's scripts asked for, against this
-/// server alone: a teleport into it again rejoins the player here, one to
-/// a new server leaves for the app to start it.
+/// The moves the router sends off this server, which routes against itself
+/// alone: a player sent into it again joins it again here; any other
+/// leaves for the app to carry out.
 fn teleport(hosted: &mut Hosted) -> Vec<Teleported> {
     let host = &mut hosted.host;
-    if !host.server().runtime().wants_teleports() {
-        return Vec::new();
-    }
-    let mut running = vec![host.running()];
-    let own = running[0].identity.job_id.clone();
     let mut out = Vec::new();
-    for plan in host.teleports(&hosted.placement.universe, &mut running) {
-        let here = match &plan.route.target {
-            Target::Running(job) if *job == own => true,
-            Target::New(_) => false,
-            // Routing knows no other running server.
-            Target::Running(_) => {
-                host.refuse(plan, not_started(&"that server isn't here"));
-                continue;
-            }
-        };
-        for departure in host.depart(plan) {
-            let joined = if here {
-                let d = &departure;
+    for m in hosted.router.route_alone(host) {
+        let joined = match m.to {
+            To::Same => {
+                let d = &m.departure;
                 match host.join_with(&d.name, d.user_id, d.join.clone()) {
                     Ok((index, joined)) => {
                         hosted.client = index;
@@ -380,11 +381,10 @@ fn teleport(hosted: &mut Hosted) -> Vec<Teleported> {
                         None
                     }
                 }
-            } else {
-                None
-            };
-            out.push(Teleported { departure, joined });
-        }
+            }
+            To::Running(_) | To::Start(_) => None,
+        };
+        out.push(Teleported { sent: m, joined });
     }
     out
 }

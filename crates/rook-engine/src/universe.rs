@@ -24,6 +24,17 @@ pub enum PlaceSource {
     Bytes(Arc<[u8]>),
 }
 
+impl PlaceSource {
+    /// The file's bytes: a file is read now, so whoever loads the place
+    /// reads it, off the thread that asked for it.
+    pub fn read(&self) -> std::io::Result<Arc<[u8]>> {
+        match self {
+            Self::Bytes(b) => Ok(b.clone()),
+            Self::File(path) => Ok(rook_platform::get().files.read(path)?.into()),
+        }
+    }
+}
+
 /// The places of one game.
 #[derive(Debug, Default)]
 pub struct Universe {
@@ -51,16 +62,19 @@ impl Universe {
         self.places.contains_key(&place_id)
     }
 
-    /// The bytes of a place's file.
-    pub fn place_bytes(&self, place_id: i64) -> std::io::Result<Arc<[u8]>> {
-        match self.places.get(&place_id) {
-            Some(PlaceSource::Bytes(b)) => Ok(b.clone()),
-            Some(PlaceSource::File(path)) => Ok(rook_platform::get().files.read(path)?.into()),
-            None => Err(std::io::Error::new(
+    /// Where a place's file comes from.
+    pub fn place_source(&self, place_id: i64) -> std::io::Result<PlaceSource> {
+        self.places.get(&place_id).cloned().ok_or_else(|| {
+            std::io::Error::new(
                 std::io::ErrorKind::NotFound,
                 format!("place {place_id} isn't in the universe"),
-            )),
-        }
+            )
+        })
+    }
+
+    /// The bytes of a place's file, read now.
+    pub fn place_bytes(&self, place_id: i64) -> std::io::Result<Arc<[u8]>> {
+        self.place_source(place_id)?.read()
     }
 
     /// A new id in a GUID's form, for a server's `JobId` or a reserved
