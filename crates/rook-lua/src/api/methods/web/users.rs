@@ -1,9 +1,9 @@
-//! Who users are: names and ids (`users`), friendships (`friends`),
-//! group roles (`groups`) and avatar thumbnails (`thumbnails`), and what
-//! they own: badges (`badges`), passes and assets (`inventory`). With no
-//! endpoint ([`super::requests`]), the session is all there is: its
-//! players are the only users, none are friends or in a group, nobody
-//! owns anything, and no thumbnail is ready.
+//! Who users are: names and ids (`users`), friendships (`friends`) and
+//! avatar thumbnails (`thumbnails`), and what they own: passes and assets
+//! (`inventory`). With no endpoint ([`super::requests`]), the session is
+//! all there is: its players are the only users, none are friends,
+//! nobody owns anything, and no thumbnail is ready. Groups and badges
+//! are [`super::groups`] and [`super::badges`].
 
 use mlua::{Lua, MultiValue, Value as LuaValue};
 use rook_dom::InstanceId;
@@ -22,10 +22,6 @@ pub(super) fn native(owner: &str, name: &str) -> Option<RawMethod> {
         ("Players", "GetUserThumbnailAsync") => user_thumbnail,
         ("UserService", "GetUserInfosByUserIdsAsync") => user_infos,
         ("Player", "IsFriendsWith") => is_friends_with,
-        ("Player", "GetRankInGroup") => rank_in_group,
-        ("Player", "GetRoleInGroup") => role_in_group,
-        ("Player", "IsInGroup") => is_in_group,
-        ("BadgeService", "UserHasBadgeAsync") => user_has_badge,
         ("MarketplaceService", "UserOwnsGamePassAsync") => owns_game_pass,
         ("MarketplaceService", "PlayerOwnsAsset") => player_owns_asset,
         _ => return None,
@@ -33,7 +29,7 @@ pub(super) fn native(owner: &str, name: &str) -> Option<RawMethod> {
 }
 
 /// A user in the session: `(user id, name, display name)` of each player.
-fn session_users(lua: &Lua) -> Vec<(i64, String, String)> {
+pub(super) fn session_users(lua: &Lua) -> Vec<(i64, String, String)> {
     with_world(lua, |w| {
         let Some(players) = w.dom.find_service("Players") else {
             return Vec::new();
@@ -54,17 +50,17 @@ fn session_users(lua: &Lua) -> Vec<(i64, String, String)> {
     })
 }
 
-fn id(a: &Args, i: usize) -> ApiResult<i64> {
+pub(super) fn id(a: &Args, i: usize) -> ApiResult<i64> {
     Ok(a.number(i)? as i64)
 }
 
 /// The `data` array of a 2xx JSON answer.
-fn data(answer: WebAnswer) -> Result<Vec<Json>, String> {
+pub(super) fn data(answer: WebAnswer) -> Result<Vec<Json>, String> {
     let json = web::json(answer)?;
     Ok(json["data"].as_array().cloned().unwrap_or_default())
 }
 
-fn values(lua: &Lua, v: impl mlua::IntoLuaMulti) -> Result<MultiValue, String> {
+pub(super) fn values(lua: &Lua, v: impl mlua::IntoLuaMulti) -> Result<MultiValue, String> {
     v.into_lua_multi(lua).map_err(|e| e.to_string())
 }
 
@@ -218,13 +214,13 @@ fn user_infos(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
     )
 }
 
-fn player_id(lua: &Lua, player: InstanceId) -> i64 {
+pub(super) fn player_id(lua: &Lua, player: InstanceId) -> i64 {
     with_world(lua, |w| w.dom.number_property(player, "UserId")).unwrap_or(0.0) as i64
 }
 
 /// Ask `domain` for `path` and answer with what `decode` makes of its
 /// `data` array, or with `local` when the domain has no endpoint.
-fn ask<T: mlua::IntoLuaMulti + 'static>(
+pub(super) fn ask<T: mlua::IntoLuaMulti + 'static>(
     lua: &Lua,
     domain: &str,
     path: &str,
@@ -248,54 +244,6 @@ fn is_friends_with(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> 
     ask(lua, "friends", &path, false, |d| {
         d.iter().any(|s| s["status"] == "Friends")
     })
-}
-
-/// Answer with what `decode` makes of the player's role in group
-/// `a[0]`, from `GET groups/v2/users/{id}/groups/roles`.
-fn in_group<T: mlua::IntoLuaMulti + 'static>(
-    lua: &Lua,
-    this: InstanceId,
-    a: &Args,
-    local: T,
-    decode: fn(Option<&Json>) -> T,
-) -> ApiResult<Outcome> {
-    let group = id(a, 0)?;
-    let path = format!("/v2/users/{}/groups/roles", player_id(lua, this));
-    ask(lua, "groups", &path, local, move |data| {
-        let role = data
-            .iter()
-            .find(|r| r["group"]["id"].as_i64() == Some(group))
-            .map(|r| &r["role"]);
-        decode(role)
-    })
-}
-
-/// The rank, 0 outside the group (creator-docs Player:GetRankInGroup).
-fn rank_in_group(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> {
-    in_group(lua, this, a, 0, |r| {
-        r.and_then(|r| r["rank"].as_i64()).unwrap_or(0)
-    })
-}
-
-/// The role's name, "Guest" outside the group (creator-docs
-/// Player:GetRoleInGroup).
-fn role_in_group(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> {
-    in_group(lua, this, a, "Guest".to_owned(), |r| {
-        r.and_then(|r| r["name"].as_str())
-            .unwrap_or("Guest")
-            .to_owned()
-    })
-}
-
-fn is_in_group(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> {
-    in_group(lua, this, a, false, |r| r.is_some())
-}
-
-/// `GET badges/v1/users/{id}/badges/awarded-dates?badgeIds={badge}`.
-fn user_has_badge(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
-    let (user, badge) = (id(a, 0)?, id(a, 1)?);
-    let path = format!("/v1/users/{user}/badges/awarded-dates?badgeIds={badge}");
-    ask(lua, "badges", &path, false, |d| !d.is_empty())
 }
 
 /// `GET inventory/v1/users/{id}/items/GamePass/{pass}`.

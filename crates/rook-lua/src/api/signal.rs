@@ -30,6 +30,7 @@ impl LSignal {
             SignalKind::Attribute(_) => "AttributeChangedSignal".to_owned(),
             SignalKind::Tag { tag, added: true } => format!("{tag}InstanceAdded"),
             SignalKind::Tag { tag, added: false } => format!("{tag}InstanceRemoved"),
+            SignalKind::Message(topic) => format!("{topic}Message"),
         }
     }
 }

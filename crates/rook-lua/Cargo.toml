@@ -32,6 +32,7 @@ profiling.workspace = true
 blake3.workspace = true
 base64.workspace = true
 zstd.workspace = true
+thiserror.workspace = true
 
 [lints]
 workspace = true

@@ -50,6 +50,52 @@ fn step(rt: &Runtime) {
     rt.resume_due(Queue::Task);
 }
 
+/// [`run`] with Ann (user 5) in Players and the web's domains at `base`
+/// (offline without one), each request answered with `answer(its URL)`'s
+/// JSON. Returns the output lines and the requests, as `METHOD url`.
+fn run_with_ann(
+    source: &str,
+    frames: u32,
+    base: Option<&str>,
+    answer: fn(&str) -> &'static str,
+) -> (Vec<String>, Vec<String>) {
+    use rook_platform::endpoints::Endpoints;
+    let rt = Runtime::new(Dom::new(), Clock::Fixed { step: 1.0 / 60.0 }).unwrap();
+    {
+        let mut w = rt.world_mut();
+        let endpoints = base.map_or_else(Endpoints::offline, |b| Endpoints::new(Some(b), []));
+        w.web.endpoints = std::sync::Arc::new(endpoints);
+        let players = w.dom.get_service("Players").unwrap();
+        let ann = w.dom.create_by_name("Player").unwrap();
+        w.dom.set_name(ann, "Ann".into()).unwrap();
+        w.dom
+            .set_property_by_name(ann, "UserId", rook_types::Value::Int64(5))
+            .unwrap();
+        w.dom.set_parent(ann, Some(players)).unwrap();
+    }
+    rt.run_source("Workspace.Script", source, None).unwrap();
+    let mut requests = Vec::new();
+    for _ in 0..frames {
+        loop {
+            let outbox = rt.take_web_requests();
+            if outbox.is_empty() {
+                break;
+            }
+            for (id, request) in outbox {
+                requests.push(format!("{} {}", request.method, request.url));
+                let response = rook_platform::network::Response {
+                    status: 200,
+                    headers: Vec::new(),
+                    body: answer(&request.url).as_bytes().to_vec(),
+                };
+                rt.deliver_web(id, Ok(response));
+            }
+        }
+        step(&rt);
+    }
+    (finish(&rt, 0), requests)
+}
+
 #[track_caller]
 fn expect(source: &str, frames: u32, lines: &[&str]) {
     let out = run(source, frames);

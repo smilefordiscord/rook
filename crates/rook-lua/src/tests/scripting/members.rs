@@ -49,6 +49,30 @@ fn unimplemented_members_are_counted() {
     );
 }
 
+/// A member Rook lacks still casts its arguments as the API dump types
+/// them, so a bad argument raises Roblox's error, not Rook's (measured on
+/// `BadgeService:GetBadgeInfoAsync` and `GroupService:PromptJoinAsync`).
+#[test]
+fn unimplemented_members_cast_their_arguments() {
+    expect(
+        r#"
+        local Badges = game:GetService("BadgeService")
+        local Groups = game:GetService("GroupService")
+        print(select(2, pcall(Badges.GetBadgeInfoAsync, Badges, "abc")))
+        print(select(2, pcall(Badges.GetBadgeInfoAsync, Badges)))
+        print(select(2, pcall(Groups.PromptJoinAsync, Groups, {})))
+        print(select(2, pcall(Badges.GetBadgeInfoAsync, Badges, 1)))
+        "#,
+        0,
+        &[
+            "Unable to cast string to int64",
+            "Argument 1 missing or nil",
+            "Unable to cast Array to int64",
+            "BadgeService:GetBadgeInfoAsync is not implemented in Rook yet",
+        ],
+    );
+}
+
 #[test]
 fn services_datastore_http_bindables() {
     expect(

@@ -237,6 +237,13 @@ pub struct World {
     pub web: crate::api::methods::web::requests::WebRequests,
     /// What each TextFilterResult holds.
     pub(crate) filter_results: FxHashMap<InstanceId, crate::api::methods::web::filtering::Filtered>,
+    /// Badges awarded in this session, as (user, badge), when no badges
+    /// endpoint keeps them.
+    pub(crate) badges_awarded: FxHashSet<(i64, i64)>,
+    /// MemoryStoreService's sorted maps, queues and hash maps.
+    pub(crate) memory_stores: crate::memory_stores::MemoryStores,
+    /// What each Pages object holds.
+    pub(crate) pages: FxHashMap<InstanceId, crate::api::methods::web::pages::Pages>,
     /// The physics world. Scripts query it (raycasts, regions), which
     /// brings it up to date with the DOM first, so it lives here with the
     /// DOM. Each side steps what it owns (`characters::ownership`).
@@ -369,6 +376,9 @@ impl World {
             assets: Default::default(),
             web: Default::default(),
             filter_results: FxHashMap::default(),
+            badges_awarded: FxHashSet::default(),
+            memory_stores: Default::default(),
+            pages: FxHashMap::default(),
             physics: rook_physics::Physics::new(),
             gui: rook_gui::Gui::default(),
             pending_calls: FxHashMap::default(),
@@ -461,6 +471,8 @@ impl World {
     /// Drop what the runtime keeps about `id`, which is being freed.
     pub(crate) fn forget(&mut self, id: InstanceId) {
         self.filter_results.remove(&id);
+        self.memory_stores.objects.remove(&id);
+        self.pages.remove(&id);
         self.prompts.forget(id);
         self.modules.results.remove(&id);
         self.modules.loading.remove(&id);

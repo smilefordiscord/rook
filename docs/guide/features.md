@@ -27,7 +27,7 @@ Everything Rook supports today. What's coming next is in the [roadmap](../roadma
 - `require` for ModuleScripts, with per-DataModel caching and Roblox's cyclic-require and load-error messages.
 - Roblox-style error messages and chunk names (`Workspace.Script:3: ...`), output through `LogService`.
 - Security levels: members tagged above game identity raise Roblox's permission error.
-- Services including `RunService`, `TweenService` (and the legacy GUI tweens), `Players`, `Debris`, `PhysicsService`, `DataStoreService` (in memory for now) and `HttpService` (JSON and GUIDs; servers' requests when the place's `HttpEnabled` is on).
+- Services including `RunService`, `TweenService` (and the legacy GUI tweens), `Players`, `Debris`, `PhysicsService`, `DataStoreService` (in memory for now), `MemoryStoreService` (in memory for the session), `MessagingService` (within the session) and `HttpService` (JSON and GUIDs; servers' requests when the place's `HttpEnabled` is on).
 - Unfinished members are either clear `"is not implemented in Rook yet"` errors or listed, inert stubs. Every stub is documented in [behavior/stubs.md](stubs.md), and a test fails if one is added without an entry.
 
 ## Client and server

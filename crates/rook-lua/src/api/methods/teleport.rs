@@ -174,7 +174,7 @@ fn queue_and_wait(lua: &Lua, mut request: TeleportRequest, returns: Returns) -> 
 fn teleport_async(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
     let options = a.opt_instance(2)?;
     let players = a.objects(1)?;
-    let place = a.int64(0, "int64")?;
+    let place = a.int64_rounded(0, "int64")?;
     server_only(lua, "TeleportUnknown must be called from a Server")?;
     let options = options.map(|o| {
         let is_options = with_world(lua, |w| w.dom.is_a(o, "TeleportOptions"));
@@ -284,7 +284,7 @@ fn teleport(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
     let gui = a.opt_instance(3)?;
     let data = data_argument(lua, a.get(2))?;
     let player = a.opt_instance(1)?;
-    let place = a.int64(0, "int64")?;
+    let place = a.int64_rounded(0, "int64")?;
     legacy(
         lua,
         Legacy {
@@ -306,7 +306,7 @@ fn teleport_to_spawn(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
     let data = data_argument(lua, a.get(3))?;
     let player = a.opt_instance(2)?;
     let spawn_name = a.string(1)?;
-    let place = a.int64(0, "int64")?;
+    let place = a.int64_rounded(0, "int64")?;
     legacy(
         lua,
         Legacy {
@@ -329,7 +329,7 @@ fn teleport_to_instance(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome
     let spawn_name = a.opt_string(3)?.unwrap_or_default();
     let player = a.opt_instance(2)?;
     let job = a.string(1)?;
-    let place = a.int64(0, "int64")?;
+    let place = a.int64_rounded(0, "int64")?;
     legacy(
         lua,
         Legacy {
@@ -352,7 +352,7 @@ fn teleport_to_private_server(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<O
     let spawn_name = a.opt_string(3)?.unwrap_or_default();
     let players = a.objects(2)?;
     let code = a.string(1)?;
-    let place = a.int64(0, "int64")?;
+    let place = a.int64_rounded(0, "int64")?;
     server_only(
         lua,
         "TeleportToPrivateServer can only be called from the server",
@@ -380,7 +380,7 @@ fn teleport_party(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
     a.opt_instance(3)?;
     let data = data_argument(lua, a.get(2))?;
     let players = a.objects(1)?;
-    let place = a.int64(0, "int64")?;
+    let place = a.int64_rounded(0, "int64")?;
     server_only(lua, "TeleportPartyAsync must be called from a Server")?;
     let place_id = place_id(place)?;
     let players = group(lua, players)?;
@@ -401,7 +401,7 @@ fn teleport_party(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
 /// Inference: a place outside the universe is only found when the code is
 /// used, and the place id is checked as a teleport's is.
 fn reserve_server(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
-    let place = a.int64(0, "int64")?;
+    let place = a.int64_rounded(0, "int64")?;
     server_only(lua, "ReserveServer can only be called from the server")?;
     let place_id = place_id(place)?;
     let id = super::web::http::random_guid(lua)?.to_lowercase();
@@ -412,7 +412,7 @@ fn reserve_server(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
 /// `GetPlayerPlaceInstanceAsync(userId)`: where the user plays, which the
 /// session answers; an error if they're nowhere (creator-docs).
 fn player_place_instance(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
-    let user = a.int64(0, "User")?;
+    let user = a.int64_rounded(0, "User")?;
     server_only(
         lua,
         "GetPlayerPlaceInstanceAsync can only be called from the server",

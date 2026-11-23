@@ -54,7 +54,7 @@ pub(super) fn method_function(
             raw(lua, this, &args)
         })?,
         None => api_fn(lua, move |lua, args| {
-            let (this, _) = Args::method(args, name)?;
+            let (this, args) = Args::method(args, name)?;
             own_class(lua, this, owner_class, name)?;
             let class = with_world(lua, |w| {
                 w.count_unimplemented(format!("{owner}.{name}"));
@@ -65,6 +65,14 @@ pub(super) fn method_function(
             // mustn't stop the whole GUI, so for them it does nothing.
             if crate::api::scripts::caller_is_core(lua) {
                 return Outcome::ret(lua, ());
+            }
+            // A bad argument raises Roblox's error, as the member would.
+            if let Some(f) = members()
+                .classes
+                .get(owner)
+                .and_then(|c| c.functions.iter().find(|f| f.name == resolved))
+            {
+                args.cast(lua, &f.params)?;
             }
             Err(ScriptError(format!(
                 "{class}:{name} is not implemented in Rook yet"
