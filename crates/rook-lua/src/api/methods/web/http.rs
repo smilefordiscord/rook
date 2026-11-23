@@ -9,6 +9,7 @@ use rook_dom::InstanceId;
 
 use super::RawMethod;
 use super::requests::{self as web, WebAnswer, WebRequest};
+use crate::json;
 use crate::runtime::ctx::args::Args;
 use crate::runtime::ctx::{ApiResult, Outcome, ScriptError, api_fn};
 
@@ -215,68 +216,29 @@ fn to_json(v: &LuaValue, depth: usize) -> ApiResult<serde_json::Value> {
     Ok(match v {
         LuaValue::Boolean(b) => J::Bool(*b),
         LuaValue::Integer(_) | LuaValue::Number(_) => {
-            let n = crate::runtime::ctx::args::number_of(v).unwrap_or(0.0);
-            if n.fract() == 0.0 && n.abs() < 9.0e15 {
-                J::Number((n as i64).into())
-            } else {
-                serde_json::Number::from_f64(n).map_or(J::Null, J::Number)
-            }
+            json::number(crate::runtime::ctx::args::number_of(v).unwrap_or(0.0))
         }
         LuaValue::String(s) => J::String(s.to_string_lossy()),
-        LuaValue::Table(t) => {
-            // Measured in Studio 0.748: a table with a length (`#t`) is an
-            // array of 1 to that length, nil as null and other keys
-            // dropped; an empty one is `[]`; the rest are objects.
-            let len = t.raw_len();
-            if len > 0 || t.is_empty() {
+        LuaValue::Table(t) => match json::array_length(t) {
+            Some(len) => {
                 let mut out = Vec::with_capacity(len);
                 for i in 1..=len {
                     out.push(to_json(&t.raw_get::<LuaValue>(i)?, depth + 1)?);
                 }
                 J::Array(out)
-            } else {
+            }
+            None => {
                 let mut out = serde_json::Map::new();
                 for pair in t.clone().pairs::<LuaValue, LuaValue>() {
                     let (k, v) = pair?;
-                    let key = match &k {
-                        LuaValue::String(s) => s.to_string_lossy(),
-                        LuaValue::Integer(_) | LuaValue::Number(_) => {
-                            crate::runtime::ctx::args::format_number(
-                                crate::runtime::ctx::args::number_of(&k).unwrap_or(0.0),
-                            )
-                        }
-                        _ => return Err(ScriptError("Can't convert to JSON".into())),
-                    };
+                    let key = json::object_key(&k)
+                        .ok_or_else(|| ScriptError("Can't convert to JSON".into()))?;
                     out.insert(key, to_json(&v, depth + 1)?);
                 }
                 J::Object(out)
             }
-        }
+        },
         _ => J::Null,
-    })
-}
-
-fn from_json(lua: &Lua, v: &serde_json::Value) -> mlua::Result<LuaValue> {
-    use serde_json::Value as J;
-    Ok(match v {
-        J::Null => LuaValue::Nil,
-        J::Bool(b) => LuaValue::Boolean(*b),
-        J::Number(n) => LuaValue::Number(n.as_f64().unwrap_or(0.0)),
-        J::String(s) => LuaValue::String(lua.create_string(s)?),
-        J::Array(a) => {
-            let t = lua.create_table_with_capacity(a.len(), 0)?;
-            for (i, x) in a.iter().enumerate() {
-                t.raw_set(i + 1, from_json(lua, x)?)?;
-            }
-            LuaValue::Table(t)
-        }
-        J::Object(o) => {
-            let t = lua.create_table_with_capacity(0, o.len())?;
-            for (k, x) in o {
-                t.raw_set(k.as_str(), from_json(lua, x)?)?;
-            }
-            LuaValue::Table(t)
-        }
     })
 }
 
@@ -289,7 +251,7 @@ fn json_decode(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
     let text = a.string(0)?;
     let json: serde_json::Value =
         serde_json::from_str(&text).map_err(|_| ScriptError("Can't parse JSON".into()))?;
-    Outcome::ret(lua, from_json(lua, &json)?)
+    Outcome::ret(lua, json::to_lua(lua, &json)?)
 }
 
 /// A random version 4 UUID, uppercase, in braces unless asked otherwise

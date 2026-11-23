@@ -76,6 +76,8 @@ impl<T> Ord for Timer<T> {
 #[derive(Debug)]
 pub struct Scheduler<T> {
     clock: Clock,
+    /// Unix time in seconds when the DataModel started.
+    epoch: f64,
     now: f64,
     delta: f64,
     frame: u64,
@@ -89,6 +91,9 @@ impl<T> Scheduler<T> {
     pub fn new(clock: Clock) -> Self {
         Self {
             clock,
+            epoch: std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map_or(0.0, |d| d.as_secs_f64()),
             now: 0.0,
             delta: 0.0,
             frame: 0,
@@ -112,6 +117,12 @@ impl<T> Scheduler<T> {
     /// Seconds since the DataModel started (`time()`, `workspace.DistributedGameTime`).
     pub fn now(&self) -> f64 {
         self.now
+    }
+
+    /// Unix time in seconds (`tick()`), following the DataModel's clock
+    /// from its start, so a fixed clock keeps it consistent with game time.
+    pub fn unix_time(&self) -> f64 {
+        self.epoch + self.now
     }
 
     pub fn delta(&self) -> f64 {

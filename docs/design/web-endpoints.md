@@ -54,7 +54,7 @@ These answer locally only, with no endpoint path yet:
 | Members | Roblox's domain | Local answer |
 |---|---|---|
 | `PolicyService:GetPolicyInfoForPlayerAsync` | Roblox's own policy service | No restrictions |
-| DataStores (`DataStoreService`, `GlobalDataStore`, ordered stores) | Roblox's game servers | Kept in memory for the run |
+| DataStores (`DataStoreService`, `GlobalDataStore`, ordered stores) | Roblox's game servers | Kept in memory for the run ([data stores](../behavior/scripting/data-stores.md)) |
 | `LocalizationService:GetTranslatorForPlayerAsync` and cloud tables | `localizationtables` | The place's own LocalizationTables |
 | TextChatService messages | `textfilter` | Delivered unfiltered |
 

@@ -86,6 +86,7 @@
   - Scripting
     - [Bindables](behavior/scripting/bindables.md): the copies arguments arrive as
     - [Content](behavior/scripting/content.md): the `Content` datatype and its constructors
+    - [Data stores](behavior/scripting/data-stores.md): versions, key info, listings, budgets and limits
     - [Datatype errors](behavior/scripting/datatype-errors.md): their messages in `pcall`
     - [Faces, Axes and PhysicalProperties](behavior/scripting/faces-and-axes.md): their `typeof` and printing
     - [JSON](behavior/scripting/json.md): which tables `JSONEncode` writes as arrays
