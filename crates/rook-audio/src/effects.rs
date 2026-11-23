@@ -111,9 +111,9 @@ impl Effect {
     /// The priority a legacy effect with `Priority` 0 runs at (Confirmed by
     /// bisection against Studio's output: Equalizer and Reverb 8,
     /// Distortion 4, PitchShift 3). Chorus, Compressor, Echo, Flange and
-    /// Tremolo aren't measured and run after those at 0 (Approximation;
-    /// only the compressor's place changes how it sounds, the others being
-    /// linear). The audio API's effects have no priority.
+    /// Tremolo aren't measured and run after those at 0 (Approximation:
+    /// their place beside Distortion, PitchShift or the compressor changes
+    /// how it sounds). The audio API's effects have no priority.
     pub fn base_priority(&self) -> i32 {
         match self {
             Self::Equalizer { .. } | Self::Reverb(_) => 8,

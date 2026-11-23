@@ -46,7 +46,9 @@ impl Default for Tremolo {
 
 impl Tremolo {
     /// The share of the cycle the upper half takes, and where in each half
-    /// the wave turns (0.5 unskewed).
+    /// the wave turns (0.5 unskewed). Approximation: both are kept a
+    /// hundredth from 0 and 1, where creator-docs allows `Duty` its ends,
+    /// as the warp divides by each half's share.
     fn warp(&self) -> (f32, f32) {
         let duty = self.duty.clamp(0.01, 0.99);
         let turn = ((1.0 + self.skew.clamp(-1.0, 1.0)) / 2.0).clamp(0.01, 0.99);

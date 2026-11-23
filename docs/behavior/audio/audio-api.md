@@ -170,8 +170,8 @@ the delays, the low shelf, `ReferenceFrequency`) aren't played
   Within 8% at five settings, but 0.6 times as loud at the defaults.
   `MakeupGain` is exact (10 dB was 3.16 times).
 
-The five below play by creator-docs; none is measured against Studio
-yet. A value saved in a file outside a property's range plays at the
+The five below play by creator-docs; none is measured against Studio.
+A value saved in a file outside a property's range plays at the
 range's end, as a script's would.
 
 - **AudioFilter** (Inference). Each `FilterType` is built from the Audio

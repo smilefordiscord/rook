@@ -28,8 +28,7 @@ no new scan):
 
 Each of the four most used effects is in about twice as many files as
 any of the rest. Those four were measured in Studio; the other five play
-by creator-docs, sharing the audio API's effects, and haven't been
-measured yet. Scripts call `SoundService:PlayLocalSound` in 38 files (327
+by creator-docs, sharing the audio API's effects, unmeasured. Scripts call `SoundService:PlayLocalSound` in 38 files (327
 calls), so it is done too.
 
 The corpus doesn't count SoundService's property values, so five places
@@ -134,8 +133,10 @@ order shows in the level: Equalizer 8, Reverb 8, Distortion 4,
 PitchShift 3. For example, a Distortion at Priority 9 ran before an
 Equalizer at 0, and one at 8 ran after it. Negative priorities sort the
 same way. Chorus, Compressor, Echo, Flange and Tremolo aren't measured,
-so Rook gives them 0, after the four above (Approximation). Only the
-compressor's place changes what is heard: the other four are linear.
+so Rook gives them 0, after the four above (Approximation). Their place
+beside Distortion, PitchShift or a Compressor changes what is heard: a
+Tremolo before a Distortion swings how hard it drives, and one after it
+swings what it gives out.
 
 In the three ties measured, the effect added later ran first, and Rook
 breaks ties that way (Inference; creator-docs calls the order
