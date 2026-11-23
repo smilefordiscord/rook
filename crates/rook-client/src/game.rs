@@ -338,7 +338,10 @@ impl Game {
         }
     }
 
+    /// The window's size: the client's camera takes it, and so does the
+    /// client a teleport makes next, from its start.
     pub(crate) fn set_viewport(&mut self, width: u32, height: u32) {
+        self.options.viewport = Some((width, height));
         self.view_mut().set_viewport(width, height);
     }
 
