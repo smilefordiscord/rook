@@ -21,9 +21,9 @@ pub(crate) struct LUDim2(pub UDim2);
 // TODO: draw Path2D.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) struct LPath2DControlPoint {
-    position: UDim2,
-    left: UDim2,
-    right: UDim2,
+    pub(crate) position: UDim2,
+    pub(crate) left: UDim2,
+    pub(crate) right: UDim2,
 }
 
 impl UserData for LPath2DControlPoint {

@@ -8,6 +8,7 @@ mod instances;
 mod json;
 mod members;
 mod object_arguments;
+mod path2d;
 mod scheduling;
 mod scripts;
 mod tweens;

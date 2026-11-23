@@ -181,6 +181,18 @@ pub struct Gui {
     fonts: text::Fonts,
     glyphs: text::Glyphs,
     images: images::Images,
+    /// Each Path2D's control points, which scripts set with its methods
+    /// (they're no property Roblox exposes).
+    paths: FxHashMap<InstanceId, Vec<PathPoint>>,
+}
+
+/// A Path2D's control point: where it is and its tangents, each against
+/// the path's parent (creator-docs Path2DControlPoint).
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub struct PathPoint {
+    pub position: rook_types::UDim2,
+    pub left: rook_types::UDim2,
+    pub right: rook_types::UDim2,
 }
 
 impl Default for Gui {
@@ -226,6 +238,7 @@ impl Default for Gui {
             fonts: text::Fonts::default(),
             glyphs: text::Glyphs::default(),
             images: images::Images::default(),
+            paths: FxHashMap::default(),
         }
     }
 }
@@ -236,6 +249,21 @@ impl Gui {
     pub fn set_content(&mut self, resolver: Arc<rook_content::Resolver>) {
         self.fonts.set_resolver(resolver);
         self.screen_changed();
+    }
+
+    /// A Path2D's control points; none until a script sets them.
+    pub fn path_points(&self, id: InstanceId) -> &[PathPoint] {
+        self.paths.get(&id).map_or(&[], Vec::as_slice)
+    }
+
+    /// Set a Path2D's control points; it draws again.
+    pub fn set_path_points(&mut self, id: InstanceId, points: Vec<PathPoint>) {
+        if points.is_empty() {
+            self.paths.remove(&id);
+        } else {
+            self.paths.insert(id, points);
+        }
+        self.restyled.insert(id);
     }
 
     /// Everything lays out again, on the screen as it is now.
