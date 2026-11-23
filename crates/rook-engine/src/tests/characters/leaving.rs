@@ -109,6 +109,53 @@ fn a_local_script_kicks_only_its_own_player() {
     assert_eq!(players_of(server), ["B"]);
 }
 
+/// An `InvokeClient` the client hasn't answered when it's kicked raises
+/// on the server (creator-docs RemoteFunction:InvokeClient), where it
+/// once waited forever; another client's answer still arrives.
+#[test]
+fn an_invoke_of_a_client_that_leaves_raises() {
+    let mut server = Server::new(&Options::default()).unwrap();
+    use_r6(&server);
+    let storage = service(&server, "ReplicatedStorage");
+    add_under(&server, storage, "RemoteFunction", "Ask", "");
+    add_script(
+        &server,
+        "ServerScriptService",
+        "Ask",
+        r#"local ask = game.ReplicatedStorage.Ask
+        game:GetService("Players").PlayerAdded:Connect(function(p)
+            task.wait(0.2)
+            task.spawn(function()
+                print("invoke", p.Name, pcall(ask.InvokeClient, ask, p))
+            end)
+            task.wait(0.2)
+            if p.Name == "A" then p:Kick() end
+        end)"#,
+    );
+    add_local_script(
+        &server,
+        "Answer",
+        r#"local me = game:GetService("Players").LocalPlayer
+        game.ReplicatedStorage.Ask.OnClientInvoke = function()
+            if me.Name == "A" then task.wait(60) end
+            return "answer"
+        end"#,
+    );
+    server.start();
+    let mut session = Session::new(server, Options::default());
+    session.join("A", 1).unwrap();
+    session.join("B", 2).unwrap();
+    session.run_for(1.0);
+    assert!(session.client(0).unwrap().session_ended());
+    assert_eq!(
+        lines(session.server()),
+        [
+            "invoke B true answer",
+            "invoke A false Player is not connected"
+        ]
+    );
+}
+
 /// The prompt takes the window's input: only pressing and releasing the
 /// mouse on its button leaves, so a button held down when the kick came
 /// doesn't, and it's centered again when the window's size changes.

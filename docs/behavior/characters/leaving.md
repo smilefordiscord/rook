@@ -41,6 +41,10 @@ own connection; the server sees it leave with reason `Unknown`.
   (creator-docs). Rook parents it to nil whatever that property says.
 - The other clients see the Player and its character go, as any removal
   replicates.
+- A `RemoteFunction:InvokeClient` the client hadn't answered raises an
+  error on the server (creator-docs RemoteFunction). Inference: it
+  raises once the player has left, with the words an invoke of a player
+  who isn't connected raises, `Player is not connected`.
 - Inference: `LoadCharacter` on a player that left raises `LoadCharacter
   can only be called when Player is in the world` and spawns nothing.
 

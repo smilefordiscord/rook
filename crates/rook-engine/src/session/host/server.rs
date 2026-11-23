@@ -10,6 +10,10 @@ pub(super) struct Link {
     pub(super) player: InstanceId,
     /// What the client was last told it owns.
     pub(super) owned: rook_lua::OwnedHere,
+    /// The server's `InvokeClient` calls sent to the client and not yet
+    /// answered, by the server's number: each fails if the client leaves
+    /// first, and only these replies are taken from it.
+    pub(super) invoked: std::collections::BTreeSet<u64>,
 }
 
 /// The server end: its DataModel and what each client should see.
@@ -69,13 +73,21 @@ impl ServerHost {
     /// Client `index` has gone, for `reason`: its player leaves the game
     /// (`Players.PlayerRemoving`, its character removed) and the client
     /// hears nothing more. The one place a client's connection ends.
+    /// `InvokeClient` calls it hadn't answered raise an error (Confirmed:
+    /// creator-docs RemoteFunction:InvokeClient), once the player is gone
+    /// (Inference), and its own invokes' replies have nowhere to go.
     pub fn leave(&mut self, index: usize, reason: rook_lua::ExitReason) {
         let Some(link) = self.clients.get_mut(index).and_then(Option::take) else {
             return;
         };
         self.spawning.retain(|&p| p != link.player);
         self.dead.retain(|_, (p, _)| *p != link.player);
-        self.server.runtime().remove_player(link.player, reason);
+        self.calls.retain(|_, (client, _)| *client != index);
+        let rt = self.server.runtime();
+        rt.remove_player(link.player, reason);
+        for call in link.invoked {
+            rt.deliver_reply(call, false, &[not_connected()]);
+        }
     }
 
     /// Carry out the kicks the server's scripts asked for since the last
@@ -166,6 +178,7 @@ impl ServerHost {
             source,
             player,
             owned: rook_lua::OwnedHere::default(),
+            invoked: std::collections::BTreeSet::new(),
         }));
         Ok((
             self.clients.len() - 1,
@@ -324,13 +337,19 @@ impl ServerHost {
                     }
                 }
                 RemoteKind::InvokeClient { player, call } => {
-                    match self.links().find(|(_, c)| c.player == player) {
-                        Some((i, _)) => send(i, RemoteKind::InvokeClient { player, call }),
-                        None => self.server.runtime().deliver_reply(
-                            call,
-                            false,
-                            &[NetValue::String(b"Player is not connected".to_vec())],
-                        ),
+                    let client = self.links().find(|(_, c)| c.player == player);
+                    match client.map(|(i, _)| i) {
+                        Some(i) => {
+                            if let Some(Some(link)) = self.clients.get_mut(i) {
+                                link.invoked.insert(call);
+                            }
+                            send(i, RemoteKind::InvokeClient { player, call });
+                        }
+                        None => {
+                            self.server
+                                .runtime()
+                                .deliver_reply(call, false, &[not_connected()])
+                        }
                     }
                 }
                 RemoteKind::Reply { call, ok } => {
@@ -454,13 +473,24 @@ impl ServerHost {
                         );
                     }
                 }
-                RemoteKind::Reply { call, ok } => rt.deliver_reply(call, ok, &args),
+                RemoteKind::Reply { call, ok } => {
+                    let link = self.clients.get_mut(index).and_then(Option::as_mut);
+                    if link.is_some_and(|link| link.invoked.remove(&call)) {
+                        rt.deliver_reply(call, ok, &args);
+                    }
+                }
                 RemoteKind::FireClient { .. }
                 | RemoteKind::FireAllClients
                 | RemoteKind::InvokeClient { .. } => {}
             },
         }
     }
+}
+
+/// What an `InvokeClient` whose player isn't connected, or leaves before
+/// answering, raises (Inference: the words).
+fn not_connected() -> NetValue {
+    NetValue::String(b"Player is not connected".to_vec())
 }
 
 /// StarterPlayer's properties a joining Player copies, as (StarterPlayer
