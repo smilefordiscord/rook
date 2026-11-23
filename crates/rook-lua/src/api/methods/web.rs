@@ -36,10 +36,7 @@ pub(super) fn native(owner: &str, name: &str) -> Option<RawMethod> {
 
 pub(super) fn luau_source(owner: &str, name: &str) -> Option<&'static str> {
     first(
-        &[
-            http::luau_source,
-            memory_stores::luau_source,
-        ],
+        &[http::luau_source, memory_stores::luau_source],
         owner,
         name,
     )

@@ -5,8 +5,8 @@ use rook_render::{Disc, DiscImage, Stars};
 
 use super::sky::SkyImage;
 use super::sun::{day_turn, horizon_fade};
-use rook_types::moon_direction;
 use super::*;
+use rook_types::moon_direction;
 
 /// What a Sky's celestial bodies are without a Sky, or before its
 /// properties were saved: a new Sky's defaults (creator-docs Sky). That a
