@@ -14,7 +14,6 @@ mod members;
 mod memory_stores;
 mod messaging;
 mod object_arguments;
-mod path2d;
 mod scheduling;
 mod scripts;
 mod teleports;

@@ -110,3 +110,20 @@ fn get_text_bounds_params_size_and_clone() {
         ],
     );
 }
+
+#[test]
+fn text_bounds_match_text_size() {
+    expect(
+        r#"
+        local ts = game:GetService("TextService")
+        local params = Instance.new("GetTextBoundsParams")
+        params.Text = "hello world"
+        params.Size = 18
+        params.Font = Font.fromEnum(Enum.Font.Gotham)
+        local b = ts:GetTextBoundsAsync(params)
+        print(typeof(b), b == ts:GetTextSize("hello world", 18, Enum.Font.Gotham, Vector2.new(1e7, 1e7)))
+        "#,
+        0,
+        &["Vector2 true"],
+    );
+}
