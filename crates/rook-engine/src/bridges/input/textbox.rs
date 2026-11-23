@@ -76,6 +76,38 @@ impl Edit {
         i
     }
 
+    /// The word `at` is in or next to: a run of letters, digits and `_`,
+    /// of spaces, or a single other character.
+    fn word_at(&self, at: usize) -> (usize, usize) {
+        let n = self.text.len();
+        if n == 0 {
+            return (0, 0);
+        }
+        let i = at.min(n - 1);
+        let kind = |c: char| {
+            if c.is_alphanumeric() || c == '_' {
+                0
+            } else if c.is_whitespace() {
+                1
+            } else {
+                2
+            }
+        };
+        let k = kind(self.text[i]);
+        if k == 2 {
+            return (i, i + 1);
+        }
+        let mut lo = i;
+        while lo > 0 && kind(self.text[lo - 1]) == k {
+            lo -= 1;
+        }
+        let mut hi = i + 1;
+        while hi < n && kind(self.text[hi]) == k {
+            hi += 1;
+        }
+        (lo, hi)
+    }
+
     fn line(&self) -> (usize, usize) {
         let start = self.text[..self.caret]
             .iter()
@@ -136,16 +168,78 @@ impl DataModel {
         }
     }
 
-    /// A click on TextBox `id` at `at` (GUI coordinates): focus it, its
-    /// caret where it was clicked unless focusing clears it.
-    pub(super) fn focus_by_click(&self, id: InstanceId, at: Vec2) {
-        let caret = {
-            let mut w = self.runtime.world_mut();
-            let w = &mut *w;
-            w.gui.caret_index_at(&mut w.dom, id, at)
+    /// Where in TextBox `id`'s text the caret goes for the mouse at `at`
+    /// (GUI coordinates), the nearest place when it's outside the box.
+    fn caret_at(&self, id: InstanceId, at: Vec2) -> Option<usize> {
+        let mut w = self.runtime.world_mut();
+        let w = &mut *w;
+        w.gui.caret_index_at(&mut w.dom, id, at)
+    }
+
+    /// Button 1 pressed on TextBox `id` at `at` (GUI coordinates): focus
+    /// it, its caret where it was clicked unless focusing clears it, and
+    /// hold the selection's start there while the button is held, the
+    /// caret following the mouse. Inference (as text fields everywhere):
+    /// with Shift held, a press in the focused box extends its selection
+    /// to the click; a second quick press selects the word clicked.
+    pub(super) fn press_text_box(&mut self, id: InstanceId, at: Vec2) {
+        let caret = self.caret_at(id, at);
+        let now = self.runtime.world().scheduler.now();
+        let presses = match self.input.gui.last_box_press {
+            Some((b, when, n)) if b == id && now - when <= super::gui::CLICK_RUN => n + 1,
+            _ => 1,
         };
-        self.runtime.focus_text_box(id, caret);
-        self.runtime.drain_deferred();
+        self.input.gui.last_box_press = Some((id, now, presses));
+        let focused = self.focused_text_box() == Some(id);
+        let shift = self.held(["LeftShift", "RightShift"]);
+        if focused && let Some(caret) = caret {
+            let mut edit = self.read_edit(id);
+            if shift {
+                edit.move_to(caret, true);
+            } else if presses == 2 {
+                let (lo, hi) = edit.word_at(caret);
+                edit.anchor = Some(lo);
+                edit.caret = hi;
+            } else {
+                edit.move_to(caret, false);
+            }
+            self.write_edit(id, &edit);
+        } else {
+            self.runtime.focus_text_box(id, caret);
+            self.runtime.drain_deferred();
+        }
+        if self.focused_text_box() == Some(id) {
+            let edit = self.read_edit(id);
+            self.input.gui.text_drag = Some((id, edit.anchor.unwrap_or(edit.caret)));
+        }
+    }
+
+    /// The mouse moved with button 1 held after pressing a TextBox: its
+    /// caret follows, selecting from where the press started. Whether it
+    /// did.
+    pub(super) fn drag_text_selection(&mut self) -> bool {
+        let Some((id, anchor)) = self.input.gui.text_drag else {
+            return false;
+        };
+        if self.focused_text_box() != Some(id) {
+            self.input.gui.text_drag = None;
+            return false;
+        }
+        let (x, y) = super::gui_point(self.runtime.world().input.mouse);
+        let Some(caret) = self.caret_at(id, Vec2::new(x, y)) else {
+            return true;
+        };
+        let mut edit = self.read_edit(id);
+        let n = edit.text.len();
+        let (caret, anchor) = (caret.min(n), anchor.min(n));
+        // Back where it started, nothing is selected.
+        let anchor = (anchor != caret).then_some(anchor);
+        if (edit.caret, edit.anchor) != (caret, anchor) {
+            edit.caret = caret;
+            edit.anchor = anchor;
+            self.write_edit(id, &edit);
+        }
+        true
     }
 
     /// Text typed into the focused TextBox. Control characters (Enter,

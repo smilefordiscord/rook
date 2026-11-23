@@ -34,18 +34,30 @@ impl TextBlock {
         Some((Vec2::new(x, line.top), line.bottom - line.top))
     }
 
-    /// The character a caret put at `at` stands before: on the nearest
-    /// line, at the nearest place.
+    /// The character a caret put at `at` stands before, on the nearest
+    /// line. Measured (Studio 0.748, the case `input/textbox_click_caret`):
+    /// the caret goes after a character once `at` is more than two thirds
+    /// of the way across it (a 44-pixel "m" took it after from 30 pixels
+    /// in, not 29; a 10-pixel "d" from 7, not 6), not at its middle.
     pub(crate) fn index_at(&self, at: Vec2) -> Option<usize> {
         let line = self.carets.iter().min_by(|a, b| {
             let off = |l: &CaretLine| (l.top - at.y).max(at.y - l.bottom).max(0.0);
             off(a).total_cmp(&off(b))
         })?;
-        let stop = line
-            .stops
-            .iter()
-            .min_by(|a, b| (a.1 - at.x).abs().total_cmp(&(b.1 - at.x).abs()))?;
-        Some(stop.0)
+        let mut stops = line.stops.clone();
+        stops.sort_by(|a, b| a.1.total_cmp(&b.1));
+        let &(first, left) = stops.first()?;
+        if at.x <= left {
+            return Some(first);
+        }
+        for pair in stops.windows(2) {
+            let [(before, from), (after, to)] = [pair[0], pair[1]];
+            if at.x <= to {
+                let past = at.x > from + (to - from) * (2.0 / 3.0);
+                return Some(if past { after } else { before });
+            }
+        }
+        stops.last().map(|s| s.0)
     }
 }
 

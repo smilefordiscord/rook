@@ -1,0 +1,18 @@
+-- studio 0.748.0.7481526
+-- signals: deferred
+click 1 at 18 caret 1
+click 2 at 22 caret 1
+click 3 at 24 caret 1
+click 4 at 26 caret 1
+click 5 at 28 caret 1
+click 6 at 29 caret 1
+click 7 at 30 caret 2
+click 8 at 31 caret 2
+click 9 at 32 caret 2
+click 10 at 34 caret 2
+click 11 at 36 caret 2
+click 12 at 66 caret 2
+click 13 at 70 caret 2
+click 14 at 72 caret 2
+click 15 at 74 caret 3
+click 16 at 76 caret 3

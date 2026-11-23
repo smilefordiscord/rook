@@ -12,7 +12,7 @@ use crate::DataModel;
 
 /// Measured: activations this close count as a run for `Activated`'s
 /// `clickCount` (0.465 s apart did, 0.534 s didn't).
-const CLICK_RUN: f64 = 0.5;
+pub(super) const CLICK_RUN: f64 = 0.5;
 
 #[derive(Debug, Default)]
 pub(crate) struct GuiInput {
@@ -23,6 +23,12 @@ pub(crate) struct GuiInput {
     /// What got each held button's `InputBegan`, for its `InputEnded`.
     began: [Vec<InstanceId>; 2],
     drag: Option<rook_gui::BarDrag>,
+    /// A TextBox pressed with button 1, while it's held: where its
+    /// selection started, the caret following the mouse.
+    pub(super) text_drag: Option<(InstanceId, usize)>,
+    /// The last press on a TextBox: it, when, and how many quick presses
+    /// in a row (2 selects a word).
+    pub(super) last_box_press: Option<(InstanceId, f64, u32)>,
     /// The last activation: its button, when, and its `clickCount`.
     last_activation: Option<(InstanceId, f64, i32)>,
     /// The GUI layout hover was last worked out on.
@@ -38,6 +44,8 @@ impl GuiInput {
         for began in &mut self.began {
             began.retain(|&b| b != id);
         }
+        self.text_drag.take_if(|(b, _)| *b == id);
+        self.last_box_press.take_if(|(b, _, _)| *b == id);
         self.last_activation.take_if(|(a, ..)| *a == id);
     }
 }
@@ -215,6 +223,9 @@ impl DataModel {
             }
             return true;
         }
+        if self.drag_text_selection() {
+            return true;
+        }
         self.any_active(&hits)
     }
 
@@ -290,7 +301,7 @@ impl DataModel {
             && is_box
             && let Some(t) = target
         {
-            self.focus_by_click(t, Vec2::new(x, y));
+            self.press_text_box(t, Vec2::new(x, y));
         }
         self.input.gui.drag.is_some() || self.any_active(&hits)
     }
@@ -335,6 +346,9 @@ impl DataModel {
         }
         if let Some(p) = pressed {
             self.update_gui_state(p);
+        }
+        if button == 1 {
+            self.input.gui.text_drag = None;
         }
         let dragged = button == 1 && self.input.gui.drag.take().is_some();
         dragged || pressed.is_some() || self.any_active(&hits)

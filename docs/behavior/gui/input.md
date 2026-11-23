@@ -148,6 +148,20 @@ hover images in `draw/objects/frame.rs` and `draw/objects/image.rs`, the caret i
   keeps its `CursorPosition` and fires `FocusLost(false, nil)` but no
   `TextBoxFocusReleased`. A new TextBox's `CursorPosition` is 1 and its
   `SelectionStart` −1.
+- **Clicking in the text** puts the caret before the character clicked,
+  or after it once the click is more than two thirds of the way across
+  it, not half (a 44-pixel "m" took it after from 30 pixels in, a
+  10-pixel "d" from 7; the case `input/textbox_click_caret`, Studio 0.748
+  on 2026-11-22). Past the text's end it goes to the end.
+- **Dragging** with button 1 selects (the case `input/textbox_drag_select`):
+  the press sets the caret and the selection's start, and the caret
+  follows the mouse until the release, `SelectionStart` staying where the
+  press was, whichever way it goes and when the mouse leaves the box
+  (past its right edge, the text's end). A drag across an unfocused box
+  focuses it and selects the same way. A plain click in the focused box
+  drops the selection (`SelectionStart` −1). Inference, as text fields
+  everywhere: Shift with a click extends the selection to it, and a
+  second quick click (within 0.5 s) selects the word.
 - **Typing** comes from the platform's text input only: a key press of C
   typed nothing. Each character moves `CursorPosition` first, then
   changes `Text`. Backspace and Left edit and move the caret.

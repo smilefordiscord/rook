@@ -1,0 +1,8 @@
+-- studio 0.748.0.7481526
+-- signals: deferred
+release 1 focused true 18 3 "pha beta gamma "
+release 2 focused true 8 23 "eta gamma delta"
+release 3 focused true 23 13 "amma delta"
+release 4 focused true 23 -1 ""
+release 5 focused false -1 -1 ""
+end alpha beta gamma delta
