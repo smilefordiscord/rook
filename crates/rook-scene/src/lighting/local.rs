@@ -213,7 +213,10 @@ impl LightCache {
         self.lights.insert(id, (i, holders));
     }
 
-    /// Stop drawing light `id`; the last entry takes its place.
+    /// Stop drawing light `id`; the last entry takes its place. Its slot
+    /// is noted as changed even when it was the last (now past the list's
+    /// end): the renderer only looks at the lights when something is
+    /// noted, and a list that only shrank would otherwise keep drawing it.
     fn remove(&mut self, id: InstanceId, list: &mut Vec<LocalLight>) {
         if !self.lights.contains_key(&id) {
             return;
@@ -224,8 +227,8 @@ impl LightCache {
         list.swap_remove(i);
         if let Some(&moved) = self.ids.get(i) {
             self.lights.get_mut(&moved).expect("known").0 = i;
-            self.changed.push(i);
         }
+        self.changed.push(i);
     }
 
     /// Forget what light `id` hangs from; its entry.
@@ -274,6 +277,35 @@ mod tests {
         assert_eq!(cache.take_changes(), [0]);
         assert_eq!(list.len(), 2);
         assert_eq!(cache.ids, [lights[2], lights[1]]);
+    }
+
+    /// The last light leaving (or the only one) is noted too, though no
+    /// entry takes its place: the renderer drops it only when told.
+    #[test]
+    fn the_last_light_going_is_noted() {
+        let mut dom = Dom::new();
+        let ws = dom.get_service("Workspace").unwrap();
+        let part = dom.create_by_name("Part").unwrap();
+        dom.set_parent(part, Some(ws)).unwrap();
+        let lights: Vec<InstanceId> = (0..2)
+            .map(|_| {
+                let l = dom.create_by_name("PointLight").unwrap();
+                dom.set_parent(l, Some(part)).unwrap();
+                l
+            })
+            .collect();
+        let mut cache = LightCache::default();
+        let mut list = Vec::new();
+        cache.build(&dom, &mut list);
+        cache.take_changes();
+        for (left, &light) in lights.iter().enumerate().rev() {
+            dom.set_parent(light, None).unwrap();
+            let mut changes = RenderChanges::default();
+            changes.lights_placed.insert(light);
+            cache.apply(&dom, &changes, &mut list);
+            assert_eq!(list.len(), left);
+            assert!(!cache.take_changes().is_empty());
+        }
     }
 
     /// A light in a ViewportFrame lights nothing, even in a frame in
