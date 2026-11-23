@@ -42,27 +42,32 @@ fn a_server_kick_waits_for_the_session() {
 }
 
 /// Leaving fires `PlayerRemoving` with the reason while the player is in
-/// Players, then removes it; a player already gone is left alone.
+/// Players, then removes it; a player already gone is left alone. Under
+/// Deferred signals the handlers once ran after the player had left.
 #[test]
 fn removing_a_player_fires_player_removing_first() {
-    let (rt, player) = with_player();
-    rt.run_source(
-        "Workspace.Script",
-        r#"local Players = game:GetService("Players")
-        Players.PlayerRemoving:Connect(function(p, reason)
-            print(p.Name, p.Parent, reason)
-        end)
-        Players.ChildRemoved:Connect(function(c) print("removed", c.Name) end)"#,
-        None,
-    )
-    .unwrap();
-    rt.remove_player(player, ExitReason::CreatorKick);
-    rt.remove_player(player, ExitReason::Unknown);
-    assert_eq!(
-        finish(&rt, 1),
-        ["A Players Enum.PlayerExitReason.CreatorKick", "removed A"]
-    );
-    assert_eq!(rt.world().dom.parent(player), None);
+    for behavior in [SignalBehavior::Immediate, SignalBehavior::Deferred] {
+        let (rt, player) = with_player();
+        rt.world_mut().signal_behavior = behavior;
+        rt.run_source(
+            "Workspace.Script",
+            r#"local Players = game:GetService("Players")
+            Players.PlayerRemoving:Connect(function(p, reason)
+                print(p.Name, p.Parent, reason)
+            end)
+            Players.ChildRemoved:Connect(function(c) print("removed", c.Name) end)"#,
+            None,
+        )
+        .unwrap();
+        rt.remove_player(player, ExitReason::CreatorKick);
+        rt.remove_player(player, ExitReason::Unknown);
+        assert_eq!(
+            finish(&rt, 1),
+            ["A Players Enum.PlayerExitReason.CreatorKick", "removed A"],
+            "{behavior:?}"
+        );
+        assert_eq!(rt.world().dom.parent(player), None);
+    }
 }
 
 /// A player that left gets no character: a script respawning it after a

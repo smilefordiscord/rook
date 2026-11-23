@@ -12,7 +12,7 @@ use crate::api::methods::mutate;
 use crate::runtime::ctx::args::Args;
 use crate::runtime::ctx::{ApiResult, Outcome, ScriptError, with_world};
 use crate::runtime::signal::SignalKey;
-use crate::runtime::threads::fire;
+use crate::runtime::threads::{drain_deferred, fire};
 
 /// Confirmed (creator-docs Player:Kick): a message a server gives that is
 /// longer than this, in bytes, is dropped for the default notice.
@@ -77,7 +77,8 @@ pub(crate) fn remove_character(lua: &Lua, player: InstanceId) -> ApiResult<()> {
 
 /// `player` leaves: `Players.PlayerRemoving` fires while it's still in
 /// Players (creator-docs), then its character is removed and `Character`
-/// cleared, then it leaves Players. Inference: the character goes after
+/// cleared, then it leaves Players. Deferred handlers of `PlayerRemoving`
+/// run before the rest, so they see the player in Players too. Inference: the character goes after
 /// `PlayerRemoving`, and the Player is parented to nil rather than
 /// destroyed, as `Workspace.PlayerCharacterDestroyBehavior`'s Disabled
 /// does.
@@ -96,6 +97,7 @@ pub(crate) fn remove_player(lua: &Lua, player: InstanceId, reason: ExitReason) -
         &SignalKey::event(players, "PlayerRemoving"),
         &[LuaValue::UserData(ud), reason],
     );
+    drain_deferred(lua);
     remove_character(lua, player)?;
     mutate(lua, |w| {
         w.client_players.remove(&player);

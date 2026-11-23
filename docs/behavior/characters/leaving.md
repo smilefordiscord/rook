@@ -30,7 +30,10 @@ own connection; the server sees it leave with reason `Unknown`.
 
 - `Players.PlayerRemoving` fires with the player and an
   `Enum.PlayerExitReason` (`CreatorKick` for a kick) while the player is
-  still in Players, before Players' `ChildRemoved` (creator-docs).
+  still in Players, before Players' `ChildRemoved` (creator-docs). Under
+  Deferred signals its handlers run before the player is taken out of
+  Players too, so they see what Immediate handlers see (Inference: what
+  the creator docs promise them).
 - Inference: then the character goes as it does on respawning
   (`CharacterRemoving`, then it's destroyed), `Character` is cleared, and
   the Player is parented to nil rather than destroyed, as
