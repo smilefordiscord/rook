@@ -99,7 +99,13 @@ impl<'a> Pass<'a> {
                 self.out.pages.insert(layout, pages);
                 page::arrange(dom, layout, &kids, inner, at)
             }
-            _ => list::arrange(dom, layout, &kids, (inner, spaced)),
+            _ => {
+                let flexed = list::arrange(dom, layout, &kids, (inner, spaced));
+                match self.grown_across(layout, &kids, &flexed.sizes, inner) {
+                    Some(grown) => list::arrange(dom, layout, &grown, (inner, spaced)),
+                    None => flexed,
+                }
+            }
         };
         // Back to child order.
         let mut slots = vec![Vec2::ZERO; order.len()];
@@ -111,6 +117,48 @@ impl<'a> Pass<'a> {
         out.slots = slots;
         out.sizes = sizes;
         out
+    }
+
+    /// The kids of a list again, when flex changed the length of one that
+    /// grows across the list by `AutomaticSize`: that one measured again
+    /// at its new length, which it keeps (measured: an item filling a row
+    /// beside a 50 tall frame, holding a square as wide as it, was as tall
+    /// as the 200 it was given, and the row, its content and the alignment
+    /// across followed). `None` when no such kid changed. Arranged with
+    /// these, each keeps its length, as the lengths already fill the line.
+    fn grown_across(
+        &mut self,
+        layout: InstanceId,
+        kids: &[Kid],
+        flexed: &[Vec2],
+        inner: Vec2,
+    ) -> Option<Vec<Kid>> {
+        let dom = self.dom;
+        let along = if dom.enum_item_property(layout, "FillDirection") == Some("Horizontal") {
+            Vec2::X
+        } else {
+            Vec2::Y
+        };
+        let across = Vec2::ONE - along;
+        let changed = |n: usize| {
+            (flexed[n] - kids[n].size).dot(along).abs() > 1e-3
+                && automatic::automatic_axes(dom, kids[n].id).dot(across) > 0.0
+        };
+        if !(0..kids.len()).any(changed) {
+            return None;
+        }
+        let mut out = kids.to_vec();
+        for (n, kid) in out.iter_mut().enumerate() {
+            if !changed(n) {
+                continue;
+            }
+            let base = base_size(dom, kid.id, inner) * across + flexed[n] * along;
+            let room = (inner - resolve(position_of(dom, kid.id), inner)).max(base);
+            let grown = automatic::grow_only(self, kid.id, base, room, across);
+            let held = constraints::apply(dom, kid.id, grown, inner);
+            kid.size = flexed[n] * along + held * across;
+        }
+        Some(out)
     }
 
     /// Lay out a tree from its top: a LayerCollector, or a GUI object

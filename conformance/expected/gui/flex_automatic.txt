@@ -1,0 +1,8 @@
+-- studio 0.748.0.7481526
+-- signals: deferred
+fill, grows Y row 300,20 fixed 0,0/100,50 item 100,0/200,200 square 200,200 content 300,200
+fill, grows Y, row grows Y, centered row 300,200 fixed 0,75/100,50 item 100,0/200,200 square 200,200 content 300,200
+grow, grows Y, row grows Y, centered row 300,200 fixed 0,75/100,50 item 100,0/200,200 square 200,200 content 300,200
+fill, grows XY, row grows Y row 300,200 fixed 0,0/100,50 item 100,0/200,200 square 200,200 content 300,200
+fill, no AutomaticSize, row grows Y row 300,50 fixed 0,0/100,50 item 100,0/200,0 square 200,200 content 300,50
+vertical, fill, grows X, row grows X row 200,300 fixed 75,0/50,100 item 0,100/200,200 square 200,200 content 200,300

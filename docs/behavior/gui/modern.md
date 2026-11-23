@@ -121,6 +121,13 @@ UIListLayout's `HorizontalFlex` and `VerticalFlex` (whichever is along
 - `AbsoluteContentSize` is the longest line (the room spreading adds left
   out, grown items counted) by the lines across.
 - Children of an item flex changed lay out in its new size.
+- An item flex changed the length of that grows across the list by
+  `AutomaticSize` is measured again at its new length: a 0 × 0 item
+  growing on Y and filling the rest of a 300-wide row beside a 100 × 50
+  frame, holding a square as wide as it (`SizeConstraint` RelativeXX), was
+  200 × 200, and the line, `AbsoluteContentSize` (300, 200), a row growing
+  on Y (200 tall) and the alignment across (the frame centered at 75)
+  followed (Studio 0.748, conformance `gui/flex_automatic`).
 
 ## UITableLayout
 

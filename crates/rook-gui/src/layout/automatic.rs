@@ -23,8 +23,25 @@ pub(super) fn grow(pass: &mut Pass<'_>, id: InstanceId, base: Vec2, room: Vec2) 
     grow_on(pass, id, base, room, axes)
 }
 
+/// `base` grown on those of `id`'s `AutomaticSize` axes that are in
+/// `axes`, with its size on the others held (a list item flex gave a
+/// length, growing across the list).
+pub(super) fn grow_only(
+    pass: &mut Pass<'_>,
+    id: InstanceId,
+    base: Vec2,
+    room: Vec2,
+    axes: Vec2,
+) -> Vec2 {
+    let axes = automatic_axes(pass.dom, id) * axes;
+    if axes == Vec2::ZERO {
+        return base;
+    }
+    grow_on(pass, id, base, room, axes)
+}
+
 /// 1 on each axis `id` grows on by `AutomaticSize`.
-fn automatic_axes(dom: &rook_dom::Dom, id: InstanceId) -> Vec2 {
+pub(super) fn automatic_axes(dom: &rook_dom::Dom, id: InstanceId) -> Vec2 {
     match dom.enum_item_property(id, "AutomaticSize") {
         Some("X") => Vec2::X,
         Some("Y") => Vec2::Y,
