@@ -104,6 +104,20 @@ impl DataModel {
         }
     }
 
+    /// Fire `event` on the activated plugin's PluginMouse, which hears
+    /// the viewport alone: not what GUI (a dock widget) took, but always a
+    /// release, so a drag that ends over a widget ends
+    /// (docs/behavior/studio/plugins.md#the-plugins-mouse).
+    pub(super) fn fire_plugin_mouse(&self, event: &'static str, gui_took: bool) {
+        if gui_took && !event.ends_with("Up") {
+            return;
+        }
+        let mouse = self.runtime.world().studio.active_mouse();
+        if let Some(m) = mouse {
+            self.fire(m, event, ());
+        }
+    }
+
     /// Handle one input event. Returns the ClickDetector interactions it
     /// caused, for the session to fire on both sides.
     pub fn input(&mut self, event: InputEvent) -> Vec<ClickEvent> {
@@ -152,6 +166,7 @@ impl DataModel {
         }
         self.refresh_mouse(clicks);
         self.fire_mice("Move");
+        self.fire_plugin_mouse("Move", processed);
         processed
     }
 
@@ -202,11 +217,13 @@ impl DataModel {
         // Inference: after InputChanged, as Roblox's camera reads both.
         self.runtime
             .pointer_action(delta, (0.0, 0.0), 0.0, processed);
-        self.fire_mice(if delta > 0.0 {
+        let event = if delta > 0.0 {
             "WheelForward"
         } else {
             "WheelBackward"
-        });
+        };
+        self.fire_mice(event);
+        self.fire_plugin_mouse(event, processed);
         processed
     }
 
@@ -251,12 +268,14 @@ impl DataModel {
         let processed = obj.map_or(gui_took, |obj| self.deliver(event, obj, gui_took));
         let detector = self.refresh_mouse(clicks);
         if button <= 2 {
-            self.fire_mice(match (button, down) {
+            let event = match (button, down) {
                 (1, true) => "Button1Down",
                 (1, false) => "Button1Up",
                 (_, true) => "Button2Down",
                 (_, false) => "Button2Up",
-            });
+            };
+            self.fire_mice(event);
+            self.fire_plugin_mouse(event, gui_took);
         }
         // Measured: a left click GUI didn't take activates the Tools the
         // character holds; a right click nothing. After the Mouse's events

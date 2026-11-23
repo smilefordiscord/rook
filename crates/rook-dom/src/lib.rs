@@ -9,6 +9,7 @@ mod attributes;
 mod classes;
 mod collect;
 mod drawn;
+mod history;
 mod instance;
 mod journal;
 mod observe;
@@ -16,6 +17,7 @@ mod properties;
 mod tree;
 mod voxels;
 
+pub use history::Undo;
 pub use instance::{Attributes, Properties};
 pub use journal::Change;
 pub use observe::Observed;
@@ -112,6 +114,10 @@ pub struct Dom {
     /// `voxels.rs`), and that property's id.
     voxels: FxHashMap<InstanceId, rook_terrain::Grid>,
     smooth_grid: Option<PropertyId>,
+    /// What each change replaced, while recording (see `history.rs`).
+    recording: Option<Vec<Undo>>,
+    /// Children of the DataModel whose contents aren't recorded.
+    unrecorded: FxHashSet<InstanceId>,
     /// Debug builds remember freed ids, so reading one fails: a slot that
     /// is gone reads like a removed one, and the holder that read it kept
     /// it past its `Collected`.
@@ -151,6 +157,8 @@ impl Dom {
                 .class_by_name("Terrain")
                 .and_then(|t| db.find_canonical_property(t.id, "SmoothGrid"))
                 .map(|p| p.id),
+            recording: None,
+            unrecorded: FxHashSet::default(),
             #[cfg(debug_assertions)]
             freed: rustc_hash::FxHashSet::default(),
         }
@@ -272,7 +280,10 @@ impl Dom {
     pub fn set_name(&mut self, id: InstanceId, name: String) -> Result<(), DomError> {
         let inst = self.inst_mut(id)?;
         if inst.name != name {
-            inst.name = name;
+            let old = std::mem::replace(&mut inst.name, name);
+            if self.records(id) {
+                self.note_undo(Undo::Name { id, old });
+            }
             let property = self.name_prop;
             self.journal.push(Change::Property { id, property });
             self.notify(Observed::Renamed(id));

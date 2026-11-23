@@ -406,3 +406,96 @@ fn set_drawn_returns_what_moves() {
         Vec::new()
     );
 }
+
+/// Recorded edits put back newest first, and putting them back records
+/// what redoes them (docs/behavior/studio/history.md).
+#[test]
+fn recorded_edits_revert_and_redo() {
+    let mut dom = Dom::new();
+    let ws = dom.get_service("Workspace").unwrap();
+    let p = part(&mut dom, "Brick");
+    dom.set_parent(p, Some(ws)).unwrap();
+    let transparency = dom.property_id(p, "Transparency").unwrap();
+    dom.set_property(p, transparency, Value::Float32(0.25))
+        .unwrap();
+
+    dom.start_recording();
+    dom.set_name(p, "Wall".into()).unwrap();
+    dom.set_property(p, transparency, Value::Float32(0.5))
+        .unwrap();
+    dom.set_property(p, transparency, Value::Float32(0.75))
+        .unwrap();
+    dom.set_attribute(p, "Hp", Some(Value::Float64(3.0)))
+        .unwrap();
+    dom.add_tag(p, "Door").unwrap();
+    dom.set_parent(p, None).unwrap();
+    let undo = dom.stop_recording();
+    assert_eq!(undo.len(), 6);
+    assert!(!dom.is_recording());
+
+    let redo = dom.revert(&undo);
+    assert_eq!(dom.name(p), "Brick");
+    assert_eq!(dom.parent(p), Some(ws));
+    assert_eq!(dom.float_property(p, "Transparency"), Some(0.25));
+    assert_eq!(dom.attribute(p, "Hp"), None);
+    assert!(!dom.has_tag(p, "Door"));
+    assert!(!dom.is_recording(), "reverting leaves recording as it was");
+
+    dom.revert(&redo);
+    assert_eq!(dom.name(p), "Wall");
+    assert_eq!(dom.parent(p), None);
+    assert_eq!(dom.float_property(p, "Transparency"), Some(0.75));
+    assert_eq!(dom.attribute(p, "Hp"), Some(&Value::Float64(3.0)));
+    assert!(dom.has_tag(p, "Door"));
+}
+
+/// A property that read its default reads it again once reverted.
+#[test]
+fn reverting_a_first_write_unsets_it() {
+    let mut dom = Dom::new();
+    let ws = dom.get_service("Workspace").unwrap();
+    let p = part(&mut dom, "Brick");
+    dom.set_parent(p, Some(ws)).unwrap();
+    let anchored = dom.property_id(p, "Anchored").unwrap();
+    dom.start_recording();
+    dom.set_property(p, anchored, Value::Bool(true)).unwrap();
+    let undo = dom.stop_recording();
+    dom.revert(&undo);
+    assert!(!dom.is_set(p, anchored));
+    assert_eq!(dom.bool_property(p, "Anchored"), Some(false));
+}
+
+/// Only the place is recorded: not what isn't in the DataModel, not the
+/// containers left out, and not what the engine works out.
+#[test]
+fn recording_keeps_to_the_place() {
+    let mut dom = Dom::new();
+    let ws = dom.get_service("Workspace").unwrap();
+    let core = dom.get_service("CoreGui").unwrap();
+    dom.leave_unrecorded(core);
+    let loose = part(&mut dom, "Loose");
+    let gui = dom.create_by_name("ScreenGui").unwrap();
+    dom.set_parent(gui, Some(core)).unwrap();
+    let frame = dom.create_by_name("Frame").unwrap();
+    dom.set_parent(frame, Some(ws)).unwrap();
+    dom.start_recording();
+    dom.set_name(loose, "Still loose".into()).unwrap();
+    dom.set_name(gui, "Panel".into()).unwrap();
+    let size = dom.property_id(frame, "AbsoluteSize").unwrap();
+    dom.set_property(
+        frame,
+        size,
+        Value::Vector2(rook_types::Vector2::new(5.0, 5.0)),
+    )
+    .unwrap();
+    assert_eq!(dom.take_recorded(), Vec::new());
+    // Moving the loose part in is kept, so undoing it takes it out again.
+    dom.set_parent(loose, Some(ws)).unwrap();
+    assert_eq!(
+        dom.stop_recording(),
+        vec![Undo::Parent {
+            id: loose,
+            old: None
+        }]
+    );
+}

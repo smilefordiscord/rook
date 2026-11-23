@@ -102,6 +102,9 @@
     - [Adornments](behavior/rendering/adornments.md): selection boxes, handles, FloorWire, lassos
     - [Antialiasing](behavior/rendering/antialiasing.md)
     - [Frame threads](behavior/rendering/frame-threads.md): what runs on Roblox's render thread and what overlaps
+  - Studio
+    - [Plugins](behavior/studio/plugins.md): Edit mode, loading plugins, toolbars, dock widgets and DockWidgetPluginGuiInfo, the plugin's mouse, settings, the selection, ReflectionService
+    - [Change history](behavior/studio/history.md): what's recorded, steps and waypoints, recordings, undo and redo
   - Terrain
     - [Voxels](behavior/terrain/voxels.md): `SmoothGrid` and legacy terrain
     - [Surface](behavior/terrain/surface.md): the surface Roblox builds from the voxels

@@ -232,6 +232,7 @@ fn play(args: &Args) -> anyhow::Result<()> {
         wait_for_sounds: args.record_audio.is_some(),
         core_scripts,
         user_settings: None,
+        studio: false,
     };
     if args.windowed() && !args.crash_test {
         // The player's settings, which only a window's player changes.

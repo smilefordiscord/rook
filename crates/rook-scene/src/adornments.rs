@@ -105,14 +105,15 @@ fn adornments(dom: &Dom, id: InstanceId, cx: &mut Context<'_>) -> Vec<(PartInsta
 }
 
 /// Whether adornment `id` draws: `Visible`, and somewhere drawn from
-/// (Workspace, or a PlayerGui).
+/// (Workspace, a PlayerGui, or CoreGui, where Roblox's CoreScripts and
+/// Studio's plugins put theirs: Inference).
 fn shown(dom: &Dom, id: InstanceId) -> bool {
     if dom.bool_property(id, "Visible") == Some(false) {
         return false;
     }
     let mut at = dom.parent(id);
     while let Some(p) = at {
-        if matches!(dom.class_name(p), "Workspace" | "PlayerGui") {
+        if matches!(dom.class_name(p), "Workspace" | "PlayerGui" | "CoreGui") {
             return true;
         }
         at = dom.parent(p);

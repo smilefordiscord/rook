@@ -129,9 +129,22 @@ impl Dom {
         if unchanged {
             return Ok(());
         }
+        if self.records_property(id, property) {
+            let old = inst.properties.get(property).cloned();
+            self.note_undo(Undo::Property { id, property, old });
+        }
         self.store(id, property, value)?;
         self.journal.push(Change::Property { id, property });
         Ok(())
+    }
+
+    /// Whether a write to `property` of `id` is recorded: what the engine
+    /// works out (read-only properties such as `AbsoluteSize`) and
+    /// terrain's voxels aren't edits.
+    fn records_property(&self, id: InstanceId, property: PropertyId) -> bool {
+        self.records(id)
+            && Some(property) != self.smooth_grid
+            && !self.db.property(property).flags.read_only
     }
 
     /// Whether `property` was set on `id`, rather than reading its class
@@ -154,6 +167,10 @@ impl Dom {
             return Ok(());
         };
         self.unlink(id, property, &old);
+        if self.records_property(id, property) {
+            let old = Some(old.clone());
+            self.note_undo(Undo::Property { id, property, old });
+        }
         self.journal.push(Change::Property { id, property });
         Ok(())
     }

@@ -70,6 +70,14 @@ impl Physics {
         self.unsettled.cursor = dom.journal().end();
     }
 
+    /// Read the journal as [`Physics::settle_joints`] does, moving nothing:
+    /// how a world no sync has built (Edit mode's, a client's before its
+    /// first query) keeps up with the journal's trims.
+    pub fn note_joint_changes(&mut self, dom: &Dom) {
+        self.look_at_changes(dom);
+        self.unsettled.cursor = dom.journal().end();
+    }
+
     fn bring(&mut self, dom: &mut Dom, part: InstanceId) {
         if let Some(at) = self.unsettled.targets.remove(&part)
             && let Err(e) = dom.set_property_by_name(part, "CFrame", Value::CFrame(at))

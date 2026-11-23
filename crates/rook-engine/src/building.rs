@@ -91,6 +91,9 @@ impl DataModel {
         )
         .map_err(|e| EngineError::Lua(e.to_string()))?;
         runtime.set_script_timeout(options.script_timeout);
+        if options.studio != Some(crate::studio::StudioMode::Edit) {
+            runtime.set_studio_mode(options.studio);
+        }
         runtime.world_mut().signal_behavior = signal_behavior;
         let content = options
             .content

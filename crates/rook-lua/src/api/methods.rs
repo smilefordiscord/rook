@@ -31,6 +31,11 @@ pub(crate) mod localization;
 mod materials;
 pub(crate) mod physics;
 mod player_scripts;
+mod reflection;
+mod studio;
+pub(crate) use studio::{
+    studio_drop_moved, studio_redo, studio_select, studio_selection, studio_undo,
+};
 pub(crate) mod prompts;
 pub(crate) mod remotes;
 pub(crate) mod terrain;
@@ -85,6 +90,8 @@ pub(crate) fn native(owner: &str, name: &str) -> Option<RawMethod> {
             web::native,
             localization::native,
             core::native,
+            studio::native,
+            reflection::native,
         ],
         owner,
         name,
@@ -149,10 +156,6 @@ fn nil(lua: &Lua, _: InstanceId, _: &Args) -> ApiResult<Outcome> {
 
 fn true_(lua: &Lua, _: InstanceId, _: &Args) -> ApiResult<Outcome> {
     Outcome::ret(lua, true)
-}
-
-fn false_(lua: &Lua, _: InstanceId, _: &Args) -> ApiResult<Outcome> {
-    Outcome::ret(lua, false)
 }
 
 #[cfg(test)]

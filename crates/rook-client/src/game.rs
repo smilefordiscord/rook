@@ -106,6 +106,9 @@ pub struct Setup {
     /// The player's settings file; `None` for runs that aren't played,
     /// whose changes aren't saved.
     pub user_settings: Option<PathBuf>,
+    /// Started from an editor, so RunService says it's Studio's Play or
+    /// Run mode.
+    pub studio: bool,
 }
 
 impl Loading {
@@ -118,6 +121,11 @@ impl Loading {
             wait_for_sounds: setup.wait_for_sounds,
             core_scripts: setup.core_scripts.clone(),
             user_settings: setup.user_settings.clone(),
+            studio: setup.studio.then_some(if setup.play {
+                rook_engine::studio::StudioMode::Play
+            } else {
+                rook_engine::studio::StudioMode::Run
+            }),
             ..Options::default()
         };
         let script = setup.script.clone();
@@ -229,14 +237,14 @@ impl Game {
         }
     }
     /// The DataModel the window shows.
-    pub(crate) fn view(&self) -> &DataModel {
+    pub fn view(&self) -> &DataModel {
         match &self.mode {
             Mode::Play { client, .. } => client.client(),
             Mode::Run(host) => host.server(),
         }
     }
 
-    pub(crate) fn view_mut(&mut self) -> &mut DataModel {
+    pub fn view_mut(&mut self) -> &mut DataModel {
         match &mut self.mode {
             Mode::Play { client, .. } => client.client_mut(),
             Mode::Run(host) => host.server_mut(),
@@ -257,7 +265,7 @@ impl Game {
     }
 
     /// Send window input to the local player's client (Run mode has no player).
-    pub(crate) fn input(&mut self, event: InputEvent) {
+    pub fn input(&mut self, event: InputEvent) {
         if let Mode::Play { server, client } = &mut self.mode {
             for msg in client.input(event) {
                 server.deliver(msg);
@@ -265,7 +273,7 @@ impl Game {
         }
     }
 
-    pub(crate) fn set_viewport(&mut self, width: u32, height: u32) {
+    pub fn set_viewport(&mut self, width: u32, height: u32) {
         self.view_mut().set_viewport(width, height);
     }
 
@@ -298,7 +306,7 @@ impl Game {
     }
 
     /// Let the server keep its own 60 Hz pace (Play mode), for live play.
-    pub(crate) fn free_run(&self) {
+    pub fn free_run(&self) {
         if let Mode::Play { server, .. } = &self.mode {
             server.run(true);
         }
@@ -308,7 +316,7 @@ impl Game {
     /// server sent, then step the client once, `dt` long, as Roblox runs a
     /// client frame per drawn frame. In Run mode the server steps here at
     /// 60 Hz, catching up at most four steps.
-    pub(crate) fn advance(&mut self, dt: f64) {
+    pub fn advance(&mut self, dt: f64) {
         match &mut self.mode {
             Mode::Play { server, client } => {
                 let start = std::time::Instant::now();
@@ -345,7 +353,7 @@ impl Game {
         }
     }
 
-    pub(crate) fn run_for(&mut self, seconds: f64) {
+    pub fn run_for(&mut self, seconds: f64) {
         let target = self.view().now() + seconds;
         while self.view().now() + 1e-9 < target {
             self.step();
@@ -407,7 +415,7 @@ impl Game {
         }
     }
 
-    pub(crate) fn has_client(&self) -> bool {
+    pub fn has_client(&self) -> bool {
         matches!(self.mode, Mode::Play { .. })
     }
 

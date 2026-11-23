@@ -5,6 +5,10 @@ Every release, newest first. How versions are numbered is in
 
 ## [Unreleased]
 
+- A place can be opened for editing, with Roblox Studio plugins running in it as in Studio: their toolbars, dock widgets, mouse and settings, the Selection, and undo through ChangeHistoryService. Rook could only play places, and ran no plugins. See [plugins](docs/behavior/studio/plugins.md) and [change history](docs/behavior/studio/history.md).
+- `ReflectionService` lists a class's properties as Studio does. Rook raised a "not implemented" error for it. See [stubs](docs/guide/stubs.md#studio-plugins).
+- `LogService.MessageOut` fires for every line of output, as in Roblox. Rook never fired it. See [data and logging](docs/design/data-and-logging.md).
+- Adornments under CoreGui draw, as those under Workspace do. Rook drew none there. See [adornments](docs/behavior/rendering/adornments.md).
 - Light, shadows and the sky's light follow the camera to where it moves on a busy or slow machine. Rook could keep lighting only where the camera had been, for as long as the machine stayed busy. See [local lights](docs/behavior/lighting/local-lights.md).
 - AudioChannelMixer takes sound in through its channel pins, and AudioChannelSplitter's channel pins carry only their channel, as in Roblox. Rook left the mixer unwired, so everything sent through one was silent, and sent the whole sound out of every splitter pin. See [the audio API](docs/behavior/audio/audio-api.md).
 - A part's `CustomPhysicalProperties` reads nil until it's set and can be set back to nil, as in Roblox. Rook read an empty PhysicalProperties value for an unset one and raised an error for nil. See [Faces, Axes and PhysicalProperties](docs/behavior/scripting/faces-and-axes.md).

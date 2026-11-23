@@ -17,6 +17,7 @@ mod rigs;
 mod scripts;
 pub mod session;
 pub mod settings;
+pub mod studio;
 
 pub use bridges::camera::{CameraView, MouseLock, SavedCamera};
 pub use bridges::input::{
@@ -43,6 +44,8 @@ use session::threads;
 pub enum EngineError {
     #[error(transparent)]
     Load(#[from] rook_formats::LoadError),
+    #[error(transparent)]
+    Save(#[from] rook_formats::SaveError),
     #[error("Luau setup failed: {0}")]
     Lua(String),
     #[error(transparent)]
@@ -103,6 +106,9 @@ pub struct Options {
     /// [`user_settings`]): clients load it and save it when the player
     /// changes something. `None` keeps Roblox's defaults, unsaved.
     pub user_settings: Option<std::path::PathBuf>,
+    /// A play test started from an editor: RunService says so, as in
+    /// Studio's Play and Run modes (see [`studio`]).
+    pub studio: Option<studio::StudioMode>,
 }
 
 impl Default for Options {
@@ -116,6 +122,7 @@ impl Default for Options {
             core_scripts: None,
             endpoints: None,
             user_settings: None,
+            studio: None,
         }
     }
 }
@@ -276,6 +283,7 @@ impl DataModel {
                 w.physics.sync(&mut w.dom);
             } else {
                 w.physics.note_ownership(&w.dom);
+                w.physics.note_joint_changes(&w.dom);
             }
             w.gui.note_changes(&w.dom);
             w.note_style_changes();

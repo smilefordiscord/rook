@@ -239,5 +239,6 @@ mod lighting;
 mod rendering;
 mod replication;
 mod scripting;
+mod studio;
 mod terrain;
 mod unions;

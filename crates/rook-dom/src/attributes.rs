@@ -11,12 +11,20 @@ impl Dom {
         name: &str,
         value: Option<Value>,
     ) -> Result<(), DomError> {
+        let old = self.inst(id)?.attributes.get(name).cloned();
         let attrs = &mut self.inst_mut(id)?.attributes;
         let changed = match value {
             Some(v) => attrs.insert(name.to_owned(), v),
             None => attrs.remove(name),
         };
         if changed {
+            if self.records(id) {
+                self.note_undo(Undo::Attribute {
+                    id,
+                    name: name.to_owned(),
+                    old,
+                });
+            }
             self.journal.push(Change::Attribute {
                 id,
                 name: name.to_owned(),
@@ -36,6 +44,13 @@ impl Dom {
         if !tags.iter().any(|t| t == tag) {
             tags.push(tag.to_owned());
             self.tagged.entry(tag.to_owned()).or_default().insert(id);
+            if self.records(id) {
+                self.note_undo(Undo::Tag {
+                    id,
+                    tag: tag.to_owned(),
+                    had: false,
+                });
+            }
             self.journal.push(Change::TagAdded {
                 id,
                 tag: tag.to_owned(),
@@ -50,6 +65,13 @@ impl Dom {
         if let Some(pos) = tags.iter().position(|t| t == tag) {
             tags.remove(pos);
             self.untag(id, tag);
+            if self.records(id) {
+                self.note_undo(Undo::Tag {
+                    id,
+                    tag: tag.to_owned(),
+                    had: true,
+                });
+            }
             self.journal.push(Change::TagRemoved {
                 id,
                 tag: tag.to_owned(),

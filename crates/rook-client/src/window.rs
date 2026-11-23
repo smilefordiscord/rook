@@ -12,6 +12,7 @@ mod launch;
 mod mouse;
 mod readout;
 
+pub use keys::roblox_key;
 pub use winit;
 
 use std::path::PathBuf;

@@ -24,6 +24,10 @@ impl Members {
                         if let Some(sec) = member.property_security()? {
                             out.property_security.insert(member.name.clone(), sec);
                         }
+                        if let Some(category) = member.category.as_ref().filter(|c| *c != "Data") {
+                            out.property_category
+                                .insert(member.name.clone(), category.clone());
+                        }
                     }
                     "Function" | "Callback" => {
                         let f = Function {

@@ -37,6 +37,13 @@ Everything Rook supports today. What's coming next is in the [roadmap](../roadma
 - Joining creates the `Player`, `Backpack` and `PlayerGui` from `StarterPack` and `StarterGui`, fires `PlayerAdded`, sets `Players.LocalPlayer` and starts **LocalScripts** where Roblox allows them.
 - `RemoteEvent`, `UnreliableRemoteEvent` and `RemoteFunction`: arguments are copied between VMs the way Roblox copies them, and invokes yield until the reply.
 
+## Editing
+
+- **Edit mode** for an editor built on Rook: a place opened for editing runs no place script and simulates nothing, while RunService answers as in Studio's Edit mode and fires its `Heartbeat` and render events ([plugins](../behavior/studio/plugins.md)).
+- **Studio plugins** load from their model files and run with the Plugin capability: toolbars and buttons, dock widgets laid out where the editor puts them, the plugin's mouse, settings kept between runs, and `DockWidgetPluginGuiInfo` as Studio prints and checks it.
+- **The Selection** and **ChangeHistoryService** as measured in Studio: when `SelectionChanged` fires, waypoints, recordings, undo and redo ([change history](../behavior/studio/history.md)). `LogService.MessageOut` announces each line of output.
+- Saving a place leaves out Studio's own services.
+
 ## Physics
 
 - Workspace is simulated with **Rapier** on the server at 240 Hz, with `Workspace.Gravity` and `FallenPartsDestroyHeight`. Positions and velocities replicate to clients.

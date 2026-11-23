@@ -11,6 +11,7 @@ mod calls;
 pub mod gamepads;
 mod net;
 pub mod runtime;
+pub mod studio;
 mod styles;
 mod types;
 pub mod user_settings;

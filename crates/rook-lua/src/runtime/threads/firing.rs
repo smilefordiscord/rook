@@ -55,6 +55,7 @@ pub(crate) fn dispatch(lua: &Lua, start: u64) {
     for pos in start..end {
         let mut moved_focus = None;
         let mut moved = None;
+        let mut left_place = None;
         let mut stopped = Vec::new();
         let firings = with_world(lua, |w| {
             let change = w.dom.journal().get(pos)?;
@@ -69,6 +70,7 @@ pub(crate) fn dispatch(lua: &Lua, start: u64) {
                 } => {
                     moved = Some(*id);
                     let left = new_ancestors.last() != Some(&w.dom.root());
+                    left_place = left.then_some(*id);
                     moved_focus = (w.gui.focus())
                         .filter(|f| subtree.contains(f))
                         .map(|f| (f, left));
@@ -82,6 +84,9 @@ pub(crate) fn dispatch(lua: &Lua, start: u64) {
         });
         if let Some(id) = moved {
             with_world(lua, |w| crate::api::methods::tools::retire_mice(w, id));
+        }
+        if let Some(id) = left_place {
+            crate::api::methods::studio_drop_moved(lua, id);
         }
         for script in stopped {
             crate::api::scripts::stop_script(lua, script);

@@ -207,7 +207,7 @@ fn response(lua: &Lua, answer: WebAnswer) -> mlua::Result<MultiValue> {
     (true, t).into_lua_multi(lua)
 }
 
-fn to_json(v: &LuaValue, depth: usize) -> ApiResult<serde_json::Value> {
+pub(crate) fn to_json(v: &LuaValue, depth: usize) -> ApiResult<serde_json::Value> {
     use serde_json::Value as J;
     if depth > 100 {
         return Err(ScriptError("Can't convert to JSON".into()));
@@ -256,7 +256,7 @@ fn to_json(v: &LuaValue, depth: usize) -> ApiResult<serde_json::Value> {
     })
 }
 
-fn from_json(lua: &Lua, v: &serde_json::Value) -> mlua::Result<LuaValue> {
+pub(crate) fn from_json(lua: &Lua, v: &serde_json::Value) -> mlua::Result<LuaValue> {
     use serde_json::Value as J;
     Ok(match v {
         J::Null => LuaValue::Nil,

@@ -39,6 +39,10 @@ pub struct ClassMembers {
     /// `[read, write]`. Properties not listed are open to scripts.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub property_security: BTreeMap<String, [Security; 2]>,
+    /// The group Studio's Properties window shows each property in
+    /// (the dump's `Category`), for those not in `Data`, the most common.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub property_category: BTreeMap<String, String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

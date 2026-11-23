@@ -330,6 +330,10 @@ pub struct World {
         FxHashMap<InstanceId, crate::api::methods::camera::moves::Interpolation>,
     /// Scriptable cameras' `SetRoll`, in radians, for those a script rolled.
     pub(crate) camera_rolls: FxHashMap<InstanceId, f32>,
+    /// Studio's mode, selection, history and plugins' doings.
+    pub studio: crate::studio::Studio,
+    /// Output not yet announced by `LogService.MessageOut`.
+    pub(crate) message_out: Vec<(String, MessageType)>,
 }
 
 /// SpawnLocation, which the DOM indexes so a respawn needn't walk
@@ -401,6 +405,8 @@ impl World {
             movement: Default::default(),
             interpolations: FxHashMap::default(),
             camera_rolls: FxHashMap::default(),
+            studio: Default::default(),
+            message_out: Vec::new(),
         }
     }
 
@@ -410,6 +416,11 @@ impl World {
 
     pub fn push_log_from(&mut self, kind: MessageType, message: String, source: Option<String>) {
         let time = self.scheduler.now();
+        // Bounded for a runtime that prints without running the frames
+        // that announce it.
+        if self.message_out.len() < 10_000 {
+            self.message_out.push((message.clone(), kind));
+        }
         self.log.push(LogEntry {
             kind,
             message,

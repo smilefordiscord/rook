@@ -24,7 +24,8 @@ impl Layout {
             .flat_map(|p| dom.children(p).iter().copied())
             .filter_map(|p| dom.find_first_child_of_class(p, "PlayerGui"))
             .chain(dom.find_service("StarterGui"))
-            .chain(dom.find_service("CoreGui"));
+            .chain(dom.find_service("CoreGui"))
+            .chain(dom.find_service("PluginGuiService"));
         for holder in holders {
             let found = through_folders(dom, holder, |id| dom.is_a(id, "GuiBase2d"));
             roots.extend(
@@ -36,7 +37,12 @@ impl Layout {
         roots.extend(world);
         let (kept, roots): (Vec<InstanceId>, Vec<InstanceId>) =
             roots.into_iter().partition(|r| kept.contains(r));
-        let mut pass = Pass::new(dom, (&*previous, turning), fonts, Layout::default());
+        let host = Layout {
+            widgets: previous.widgets.clone(),
+            editing: previous.editing,
+            ..Layout::default()
+        };
+        let mut pass = Pass::new(dom, (&*previous, turning), fonts, host);
         for root in roots {
             pass.root(root);
         }

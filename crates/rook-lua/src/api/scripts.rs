@@ -2,7 +2,7 @@ use mlua::{Function, Lua, MultiValue, Table, Value as LuaValue};
 use rook_dom::{Change, Dom, InstanceId};
 use rook_types::RunContext;
 
-use super::instance::{LuaInstance, push_instance};
+use super::instance::{Identity, LuaInstance, push_instance};
 use crate::runtime::bytecode;
 use crate::runtime::ctx::args::Args;
 use crate::runtime::ctx::{ApiResult, Outcome, ScriptError, api_fn, api_ret, with_world};
@@ -17,9 +17,20 @@ fn source_of(lua: &Lua, id: InstanceId) -> String {
 
 /// A fresh environment whose globals fall back to the shared ones, with
 /// `script` set. Global assignments stay in the script's own environment.
+/// A script or module inside a Plugin also gets `plugin`, and runs as
+/// [`Identity::Plugin`](super::instance::Identity) (docs/behavior/studio/plugins.md).
 fn environment(lua: &Lua, script: InstanceId) -> mlua::Result<Table> {
     let env = fresh_environment(lua)?;
     env.raw_set("script", push_instance(lua, script)?)?;
+    let plugin = with_world(lua, |w| {
+        w.dom
+            .ancestors(script)
+            .find(|&a| w.dom.class_name(a) == "Plugin")
+    });
+    if let Some(plugin) = plugin {
+        env.raw_set("plugin", push_instance(lua, plugin)?)?;
+        plugin_envs(lua)?.raw_set(env.clone(), true)?;
+    }
     Ok(env)
 }
 
@@ -58,14 +69,25 @@ fn core_envs(lua: &Lua) -> mlua::Result<Table> {
     lua.named_registry_value("rook.core_envs")
 }
 
-/// Whether the code running now is Roblox's own: the nearest frame of a
-/// script's code (not Rook's own Luau, named `[rook] ...`, nor native
-/// functions) belongs to a script that came compiled. Only asked when a
-/// member needs more than the game identity, so stack walks stay off the
-/// common paths.
+/// The environments of plugins' scripts and modules, which run as
+/// [`Identity::Plugin`](super::instance::Identity) (weak keys).
+fn plugin_envs(lua: &Lua) -> mlua::Result<Table> {
+    lua.named_registry_value("rook.plugin_envs")
+}
+
+/// Whether the code running now is Roblox's own (see [`caller_identity`]).
 pub(crate) fn caller_is_core(lua: &Lua) -> bool {
-    let Ok(core) = core_envs(lua) else {
-        return false;
+    caller_identity(lua) == Identity::Core
+}
+
+/// Who the code running now is: the nearest frame of a script's code (not
+/// Rook's own Luau, named `[rook] ...`, nor native functions) belongs to a
+/// script that came compiled (Roblox's own), to a plugin, or to the game.
+/// Only asked when a member needs more than the game identity, so stack
+/// walks stay off the common paths.
+pub(crate) fn caller_identity(lua: &Lua) -> Identity {
+    let (Ok(core), Ok(plugins)) = (core_envs(lua), plugin_envs(lua)) else {
+        return Identity::Game;
     };
     for level in 0.. {
         let frame = lua.inspect_stack(level, |d| {
@@ -76,12 +98,20 @@ pub(crate) fn caller_is_core(lua: &Lua) -> bool {
             (!rook).then(|| d.function().environment()).flatten()
         });
         match frame {
-            None => return false,
-            Some(Some(env)) => return core.raw_get::<bool>(env).unwrap_or(false),
+            None => return Identity::Game,
+            Some(Some(env)) => {
+                return if core.raw_get::<bool>(&env).unwrap_or(false) {
+                    Identity::Core
+                } else if plugins.raw_get::<bool>(env).unwrap_or(false) {
+                    Identity::Plugin
+                } else {
+                    Identity::Game
+                };
+            }
             Some(None) => {}
         }
     }
-    false
+    Identity::Game
 }
 
 /// Start a Script on a new thread. Compile errors go to the output.
@@ -388,6 +418,7 @@ pub(crate) fn install(lua: &Lua) -> mlua::Result<()> {
         "rook.stopped_envs",
         "rook.thread_functions",
         "rook.core_envs",
+        "rook.plugin_envs",
     ] {
         let t = lua.create_table()?;
         let mt = lua.create_table()?;

@@ -137,7 +137,8 @@ impl DataModel {
             let hit = hit.map(|h| (h.part, h.position));
             // A held Tool's Mouse sees what the PlayerMouse does (Inference:
             // its own TargetFilter isn't applied).
-            for m in self.mice() {
+            let plugin = self.runtime.world().studio.active_mouse();
+            for m in self.mice().into_iter().chain(plugin) {
                 self.write_mouse(m, (origin, dir, camera), hit);
             }
         }

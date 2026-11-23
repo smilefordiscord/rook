@@ -61,6 +61,9 @@ pub(super) struct Member {
     /// such as `__api_dump_class_not_creatable__`.
     #[serde(default)]
     pub default: Option<String>,
+    /// Properties only: the group Studio's Properties window shows it in.
+    #[serde(default)]
+    pub category: Option<String>,
 }
 
 #[derive(Deserialize, PartialEq)]
