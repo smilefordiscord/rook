@@ -43,24 +43,44 @@ pub(super) fn check_write(lua: &Lua, id: InstanceId, p: &PropInfo, key: &str) ->
 /// Reaching event `name` of `id` while desynchronized (every event is
 /// Unsafe in the dump).
 pub(super) fn check_event(lua: &Lua, id: InstanceId, name: &str) -> ApiResult<()> {
+    check_declared(lua, id, name, "Event", "access", |m| {
+        m.events.iter().find(|e| e.name == name).map(|e| e.safety)
+    })
+}
+
+/// Setting callback `name` of `id` (`OnInvoke`, `OnServerInvoke`, ...)
+/// while desynchronized (every callback is Unsafe in the dump).
+pub(super) fn check_callback(lua: &Lua, id: InstanceId, name: &str) -> ApiResult<()> {
+    check_declared(lua, id, name, "Callback", "set", |m| {
+        m.callbacks
+            .iter()
+            .find(|c| c.name == name)
+            .map(|c| c.safety)
+    })
+}
+
+/// Fails, while desynchronized, unless the class of `id` that declares
+/// member `name` (`safety` finds it in a class's members) says it's Safe.
+fn check_declared(
+    lua: &Lua,
+    id: InstanceId,
+    name: &str,
+    kind: &str,
+    verb: &str,
+    safety: impl Fn(&rook_reflection::members::ClassMembers) -> Option<ThreadSafety>,
+) -> ApiResult<()> {
     if !actors::in_parallel(lua) {
         return Ok(());
     }
     let class = with_world(lua, |w| w.dom.get(id).map(|i| i.class));
     let declared = class.and_then(|class| {
-        database().superclasses(class).find_map(|c| {
-            let e = members()
-                .classes
-                .get(c.name)?
-                .events
-                .iter()
-                .find(|e| e.name == name)?;
-            Some((c.name, e.safety))
-        })
+        database()
+            .superclasses(class)
+            .find_map(|c| Some((c.name, safety(members().classes.get(c.name)?)?)))
     });
     match declared {
         Some((owner, safety)) if safety != ThreadSafety::Safe => Err(ScriptError(format!(
-            "Event {owner}.{name} is not safe to access in parallel"
+            "{kind} {owner}.{name} is not safe to {verb} in parallel"
         ))),
         _ => Ok(()),
     }

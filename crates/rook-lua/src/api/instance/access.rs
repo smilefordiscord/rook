@@ -71,6 +71,7 @@ pub(crate) fn set_member(lua: &Lua, id: InstanceId, key: &str, value: LuaValue) 
     let p = match member {
         Some(Member::Property(p)) => p,
         Some(Member::Callback(name)) => {
+            super::parallel::check_callback(lua, id, name)?;
             let f = match value {
                 LuaValue::Function(f) => Some(f),
                 LuaValue::Nil => None,

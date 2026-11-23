@@ -266,6 +266,39 @@ fn desynchronized_code_may_only_do_what_is_safe_in_parallel() {
     );
 }
 
+/// Callbacks are Unsafe in the dump, so desynchronized code can't set
+/// one, which it once did past the check every property write passes.
+#[test]
+fn desynchronized_code_cannot_set_a_callback() {
+    let rt = place();
+    let sss = service(&rt, "ServerScriptService");
+    let actor = add(&rt, sss, "Actor", "Actor", "");
+    let script = add(
+        &rt,
+        actor,
+        "Script",
+        "Script",
+        r#"
+        local bf = Instance.new("BindableFunction")
+        local rf = Instance.new("RemoteFunction")
+        task.desynchronize()
+        print(pcall(function() bf.OnInvoke = function() return "parallel" end end))
+        print(pcall(function() rf.OnServerInvoke = nil end))
+        task.synchronize()
+        bf.OnInvoke = function() return "serial" end
+        print(bf:Invoke())
+        "#,
+    );
+    assert_eq!(
+        play(&rt, &[script], 1),
+        [
+            "false Callback BindableFunction.OnInvoke is not safe to set in parallel",
+            "false Callback RemoteFunction.OnServerInvoke is not safe to set in parallel",
+            "serial",
+        ]
+    );
+}
+
 /// Messages wait for the next resumption point; serial bindings run there,
 /// parallel ones in its parallel phase. Each binding gets a copy taken as
 /// the message was sent; functions can't be sent; SharedTables arrive as

@@ -108,7 +108,8 @@ where the member is reached (Confirmed: creator-docs Parallel Luau):
 | Safe | Read and written | Called |
 
 Most properties are ReadSafe; the laid-out GUI ones (`AbsoluteSize`,
-`AbsolutePosition`, ...) are Unsafe. Every event is Unsafe. Deprecated
+`AbsolutePosition`, ...) are Unsafe. Every event is Unsafe, and so is
+every callback (`OnInvoke`, `OnServerInvoke`, ...), which can't be set. Deprecated
 lowercase spellings have their own levels: `FindFirstChild` is Safe,
 `findFirstChild` Unsafe. The errors (Inference: the forms DevForum
 reports quote, `Property BasePart.CFrame is not safe to write in
@@ -120,6 +121,8 @@ the class that declares the member:
 - `Property Class.Name is not safe to write in parallel`
 - `Function Class.Name is not safe to call in parallel`
 - `Event Class.Name is not safe to access in parallel`
+- `Callback Class.Name is not safe to set in parallel` (no report quotes
+  one; the form is the others')
 
 `require` raises an error in parallel (Confirmed: creator-docs Parallel
 Luau; the words, `require is not safe to call in parallel`, are
