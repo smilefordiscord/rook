@@ -44,7 +44,7 @@ pub struct BarDrag {
 /// The axis the wheel moves `scroll` along: down where its vertical bar
 /// shows, else across where its horizontal bar does (measured: a canvas
 /// only wider scrolls sideways, though the bar under it leaves the window
-/// a little short of the frame).
+/// a little short of the frame). A bar 0 thick shows, drawn as nothing.
 fn wheel_axis(scroll: &Scroll) -> Option<usize> {
     let reach = scroll.reach();
     let y = scroll.vertical && reach.y > 0.0;

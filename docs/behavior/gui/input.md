@@ -132,7 +132,10 @@ hover images in `draw/objects/frame.rs` and `draw/objects/image.rs`, the caret i
   the bar per pixel the mouse moves (16.04 for a 3,000 canvas in a 187
   window; 50 pixels down a 200 window over 1,000 moved it 250), and keeps
   going when the cursor leaves the bar. Clicking the track beside the
-  thumb does nothing.
+  thumb does nothing. A Frame that isn't `Active` over the thumb (a
+  ScreenGui's full-screen backdrop above) lets the press through to it;
+  an `Active` Frame or a button over it takes the press instead (the
+  case `input/gui_bar_covered`).
 
 ## TextBox
 

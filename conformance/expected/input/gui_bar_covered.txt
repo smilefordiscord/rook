@@ -1,0 +1,6 @@
+-- studio 0.748.0.7481526
+-- signals: deferred
+released 1 A 250 B 0 C 0
+released 2 A 250 B 0 C 0
+released 3 A 250 B 0 C 0
+wheel over D 100 window 199, 100 canvas 200, 400

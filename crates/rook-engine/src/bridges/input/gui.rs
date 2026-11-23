@@ -218,6 +218,24 @@ impl DataModel {
         self.any_active(&hits)
     }
 
+    /// The ScrollingFrame bar thumb at `at` among `hits` (top first) that
+    /// a press takes hold of. Measured (the case `input/gui_bar_covered`):
+    /// a Frame that isn't `Active` over it, as a ScreenGui's full-screen
+    /// backdrop, lets the press through; an `Active` one or a button
+    /// takes it.
+    fn bar_under(&self, hits: &[InstanceId], at: Vec2) -> Option<rook_gui::BarDrag> {
+        let w = self.runtime.world();
+        for &id in hits {
+            if let Some(drag) = w.gui.grab_bar(id, at) {
+                return Some(drag);
+            }
+            if w.dom.bool_property(id, "Active") == Some(true) || w.dom.is_a(id, "GuiButton") {
+                return None;
+            }
+        }
+        None
+    }
+
     /// The first button or TextBox among `hits`, which takes a press.
     fn press_target(&self, hits: &[InstanceId]) -> Option<InstanceId> {
         let w = self.runtime.world();
@@ -247,10 +265,8 @@ impl DataModel {
             self.runtime.drain_deferred();
         }
         let (x, y) = gui_point(self.runtime.world().input.mouse);
-        if button == 1
-            && let Some(&top) = hits.first()
-        {
-            self.input.gui.drag = self.runtime.world().gui.grab_bar(top, Vec2::new(x, y));
+        if button == 1 {
+            self.input.gui.drag = self.bar_under(&hits, Vec2::new(x, y));
         }
         let button_target = target.filter(|_| !is_box);
         let at = self.window_point();

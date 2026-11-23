@@ -56,8 +56,10 @@ rounded in their inner halves) as `TopImage`, `MidImage` and
   than the window that way, the other bar's room counting: a 195 × 400
   canvas in 200 × 100 shows both, since the vertical bar leaves 188.
   ScrollingDirection X shows only the horizontal bar and Y only the
-  vertical; `ScrollingEnabled` off still shows them. Inference: a bar 0
-  thick doesn't show.
+  vertical; `ScrollingEnabled` off still shows them. A bar 0 thick still
+  shows, drawn as nothing: it takes the border's width from the window
+  (199 of a 200-wide frame with a 1-pixel border) and the wheel scrolls
+  the frame (the case `input/gui_bar_covered`, Studio 0.748, 2026-11-22).
 - **AbsoluteWindowSize** is the frame less, for each bar shown, its
   thickness and the frame's `BorderSizePixel` (a 1-pixel border made
   187 of 200).

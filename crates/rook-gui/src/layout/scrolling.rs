@@ -213,11 +213,10 @@ impl Settings {
         let thickness = number("ScrollBarThickness");
         let border = number("BorderSizePixel");
         let direction = dom.enum_item_property(id, "ScrollingDirection");
-        // Inference: a bar 0 thick doesn't show at all.
-        let allowed = [
-            thickness > 0.0 && direction != Some("X"),
-            thickness > 0.0 && direction != Some("Y"),
-        ];
+        // Measured: a bar 0 thick still shows, drawn as nothing: it takes
+        // the border's width from the window (199 of 200) and the frame
+        // scrolls (the case `input/gui_bar_covered`).
+        let allowed = [direction != Some("X"), direction != Some("Y")];
         Self {
             thickness,
             border,
