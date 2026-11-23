@@ -1,6 +1,6 @@
 # Marketplace
 
-Checked against Studio 0.748 on 2026-11-23, from the creator docs only: nothing here is measured in Studio yet.
+Checked against Studio 0.748 on 2026-11-23, from the creator docs only: nothing here is measured in Studio.
 
 MarketplaceService: what items are, who owns them, and buying them
 through purchase prompts, as a Studio playtest does it. Sources are

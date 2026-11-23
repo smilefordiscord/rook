@@ -184,12 +184,18 @@ fn product_info(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
 }
 
 fn decode_info(lua: &Lua, answer: WebAnswer) -> Result<MultiValue, String> {
-    let response = answer.map_err(|_| info_failed(0, "HttpError: ConnectFail"))?;
+    // Roblox's message names no cause, so the cause goes to the log.
+    let response = answer.map_err(|e| {
+        tracing::debug!("GetProductInfo's request failed: {e}");
+        info_failed(0, "HttpError: ConnectFail")
+    })?;
     if !(200..300).contains(&response.status) {
         return Err(info_failed(response.status, reason(response.status)));
     }
-    let json: Json = serde_json::from_slice(&response.body)
-        .map_err(|_| "MarketplaceService:getProductInfo() can't parse JSON".to_owned())?;
+    let json: Json = serde_json::from_slice(&response.body).map_err(|e| {
+        tracing::debug!("GetProductInfo's answer isn't JSON: {e}");
+        "MarketplaceService:getProductInfo() can't parse JSON".to_owned()
+    })?;
     if !json.is_object() {
         return Err("MarketplaceService:getProductInfo() can't parse JSON".to_owned());
     }
