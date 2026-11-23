@@ -689,7 +689,9 @@ mod tests {
                 client_script: None,
                 wait_for_sounds: true,
                 core_scripts: None,
+                menu: false,
                 user_settings: None,
+                viewport: None,
                 launch_data: Some("hello".into()),
             };
             Game::load(&self.dir.join("Lobby.rbxlx"), &setup).unwrap()
