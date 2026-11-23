@@ -26,6 +26,10 @@ pub struct PathCurve {
     /// The same segments in GUI pixels (`AbsolutePosition`'s space), sized,
     /// scaled and turned with the parent.
     drawn: Vec<CubicBez>,
+    /// Whether every drawn point is a number: a script can place a point at
+    /// `math.huge` or NaN, which kurbo's arc lengths and flattening can't
+    /// take (they subdivide without end, or ask for an endless buffer).
+    finite: bool,
 }
 
 impl PathCurve {
@@ -58,10 +62,21 @@ impl PathCurve {
             let p = frame.screen_point(local);
             Point::new(f64::from(p.x), f64::from(p.y))
         };
-        let drawn = (given.iter())
+        let drawn: Vec<CubicBez> = (given.iter())
             .map(|c| CubicBez::new(at(c[0]), at(c[1]), at(c[2]), at(c[3])))
             .collect();
-        Self { given, drawn }
+        let finite = (drawn.iter()).all(|c| [c.p0, c.p1, c.p2, c.p3].iter().all(|p| p.is_finite()));
+        Self {
+            given,
+            drawn,
+            finite,
+        }
+    }
+
+    /// Whether the curve is placed anywhere: false when a point is at an
+    /// infinite or NaN place. Inference: such a path draws nothing.
+    pub(crate) fn is_finite(&self) -> bool {
+        self.finite
     }
 
     pub fn segments(&self) -> usize {
@@ -125,8 +140,12 @@ impl PathCurve {
     }
 
     /// The segment and place in it `t` (0 to 1) of the way along the
-    /// path's length.
+    /// path's length. Inference: a curve with no finite length is split by
+    /// its parameter, as [`PathCurve::split`].
     fn split_by_length(&self, t: f32) -> (usize, f64) {
+        if !self.finite {
+            return self.split(t);
+        }
         let lengths: Vec<f64> = self.drawn.iter().map(|c| c.arclen(ACCURACY)).collect();
         let mut left = lengths.iter().sum::<f64>() * f64::from(t.clamp(0.0, 1.0));
         for (i, &l) in lengths.iter().enumerate() {
@@ -163,8 +182,12 @@ impl PathCurve {
         (self.segments() > 0).then(|| self.tangent_at(self.split_by_length(t)))
     }
 
-    /// `GetLength`, in pixels as drawn.
+    /// `GetLength`, in pixels as drawn. Inference: infinite for a curve
+    /// through a point at no finite place.
     pub fn length(&self) -> f32 {
+        if !self.finite {
+            return f32::INFINITY;
+        }
         (self.drawn.iter()).fold(0.0, |sum, c| sum + c.arclen(ACCURACY)) as f32
     }
 
@@ -188,7 +211,7 @@ impl PathCurve {
     /// handles sit on its ends into several pieces), so each line drawn is
     /// as long as it can be.
     pub(crate) fn flatten(&self, tolerance: f32) -> Vec<Vec2> {
-        let Some(first) = self.drawn.first() else {
+        let Some(first) = self.drawn.first().filter(|_| self.finite) else {
             return Vec::new();
         };
         let path = std::iter::once(PathEl::MoveTo(first.p0))

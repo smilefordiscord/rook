@@ -28,6 +28,14 @@ use crate::path::{PathCurve, PathPoint};
 const TOLERANCE: f32 = 0.25;
 const WORLD_TOLERANCE: f32 = 1.0 / 16.0;
 
+/// The fewest tolerances a curve's box spans before the tolerance grows
+/// with it. Flattening cuts a cubic into lines numbering about the square
+/// root of its size over the tolerance, so past this each segment draws
+/// about a thousand lines however far a script places its points, rather
+/// than millions. Approximation: such a curve is drawn coarser than
+/// [`TOLERANCE`], which only one far bigger than the screen can be.
+const MAX_SPAN: f32 = (1 << 20) as f32;
+
 /// The path `id` with `points` in `frame` (its parent's box), clipped to
 /// `clip`.
 pub(in crate::draw) fn emit(
@@ -52,10 +60,14 @@ pub(in crate::draw) fn emit(
     }
     let closed = dom.bool_property(id, "Closed") == Some(true);
     let curve = PathCurve::new(points, closed, frame);
-    let line = curve.flatten(if world { WORLD_TOLERANCE } else { TOLERANCE });
+    if !curve.is_finite() {
+        return;
+    }
     let Some((lo, hi)) = curve.bounds(width * 0.5) else {
         return;
     };
+    let tolerance = if world { WORLD_TOLERANCE } else { TOLERANCE };
+    let line = curve.flatten(tolerance.max((hi - lo).max_element() / MAX_SPAN));
     let box_at = Placed {
         center: (lo + hi) * 0.5,
         local: hi - lo,

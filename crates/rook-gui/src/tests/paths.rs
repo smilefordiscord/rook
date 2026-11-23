@@ -283,3 +283,24 @@ fn queries_read_the_curve_where_it_is_laid_out() {
     let single = gui.path_curve(&mut dom, p);
     assert_eq!((single.position(0.5), single.length()), (None, 0.0));
 }
+
+/// A script can place a tangent at `math.huge`, NaN or far off the
+/// screen: the path draws nothing or a bounded number of lines, and its
+/// length is answered, where flattening it as it is panicked or ran out of
+/// memory.
+#[test]
+fn points_far_away_or_nowhere_stay_bounded() {
+    for far in [f32::INFINITY, f32::NAN, 1e12] {
+        let (mut dom, frame) = boxed();
+        let p = path(&mut dom, frame, 4.0);
+        let mut gui = laid_out(&mut dom);
+        let mut end = point(0.25, 0, 0.5, 0);
+        end.left = UDim2::new(far, 0, 0.0, 0);
+        gui.set_path_points(p, vec![point(0.0, 0, 0.5, 0), end]);
+        gui.sync(&mut dom);
+        let quads = drawn(&mut gui, &dom);
+        assert!(lines(&quads).len() < 4096, "{far}: {}", quads.len());
+        let length = gui.path_curve(&mut dom, p).length();
+        assert!(length > 1e9, "{far}: {length}");
+    }
+}

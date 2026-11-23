@@ -234,7 +234,9 @@ draws is still to be compared, under [Open questions](#open-questions).
   the curve stops at an end whose tangent is zero, it points to the next
   control point.
 - `GetLength()` is the length on the screen, in pixels (Inference: 0
-  with fewer than two points).
+  with fewer than two points, and infinite when a point or tangent is
+  at an infinite or NaN place, which the `ArcLength` queries then read
+  by parameter).
 - `GetBoundingRect()` is the box round the curve grown by its thickness.
   Inference: the curve's own extent (not its control points'), grown by
   half `Thickness` each way, in the pixels `AbsolutePosition` is in.
@@ -253,8 +255,12 @@ draws is still to be compared, under [Open questions](#open-questions).
   joints don't show darker.
 - Rook draws the line with round joins and round ends, its edge smoothed
   over a pixel, the curve kept within a quarter of a pixel (a sixteenth
-  on a SurfaceGui or BillboardGui, seen up close). Approximation: Studio's
-  joins, ends, smoothing and curve steps aren't compared yet.
+  on a SurfaceGui or BillboardGui, seen up close); a curve over a million
+  times that across is kept within that share of its size instead, so it
+  draws a bounded number of lines. Approximation: Studio's joins, ends,
+  smoothing and curve steps aren't compared with Rook's. Inference: a
+  path with a point or tangent at an infinite or NaN place draws
+  nothing.
 
 ### Open questions
 
