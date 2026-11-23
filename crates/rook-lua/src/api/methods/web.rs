@@ -9,6 +9,7 @@ pub(crate) mod data_stores;
 pub(crate) mod filtering;
 mod groups;
 pub(crate) mod http;
+mod json;
 pub(crate) mod marketplace;
 pub(crate) mod memory_stores;
 pub(crate) mod messaging;

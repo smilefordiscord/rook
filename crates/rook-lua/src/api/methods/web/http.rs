@@ -21,8 +21,8 @@ use crate::runtime::ctx::{ApiResult, Outcome, ScriptError, api_fn, with_world};
 
 pub(super) fn native(owner: &str, name: &str) -> Option<RawMethod> {
     Some(match (owner, name) {
-        ("HttpService", "JSONEncode") => json_encode,
-        ("HttpService", "JSONDecode") => json_decode,
+        ("HttpService", "JSONEncode") => super::json::encode,
+        ("HttpService", "JSONDecode") => super::json::decode,
         ("HttpService", "GenerateGUID") => generate_guid,
         ("HttpService", "UrlEncode") => url_encode,
         ("HttpService", "GetAsync") => get_async,
@@ -298,27 +298,17 @@ pub(crate) fn from_json(lua: &Lua, v: &serde_json::Value) -> mlua::Result<LuaVal
     })
 }
 
-fn json_encode(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
-    let json = to_json(a.get(0), 0, false)?;
-    Outcome::ret(lua, json.to_string())
-}
-
-fn json_decode(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
-    let text = a.string(0)?;
-    let json: serde_json::Value =
-        serde_json::from_str(&text).map_err(|_| ScriptError("Can't parse JSON".into()))?;
-    Outcome::ret(lua, from_json(lua, &json)?)
-}
-
-/// A random version 4 UUID, uppercase, in braces unless asked otherwise
-/// (creator-docs HttpService:GenerateGUID).
+/// A random version 4 UUID in lowercase hex, in braces unless asked
+/// otherwise (measured in Studio 0.748, which casts the argument to a
+/// boolean: `GenerateGUID("x")` raises `Unable to cast string to bool`).
 fn generate_guid(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
-    let braces = !matches!(a.get(0), LuaValue::Boolean(false));
+    let braces = a.bool_or(0, true)?;
     let guid = random_guid(lua)?;
     Outcome::ret(lua, if braces { format!("{{{guid}}}") } else { guid })
 }
 
-/// A random version 4 UUID, uppercase, from the scripts' `math.random`.
+/// A random version 4 UUID in lowercase hex, from the scripts'
+/// `math.random`.
 pub(crate) fn random_guid(lua: &Lua) -> mlua::Result<String> {
     let math: Table = lua.globals().get("math")?;
     let random: mlua::Function = math.get("random")?;
@@ -328,7 +318,7 @@ pub(crate) fn random_guid(lua: &Lua) -> mlua::Result<String> {
     }
     bytes[6] = (bytes[6] & 0x0f) | 0x40;
     bytes[8] = (bytes[8] & 0x3f) | 0x80;
-    let hex: String = bytes.iter().map(|b| format!("{b:02X}")).collect();
+    let hex: String = bytes.iter().map(|b| format!("{b:02x}")).collect();
     Ok(format!(
         "{}-{}-{}-{}-{}",
         &hex[0..8],
@@ -339,11 +329,13 @@ pub(crate) fn random_guid(lua: &Lua) -> mlua::Result<String> {
     ))
 }
 
+/// Measured in Studio 0.748: only ASCII letters and digits are kept,
+/// `-`, `_`, `.` and `~` escaped too.
 fn url_encode(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
     let text = a.string(0)?;
     let mut out = String::new();
     for b in text.bytes() {
-        if b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_' | b'.' | b'~') {
+        if b.is_ascii_alphanumeric() {
             out.push(b as char);
         } else {
             out.push_str(&format!("%{b:02X}"));
