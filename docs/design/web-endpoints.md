@@ -60,7 +60,7 @@ These answer locally only, with no endpoint path yet:
 | DataStores (`DataStoreService`, `GlobalDataStore`, ordered stores) | Roblox's game servers | Kept in memory for the run |
 | MemoryStoreService | Roblox's game servers | Kept in memory for the session ([memory stores](../behavior/scripting/memory-stores.md)) |
 | MessagingService | Roblox's game servers | Delivered to the session's own subscribers ([messaging](../behavior/scripting/messaging.md)) |
-| `Player:GetJoinData`, `TeleportService:GetLocalPlayerTeleportData` | Roblox's game servers | An empty table and nil: everyone joined directly ([join data](../behavior/scripting/join-data.md)) |
+| `Player:GetJoinData`, `TeleportService:GetLocalPlayerTeleportData` | Roblox's game servers | What the session's own teleports carried; empty and nil for a direct join ([teleports](../behavior/scripting/teleports.md)) |
 | `LocalizationService:GetTranslatorForPlayerAsync` and cloud tables | `localizationtables` | The place's own LocalizationTables |
 | TextChatService messages | `textfilter` | Delivered unfiltered |
 

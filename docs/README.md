@@ -91,7 +91,6 @@
     - [Datatype errors](behavior/scripting/datatype-errors.md): their messages in `pcall`
     - [Encoding](behavior/scripting/encoding.md): EncodingService's Base64 and zstd, and their errors
     - [Faces, Axes and PhysicalProperties](behavior/scripting/faces-and-axes.md): their `typeof` and printing
-    - [Join data](behavior/scripting/join-data.md): `GetJoinData` and teleport data for a player who joined directly
     - [JSON](behavior/scripting/json.md): which tables `JSONEncode` writes as arrays
     - [Member lookup](behavior/scripting/member-lookup.md): lowercase first letters, and what a child of that name beats
     - [Memory stores](behavior/scripting/memory-stores.md): MemoryStoreService's sorted maps, queues and hash maps within one session

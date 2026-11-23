@@ -1,7 +1,6 @@
 //! Members Roblox answers from its servers: HttpService, users, groups,
-//! badges, join and teleport data, text filtering, DataStores,
-//! MemoryStores and MessagingService, through [`requests`] where Rook
-//! has an endpoint.
+//! badges, text filtering, DataStores, MemoryStores and
+//! MessagingService, through [`requests`] where Rook has an endpoint.
 
 use crate::api::methods::{RawMethod, first};
 
@@ -14,7 +13,6 @@ pub(crate) mod memory_stores;
 pub(crate) mod messaging;
 pub(crate) mod pages;
 pub(crate) mod requests;
-mod teleport;
 mod users;
 
 pub(super) fn native(owner: &str, name: &str) -> Option<RawMethod> {
@@ -25,7 +23,6 @@ pub(super) fn native(owner: &str, name: &str) -> Option<RawMethod> {
             users::native,
             groups::native,
             badges::native,
-            teleport::native,
             filtering::native,
             memory_stores::native,
             messaging::native,
