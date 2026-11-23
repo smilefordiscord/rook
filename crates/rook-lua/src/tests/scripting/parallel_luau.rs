@@ -242,6 +242,7 @@ fn desynchronized_code_may_only_do_what_is_safe_in_parallel() {
         try(function() return part.Touched end)
         try(function() require(script) end)
         print(typeof(Instance.new("Part")))
+        try(function() Instance.new("Part", part) end)
         task.synchronize()
         part.Name = "ok"
         print(part.Name, frame.AbsoluteSize)
@@ -259,6 +260,7 @@ fn desynchronized_code_may_only_do_what_is_safe_in_parallel() {
             "Event BasePart.Touched is not safe to access in parallel",
             "require is not safe to call in parallel",
             "Instance",
+            "Property Instance.Parent is not safe to write in parallel",
             "ok 0, 0",
         ]
     );

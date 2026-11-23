@@ -125,7 +125,8 @@ the class that declares the member:
 Luau; the words, `require is not safe to call in parallel`, are
 Inference). `Instance.new` works (Confirmed: the creator docs' example
 makes an Explosion in parallel), though setting the new instance's
-properties doesn't. The dump has no LocalSafe member today; Rook treats a
+properties doesn't, and a parent passed to it raises as setting `Parent`
+does (Inference). The dump has no LocalSafe member today; Rook treats a
 LocalSafe method as Unsafe.
 
 ## Messages
