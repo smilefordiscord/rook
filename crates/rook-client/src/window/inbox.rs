@@ -105,7 +105,11 @@ impl Inbox {
                     MouseScrollDelta::LineDelta(_, y) => y,
                     MouseScrollDelta::PixelDelta(p) => p.y as f32 / 40.0,
                 };
-                self.events.push(Noted::Wheel(notches));
+                // A sideways scroll (a tilted wheel, a touchpad swiped across)
+                // turns no wheel: Roblox's wheel is up and down alone.
+                if notches != 0.0 {
+                    self.events.push(Noted::Wheel(notches));
+                }
             }
             _ => {}
         }
