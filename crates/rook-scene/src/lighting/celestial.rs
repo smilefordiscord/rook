@@ -114,10 +114,16 @@ impl SceneCache {
         if url.is_empty() {
             return None;
         }
-        let image = match self.sky_image(&url) {
+        let mut image = self.sky_image(&url);
+        // A Sky's own image that won't load gives the default, as a
+        // skybox image does (Inference from the skybox's measured case).
+        if matches!(image, SkyImage::Failed) && url != default {
+            image = self.sky_image(default);
+        }
+        let image = match image {
             SkyImage::Ready(hash, _) => DiscImage::Image(hash),
             SkyImage::Loading => return None,
-            // No Roblox install to load it from: Rook's own.
+            // No Roblox install to load the default from: Rook's own.
             SkyImage::Failed => DiscImage::Own,
         };
         Some(Disc {
@@ -221,5 +227,41 @@ mod tests {
             .unwrap();
         changed(&dom, &mut cache);
         assert_eq!(cache.scene.lighting.stars.count, 500);
+    }
+
+    /// A Sky's own sun image that won't load gives the default sun, as a
+    /// skybox image that won't load gives the default sky; Rook's own
+    /// disc stands in only when the default won't load either.
+    #[test]
+    #[expect(
+        clippy::disallowed_methods,
+        reason = "tests set up files on the machine running them"
+    )]
+    fn a_sun_image_that_wont_load_gives_the_default() {
+        let dir = std::env::temp_dir().join(format!("rook-sun-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("sky")).unwrap();
+        std::fs::write(
+            dir.join("sky/sun.jpg"),
+            super::super::sky::tests::image(200),
+        )
+        .unwrap();
+        let mut dom = Dom::new();
+        let lighting = dom.get_service("Lighting").unwrap();
+        let sky = dom.create_by_name("Sky").unwrap();
+        dom.set_parent(sky, Some(lighting)).unwrap();
+        let missing = rook_types::Content::from_uri("rbxassetid://9".to_owned());
+        dom.set_property_by_name(sky, "SunTextureContent", Value::Content(missing))
+            .unwrap();
+        let mut config = rook_content::Config::empty();
+        config.folders = vec![dir.clone()];
+        let content = Arc::new(Resolver::new(config));
+        let mut cache = SceneCache::new(&dom, Floors::default(), content, Vec3::ZERO);
+        // The Sky's image fails, then the default loads.
+        cache.poll_files(&dom, true);
+        cache.poll_files(&dom, true);
+        let sun = cache.scene.lighting.sun_disc.expect("the sun by day");
+        assert!(matches!(sun.image, DiscImage::Image(_)), "{:?}", sun.image);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

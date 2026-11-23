@@ -196,7 +196,7 @@ pub(super) enum SkyImage {
 }
 
 #[cfg(test)]
-mod tests {
+pub(super) mod tests {
     use rook_types::Value;
 
     use super::*;
@@ -222,7 +222,7 @@ mod tests {
     ];
 
     /// A 1 x 1 BMP of one gray.
-    fn image(gray: u8) -> Vec<u8> {
+    pub(in crate::lighting) fn image(gray: u8) -> Vec<u8> {
         let mut bmp = b"BM".to_vec();
         for word in [58u32, 0, 54, 40, 1, 1] {
             bmp.extend(word.to_le_bytes());

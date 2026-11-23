@@ -141,9 +141,10 @@ its light, added over the sky. Approximations until Studio is measured:
 the sun at 4 light units at its image's white, so its middle is white,
 taking its light's hue (yellow in the last degrees above the horizon,
 gone below it); the moon at 1 unit, faded in over the last degrees above
-the horizon as its light is. Without a Roblox install the images don't
-load, and Rook draws its own soft white disc; an empty image draws
-nothing (Inference). A place without a Sky shows a new Sky's sun and
+the horizon as its light is. A Sky's own image that won't load gives the
+default one, as a skybox image does (Inference); without a Roblox install
+the defaults don't load either, and Rook draws its own soft white disc;
+an empty image draws nothing (Inference). A place without a Sky shows a new Sky's sun and
 moon (Inference). The reflection cube keeps the sky unturned and every
 read of it turns by `SkyboxOrientation`, so turning the sky never builds
 the cube again.
