@@ -1,9 +1,9 @@
 //! Who users are: names and ids (`users`), friendships (`friends`),
-//! group roles (`groups`) and avatar thumbnails (`thumbnails`), and what
-//! they own: badges (`badges`), passes and assets (`inventory`). With no
-//! endpoint ([`super::requests`]), the session is all there is: its
-//! players are the only users, none are friends or in a group, nobody
-//! owns anything, and no thumbnail is ready.
+//! group roles (`groups`) and avatar thumbnails (`thumbnails`), and their
+//! badges (`badges`); passes and assets they own are
+//! [`super::marketplace`]'s. With no endpoint ([`super::requests`]), the
+//! session is all there is: its players are the only users, none are
+//! friends or in a group, nobody has a badge, and no thumbnail is ready.
 
 use mlua::{Lua, MultiValue, Value as LuaValue};
 use rook_dom::InstanceId;
@@ -26,8 +26,6 @@ pub(super) fn native(owner: &str, name: &str) -> Option<RawMethod> {
         ("Player", "GetRoleInGroup") => role_in_group,
         ("Player", "IsInGroup") => is_in_group,
         ("BadgeService", "UserHasBadgeAsync") => user_has_badge,
-        ("MarketplaceService", "UserOwnsGamePassAsync") => owns_game_pass,
-        ("MarketplaceService", "PlayerOwnsAsset") => player_owns_asset,
         _ => return None,
     })
 }
@@ -296,15 +294,4 @@ fn user_has_badge(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
     let (user, badge) = (id(a, 0)?, id(a, 1)?);
     let path = format!("/v1/users/{user}/badges/awarded-dates?badgeIds={badge}");
     ask(lua, "badges", &path, false, |d| !d.is_empty())
-}
-
-/// `GET inventory/v1/users/{id}/items/GamePass/{pass}`.
-fn owns_game_pass(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
-    let (user, pass) = (id(a, 0)?, id(a, 1)?);
-    super::marketplace::owns(lua, super::marketplace::Item::GamePass, user, pass)
-}
-
-/// `GET inventory/v1/users/{id}/items/Asset/{asset}` for a Player.
-fn player_owns_asset(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
-    super::marketplace::player_owns(lua, a, super::marketplace::Item::Asset)
 }

@@ -4,6 +4,12 @@
 //! (`Argument 1 missing or nil`, `invalid argument #1 to 'new' (number
 //! expected, got string)`). They are Inference until the conformance suite
 //! pins them.
+//!
+//! A reflected method casts its arguments from the last to the first, so
+//! its native casts them in that order. Measured on MarketplaceService:
+//! `PromptPurchase()` is `Argument 2 missing or nil`, and
+//! `PromptPurchase(player, "abc", true, "Nope")` is `Unable to cast string
+//! to CurrencyType`.
 
 use mlua::{AnyUserData, Function, Lua, MultiValue, UserData, Value as LuaValue};
 use rook_dom::InstanceId;
@@ -214,6 +220,40 @@ impl Args {
     pub(crate) fn enum_value(&self, lua: &Lua, i: usize, enum_name: &str) -> ApiResult<u32> {
         crate::types::enums::item_value(lua, self.get(i), enum_name)
             .ok_or_else(|| self.cast_error(i, enum_name))
+    }
+
+    /// An `int64` parameter (an asset, badge or group id): a number, or a
+    /// string that reads as one. Measured on MarketplaceService, BadgeService
+    /// and GroupService: `Unable to cast string to int64`, `Unable to cast
+    /// Array to int64`.
+    pub(crate) fn int64(&self, i: usize) -> ApiResult<i64> {
+        self.whole(i, "int64")
+    }
+
+    /// A `User` parameter, a user id, cast as an `int64` is (measured:
+    /// `Unable to cast string to User`, `Unable to cast Instance to User`).
+    pub(crate) fn user(&self, i: usize) -> ApiResult<i64> {
+        self.whole(i, "User")
+    }
+
+    fn whole(&self, i: usize, target: &str) -> ApiResult<i64> {
+        match self.get(i) {
+            LuaValue::Nil => Err(self.missing(i)),
+            v => number_of(v)
+                .map(|n| n as i64)
+                .ok_or_else(|| cast_error(v, target)),
+        }
+    }
+
+    /// An optional `bool` parameter: nil is its default; anything but a
+    /// boolean doesn't cast (measured: a table is `Unable to cast Array to
+    /// bool`; Inference for numbers and strings).
+    pub(crate) fn opt_bool(&self, i: usize) -> ApiResult<Option<bool>> {
+        match self.get(i) {
+            LuaValue::Nil => Ok(None),
+            LuaValue::Boolean(b) => Ok(Some(*b)),
+            v => Err(cast_error(v, "bool")),
+        }
     }
 
     pub(crate) fn string(&self, i: usize) -> ApiResult<String> {

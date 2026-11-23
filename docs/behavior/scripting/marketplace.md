@@ -1,6 +1,12 @@
 # Marketplace
 
-Checked against Studio 0.748 on 2026-11-23, from the creator docs only: nothing here is measured in Studio.
+Checked against Studio 0.748 on 2026-11-23.
+
+What the members do with their arguments, `ProcessReceipt`'s rules and
+the enums are measured in a Studio playtest of an unpublished place
+(conformance cases `scripting/marketplace_args` and
+`scripting/client_marketplace`); what Roblox's web services answer is
+from the creator docs.
 
 MarketplaceService: what items are, who owns them, and buying them
 through purchase prompts, as a Studio playtest does it. Sources are
@@ -11,6 +17,51 @@ members' arguments), `api/luau/marketplace.luau` (prompts, purchases,
 receipts, events) and `api/luau/purchase_prompt.luau` (the prompt's
 GUI); the tests are `rook-lua`'s `tests/scripting/marketplace.rs` and
 `rook-engine`'s `tests/scripting/marketplace.rs`.
+
+## Arguments
+
+Confirmed (measured), on the server and on the client alike:
+
+- The members cast their arguments as Roblox's reflected methods do, the
+  last argument first: `PromptPurchase()` raises `Argument 2 missing or
+  nil`, `PromptPurchase(player, "abc", true, "Nope")` `Unable to cast
+  string to CurrencyType` and `PromptProductPurchase(player, {}, {})`
+  `Unable to cast Array to bool`. An id that doesn't cast raises
+  `Unable to cast string to int64` (`Array` for a table); a user id
+  (`UserOwnsGamePassAsync`'s first argument) `Unable to cast string to
+  User` (`Array`, `Instance`); an `InfoType` that isn't one `Unable to
+  cast string to InfoType` (`double` for a number that is no item,
+  `Material` for another enum's item). A missing or nil argument raises
+  `Argument n missing or nil`.
+- A player argument that isn't an instance raises `Unable to cast value
+  to Object`. Nil or an instance that isn't a Player then raises each
+  prompt's own message: `MarketplaceService:PromptPurchase(): player
+  should be of type Player.` (`PromptGamePassPurchase` and
+  `PromptProductPurchase` alike), `MarketplaceService:PromptBundlePurchase()
+  player should be of type Player`, `First argument to
+  PromptSubscriptionPurchase must be a player` and `First argument to
+  PromptPremiumPurchase must be a Player`.
+- `PlayerOwnsAsset`, `PlayerOwnsBundle` and
+  `GetUserSubscriptionStatusAsync` raise `Argument 1 missing or nil` for
+  a nil player; `PlayerOwnsBundle` and `GetUserSubscriptionStatusAsync`
+  raise `Argument 1 is invalid: expected 'Player' instance type` for an
+  instance that isn't a Player. Studio's `PlayerOwnsAsset` with one
+  waits on Roblox's web services; Rook answers it as it answers any
+  user's ownership (Approximation: an unpublished place can't measure
+  it).
+- A subscription id that isn't a string (a table) passes the cast and
+  raises `Invalid SubscriptionId` (Inference: which strings are
+  invalid; Rook refuses only the empty one).
+- Members called with `.` raise `Expected ':' not '.' calling member
+  function PromptPurchase`.
+
+## Enums
+
+Confirmed (measured): `ProductPurchaseDecision` is `NotProcessedYet` (0)
+and `PurchaseGranted` (1); `InfoType` `Asset`, `Product`, `GamePass`,
+`Subscription`, `Bundle` (0 to 4); `CurrencyType` `Default`, `Robux`,
+`Tix`; `ProductPurchaseChannel` `InExperience`, `ExperienceDetailsPage`,
+`AdReward`, `CommerceProduct` (1 to 4); `SubscriptionPeriod` `Month`.
 
 ## Item info
 
@@ -47,9 +98,11 @@ GUI); the tests are `rook-lua`'s `tests/scripting/marketplace.rs` and
   pages to advance to` (Inference).
 - `GetSubscriptionProductInfoAsync(id)` is the client's only, as its
   price is the local player's (Confirmed: creator-docs); on a server it
-  raises an error worded by Rook. Locally it answers unnamed, monthly
-  (`Enum.SubscriptionPeriod.Month`), for sale, with empty display
-  prices.
+  raises `Can only call GetSubscriptionProductInfoAsync from Script with
+  RunContext = Client`, after a nil id's `Argument 1 missing or nil` and
+  before an invalid id's `Invalid SubscriptionId` (Confirmed: measured).
+  Locally it answers unnamed, monthly (`Enum.SubscriptionPeriod.Month`),
+  for sale, with empty display prices.
 
 ## Ownership
 
@@ -78,12 +131,10 @@ GUI); the tests are `rook-lua`'s `tests/scripting/marketplace.rs` and
   `PromptProductPurchase`, `PromptBundlePurchase`,
   `PromptSubscriptionPurchase` and the deprecated `PromptPremiumPurchase`
   can be called from a server for any player, or from a client
-  (Confirmed: creator-docs). The player must be a Player: nil raises
-  `Argument 1 missing or nil`, another instance `MarketplaceService:PromptPurchase()
-  player should be of type Player, but is of type Workspace` (Inference:
-  the wording). A client prompting another player does nothing
-  (Inference). `equipIfPurchased` and `currencyType` are ignored
-  (Confirmed: creator-docs).
+  (Confirmed: creator-docs). The player must be a Player (see
+  [arguments](#arguments)). A client prompting another player does
+  nothing (Inference). `equipIfPurchased` and `currencyType` are cast
+  and then ignored (Confirmed: creator-docs).
 - The prompt shows on the player's client. One shows at a time; a
   prompt asked for while one is open is dropped (Confirmed for
   `PromptVIPServerPurchase` by creator-docs, Inference for the rest).
@@ -135,6 +186,14 @@ GUI); the tests are `rook-lua`'s `tests/scripting/marketplace.rs` and
 
 ## Receipts
 
+- `ProcessReceipt` is set on the server only: a client setting it, nil
+  included, raises `Can only register ProcessReceipt callback on
+  server`. It takes any value, not just a function: a number, a string
+  or a table is set without an error. Reading it raises `ProcessReceipt
+  is a callback member of MarketplaceService; you can only set the
+  callback value, get is not available`, on either side (Confirmed:
+  measured). A value that isn't a function is called as it is when a
+  receipt comes, so one that can't be called errors then (Inference).
 - Buying a developer product hands the server's `ProcessReceipt` a
   receipt (Confirmed: Roblox's announcement and creator-docs), at once,
   before the prompt closes (Inference): `PurchaseId` (a GUID string),
@@ -183,8 +242,8 @@ a prompt a listener asks for next isn't dropped as the old one's.
 
 ## Studio questions
 
-- The exact error texts for a bad player and an unknown id, and whether
-  a client prompting another player errors.
+- The error for an unknown id, which a published place's web services
+  answer, and whether a client prompting another player errors.
 - Whether a pass or bundle bought in a playtest is owned afterwards, and
   what `GetProductInfo` answers for one in Studio.
 - Whether Studio drops or queues a prompt asked for while one is open,

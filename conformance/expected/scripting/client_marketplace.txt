@@ -1,0 +1,11 @@
+-- studio 0.748.0.7481526
+-- signals: deferred
+ProcessReceipt set error Can only register ProcessReceipt callback on server
+ProcessReceipt read error ProcessReceipt is a callback member of MarketplaceService; you can only set the callback value, get is not available
+ProcessReceipt unset error Can only register ProcessReceipt callback on server
+PromptPurchase Workspace error MarketplaceService:PromptPurchase(): player should be of type Player.
+PromptPurchase nil error MarketplaceService:PromptPurchase(): player should be of type Player.
+PromptGamePassPurchase Workspace error MarketplaceService:PromptGamePassPurchase(): player should be of type Player.
+PromptProductPurchase word id error Unable to cast string to int64
+UserOwnsGamePassAsync word user error Unable to cast string to User
+GetSubscriptionProductInfoAsync table error Invalid SubscriptionId

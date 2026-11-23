@@ -221,10 +221,10 @@ fn prompts_need_a_player() {
     assert_eq!(
         out,
         [
-            "false Argument 1 missing or nil",
-            "false MarketplaceService:PromptPurchase() player should be of type Player, but is of type Workspace",
+            "false MarketplaceService:PromptProductPurchase(): player should be of type Player.",
+            "false MarketplaceService:PromptPurchase(): player should be of type Player.",
             "true",
-            "false GetSubscriptionProductInfoAsync can only be called from the client",
+            "false Can only call GetSubscriptionProductInfoAsync from Script with RunContext = Client",
         ]
     );
 }

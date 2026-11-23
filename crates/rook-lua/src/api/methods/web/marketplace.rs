@@ -11,14 +11,14 @@
 //! messages between server and client travel as MarketplaceService's own
 //! firings (`Runtime::deliver_event`).
 
-use mlua::{Function, Lua, MultiValue, Table, Value as LuaValue};
+use mlua::{Function, IntoLua, Lua, MultiValue, Table, Value as LuaValue};
 use rook_dom::InstanceId;
 use serde_json::{Value as Json, json};
 
 use super::RawMethod;
 use super::http::from_json;
 use super::requests::{self as web, WebAnswer, WebRequest};
-use super::users::{ask, id, player_id};
+use super::users::{ask, player_id};
 use crate::api::instance::push_instance;
 use crate::runtime::ctx::args::Args;
 use crate::runtime::ctx::{ApiResult, Outcome, ScriptError, api_fn, with_world};
@@ -27,12 +27,13 @@ use crate::types::enums::enum_item;
 pub(super) fn native(owner: &str, name: &str) -> Option<RawMethod> {
     Some(match (owner, name) {
         ("MarketplaceService", "GetProductInfo" | "GetProductInfoAsync") => product_info,
-        ("MarketplaceService", "PlayerOwnsAssetAsync") => {
+        ("MarketplaceService", "PlayerOwnsAsset" | "PlayerOwnsAssetAsync") => {
             |lua, _, a| player_owns(lua, a, Item::Asset)
         }
         ("MarketplaceService", "PlayerOwnsBundle" | "PlayerOwnsBundleAsync") => {
             |lua, _, a| player_owns(lua, a, Item::Bundle)
         }
+        ("MarketplaceService", "UserOwnsGamePassAsync") => owns_game_pass,
         ("MarketplaceService", "GetUserSubscriptionStatusAsync") => subscription_status,
         ("MarketplaceService", "GetSubscriptionProductInfoAsync") => subscription_info,
         ("MarketplaceService", "GetDeveloperProductsAsync") => developer_products,
@@ -77,15 +78,25 @@ impl Item {
         }
     }
 
-    fn member(self) -> &'static str {
-        match self {
+    /// The `Prompt*Purchase` member's error for a player that's nil or
+    /// not a Player, each worded its own way (measured).
+    fn not_a_player(self) -> String {
+        let member = match self {
             Self::Asset => "PromptPurchase",
             Self::GamePass => "PromptGamePassPurchase",
             Self::Product => "PromptProductPurchase",
-            Self::Bundle => "PromptBundlePurchase",
-            Self::Subscription => "PromptSubscriptionPurchase",
-            Self::Premium => "PromptPremiumPurchase",
-        }
+            Self::Bundle => {
+                return "MarketplaceService:PromptBundlePurchase() player should be of type Player"
+                    .into();
+            }
+            Self::Subscription => {
+                return "First argument to PromptSubscriptionPurchase must be a player".into();
+            }
+            Self::Premium => {
+                return "First argument to PromptPremiumPurchase must be a Player".into();
+            }
+        };
+        format!("MarketplaceService:{member}(): player should be of type Player.")
     }
 
     /// The inventory API's item type, for those a user keeps.
@@ -122,11 +133,51 @@ pub(super) fn owns(lua: &Lua, item: Item, user: i64, id: i64) -> ApiResult<Outco
     ask(lua, "inventory", &path, false, |d| !d.is_empty())
 }
 
-/// [`owns`] for a Player and an id.
-pub(super) fn player_owns(lua: &Lua, a: &Args, item: Item) -> ApiResult<Outcome> {
-    let player = a.instance(0)?;
-    let item_id = id(a, 1)?;
+/// [`owns`] for a Player and an id. Measured: nil is `Argument 1 missing
+/// or nil`; a bundle's player that isn't a Player is `Argument 1 is
+/// invalid: expected 'Player' instance type`.
+fn player_owns(lua: &Lua, a: &Args, item: Item) -> ApiResult<Outcome> {
+    let item_id = a.int64(1)?;
+    let player = a.object(0)?.ok_or_else(|| a.missing(0))?;
+    if item == Item::Bundle {
+        player_only(lua, player)?;
+    }
     owns(lua, item, player_id(lua, player), item_id)
+}
+
+/// `UserOwnsGamePassAsync(user, pass)`.
+fn owns_game_pass(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
+    let pass = a.int64(1)?;
+    owns(lua, Item::GamePass, a.user(0)?, pass)
+}
+
+/// Raise Roblox's error for an argument 1 that isn't a Player.
+fn player_only(lua: &Lua, player: InstanceId) -> ApiResult<()> {
+    if with_world(lua, |w| w.dom.is_a(player, "Player")) {
+        return Ok(());
+    }
+    Err(ScriptError(
+        "Argument 1 is invalid: expected 'Player' instance type".into(),
+    ))
+}
+
+/// A subscription id parameter. Measured: nil is `Argument 1 missing or
+/// nil`, while a table passes the cast (a server's
+/// `GetSubscriptionProductInfoAsync({})` raises its client-only error) and
+/// is then refused as `Invalid SubscriptionId`, `None` here. Inference:
+/// what else is refused, here anything but a non-empty string or a number.
+fn subscription_id(a: &Args, i: usize) -> ApiResult<Option<String>> {
+    Ok(match a.get(i) {
+        LuaValue::Nil => return Err(a.missing(i)),
+        LuaValue::String(_) | LuaValue::Integer(_) | LuaValue::Number(_) => {
+            Some(a.string(i)?).filter(|s| !s.is_empty())
+        }
+        _ => None,
+    })
+}
+
+fn invalid_subscription() -> ScriptError {
+    ScriptError("Invalid SubscriptionId".into())
 }
 
 /// The reason phrase Roblox's errors print after a status.
@@ -156,11 +207,11 @@ fn info_failed(status: u16, why: &str) -> String {
 /// `apis`' `/game-passes/v1/game-passes/{id}/product-info`). With no
 /// endpoint, or for bundles and subscriptions, the local answer.
 fn product_info(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
-    let item_id = id(a, 0)?;
     let kind = match a.get(1) {
         LuaValue::Nil => 0,
         _ => a.enum_value(lua, 1, "InfoType")?,
     };
+    let item_id = a.int64(0)?;
     let request = match kind {
         0 => Some(("economy", format!("/v2/assets/{item_id}/details"))),
         1 => Some(("economy", format!("/v2/developer-products/{item_id}/info"))),
@@ -300,10 +351,13 @@ fn developer_products_page(lua: &Lua, args: MultiValue) -> ApiResult<Outcome> {
 
 /// `GetUserSubscriptionStatusAsync(user, subscription)`: subscribed, and
 /// renewing, once bought in this session (Roblox's subscription service
-/// has no public API to ask).
+/// has no public API to ask). The user must be a Player (measured, as
+/// [`player_owns`]'s for bundles).
 fn subscription_status(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
-    let player = a.instance(0)?;
-    let subscription = a.string(1)?;
+    let subscription = subscription_id(a, 1)?;
+    let player = a.object(0)?.ok_or_else(|| a.missing(0))?;
+    player_only(lua, player)?;
+    let subscription = subscription.ok_or_else(invalid_subscription)?;
     let subscribed = bought(
         lua,
         Item::Subscription,
@@ -317,16 +371,18 @@ fn subscription_status(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome>
 }
 
 /// `GetSubscriptionProductInfoAsync(subscription)`: client only, as its
-/// price is the local player's (creator-docs). The local answer, like
+/// price is the local player's (creator-docs; the server's error
+/// measured, raised before the id is checked). The local answer, like
 /// [`local_info`]'s: unnamed, monthly, no price.
 fn subscription_info(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
-    a.string(0)?;
+    let subscription = subscription_id(a, 0)?;
     if !with_world(lua, |w| w.is_client) {
-        // Inference: the wording of the server's error.
         return Err(ScriptError(
-            "GetSubscriptionProductInfoAsync can only be called from the client".into(),
+            "Can only call GetSubscriptionProductInfoAsync from Script with RunContext = Client"
+                .into(),
         ));
     }
+    subscription.ok_or_else(invalid_subscription)?;
     let info = lua.create_table()?;
     info.set("Name", "")?;
     info.set("Description", "")?;
@@ -344,25 +400,54 @@ fn subscription_info(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
     Outcome::ret(lua, info)
 }
 
-/// The `Prompt*Purchase` members: the player must be a Player; the
-/// prompt itself is `marketplace.luau`'s.
+/// `MarketplaceService.ProcessReceipt = value`. Measured: only a server
+/// registers it (`Can only register ProcessReceipt callback on server`,
+/// for nil too), and it takes any value, a number or a table as well as a
+/// function. Inference: what isn't a function is called as it is when a
+/// receipt comes, so one that can't be called errors then and leaves the
+/// receipt unresolved.
+pub(crate) fn set_process_receipt(lua: &Lua, id: InstanceId, value: LuaValue) -> ApiResult<()> {
+    if with_world(lua, |w| w.is_client) {
+        return Err(ScriptError(
+            "Can only register ProcessReceipt callback on server".into(),
+        ));
+    }
+    let callback = match value {
+        LuaValue::Nil => None,
+        LuaValue::Function(f) => Some(f),
+        other => Some(
+            lua.load("local f = ... return function(...) return f(...) end")
+                .set_name("=[rook] ProcessReceipt")
+                .call::<Function>(other)?,
+        ),
+    };
+    crate::api::methods::instances::bindables::set_callback(lua, id, "ProcessReceipt", callback)?;
+    Ok(())
+}
+
+/// The `Prompt*Purchase` members. Measured: their arguments cast last to
+/// first (`currencyType`, `equipIfPurchased`, the id, the player), then
+/// the player must be a Player, nil included, then a subscription's id be
+/// valid. The prompt itself is `marketplace.luau`'s.
 fn prompt(lua: &Lua, a: &Args, item: Item) -> ApiResult<Outcome> {
-    let player = a.instance(0)?;
-    let class = with_world(lua, |w| {
-        (!w.dom.is_a(player, "Player")).then(|| w.dom.class_name(player).to_owned())
-    });
-    if let Some(class) = class {
-        // Inference: the wording, from creator-docs' parameter types.
-        return Err(ScriptError(format!(
-            "MarketplaceService:{}() player should be of type Player, but is of type {class}",
-            item.member()
-        )));
+    if matches!(item, Item::Asset | Item::Product) {
+        if !a.get(3).is_nil() {
+            a.enum_value(lua, 3, "CurrencyType")?;
+        }
+        a.opt_bool(2)?;
     }
     let what = match item {
-        Item::Subscription => LuaValue::String(lua.create_string(a.string(1)?)?),
-        Item::Premium => LuaValue::Nil,
-        _ => LuaValue::Number(id(a, 1)? as f64),
+        Item::Subscription => subscription_id(a, 1)?
+            .map(|s| s.into_lua(lua))
+            .transpose()?,
+        Item::Premium => Some(LuaValue::Nil),
+        _ => Some(LuaValue::Number(a.int64(1)? as f64)),
     };
+    let player = a
+        .object(0)?
+        .filter(|&p| with_world(lua, |w| w.dom.is_a(p, "Player")))
+        .ok_or_else(|| ScriptError(item.not_a_player()))?;
+    let what = what.ok_or_else(invalid_subscription)?;
     let args = vec![
         LuaValue::String(lua.create_string(item.name())?),
         LuaValue::UserData(push_instance(lua, player)?),
