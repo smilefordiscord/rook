@@ -54,12 +54,13 @@ pub(super) fn motor_supported(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<O
 /// The tuple is kept for `GetMotor` whatever it holds, for any input
 /// type, pad or not (Confirmed): numbers as single-precision floats,
 /// booleans as 1 and 0 (Confirmed for true), anything else as given (a
-/// table copied, as a remote's argument is), and nothing as one nil.
+/// table copied, as a remote's argument is, and one a remote can't send
+/// raising as it would: Inference), and nothing as one nil.
 pub(super) fn set_motor(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
     let input_type = input_type_arg(lua, a, 0)?;
     let motor = motor_arg(lua, a, 1)?;
-    let mut values: Vec<NetValue> = (a.rest(2).iter())
-        .map(|v| match to_net(v, 0) {
+    let mut values: Vec<NetValue> = (to_net(lua, &a.rest(2))?.into_iter())
+        .map(|v| match v {
             NetValue::Bool(b) => NetValue::Number(f64::from(u8::from(b))),
             NetValue::Number(n) => NetValue::Number(f64::from(n as f32)),
             other => other,
