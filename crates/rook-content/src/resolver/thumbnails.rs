@@ -142,6 +142,7 @@ fn post(url: &str, body: &str) -> Result<Value, Failure> {
         headers: &[("Content-Type", "application/json")],
         body: body.as_bytes(),
         max_bytes: MAX_ANSWER,
+        timeout: None,
     })?;
     let status = response.status;
     if !(200..300).contains(&status) {

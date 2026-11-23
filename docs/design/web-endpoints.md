@@ -1,6 +1,6 @@
 # Web endpoints
 
-Every web request Rook makes goes to an endpoint chosen by one setting, so Rook can run offline, against a mirror, or against a server of your own that answers the same web API. This page lists each request, which Roblox web domain it belongs to, what Rook answers when that domain has no endpoint, and what a server needs to answer when it has one. How to set the endpoints is in [Tools](../guide/tools.md#web-endpoints).
+Every web request Rook makes goes to an endpoint chosen by one setting, so Rook can run offline, against a mirror, or against a server of your own that answers the same web API. The one exception is a game's own HttpService requests, which go where the script points when its place enables HTTP ([HTTP requests](../behavior/scripting/http-requests.md)). This page lists each request, which Roblox web domain it belongs to, what Rook answers when that domain has no endpoint, and what a server needs to answer when it has one. How to set the endpoints is in [Tools](../guide/tools.md#web-endpoints).
 
 ## How a request finds its endpoint
 
@@ -24,7 +24,7 @@ Requests go out from the engine on a thread each, and the script that asked wait
 | Assets refused anonymously, with an Open Cloud key | none | `GET https://apis.roblox.com/asset-delivery-api/v1/assetId/{id}` with the key in `x-api-key` | The key is a Roblox credential, so it goes only to Roblox, and only while `assetdelivery` goes to Roblox; a mirror's refusals stand |
 | Thumbnails (`rbxthumb://` and the old thumbnail URLs, [thumbnails](../behavior/content/thumbnails.md)) | `thumbnails` | `POST /v1/batch` `[{"requestId", "targetId", "type", "size": "<w>x<h>", "format": "png", "isCircular"}]`, answering `{"data": [{"state", "imageUrl"}]}`, asked again while `Pending`; then a `GET` of `imageUrl` | Only the cache answers |
 | Thumbnails by username (the old avatar URLs' `username=`) | `users` | `POST /v1/usernames/users` `{"usernames": [name], "excludeBannedUsers": false}`, reading `data[1].id` | Fail as offline |
-| `HttpService:GetAsync`, `PostAsync`, `RequestAsync` (game scripts) | none | Refused, as with `HttpEnabled` off; these reach any site, not Roblox's web API | Refused |
+| `HttpService:GetAsync`, `PostAsync`, `RequestAsync` (game scripts) | none | Sent as the script wrote them, from servers of places with `HttpEnabled` on ([HTTP requests](../behavior/scripting/http-requests.md)); these reach any site but Roblox's web domains, which they're refused, and are never rewritten | Sent all the same: they don't go to Roblox's web API |
 
 What asset delivery answers and how Rook caches it is in [asset fetching](../behavior/content/asset-fetching.md).
 

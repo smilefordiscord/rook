@@ -132,6 +132,7 @@ impl Delivery {
             headers,
             body: &[],
             max_bytes: MAX_BYTES,
+            timeout: None,
         })?;
         let version = response
             .header("roblox-assetversionnumber")

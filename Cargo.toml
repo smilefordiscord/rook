@@ -96,6 +96,9 @@ zstd = "0.13"
 # Roblox's client packages (rook-content's `packages`): Deflate zips,
 # checked against their manifest's MD5
 zip = { version = "9", default-features = false, features = ["deflate-flate2"] }
+# Gzip request bodies (HttpService's `Compress`, rook-lua): the flate2 zip
+# and ureq already build
+flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
 md5 = "0.8"
 # rook-engine's build script: the build settings, rook-build.toml
 toml = "1"

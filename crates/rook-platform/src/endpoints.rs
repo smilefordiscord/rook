@@ -110,26 +110,33 @@ impl Endpoints {
 
     /// A Roblox web URL (`https://users.roblox.com/v1/users/1`) on its
     /// domain's endpoint, or `None` when that domain has none or the URL
-    /// isn't on a Roblox web domain. `roblox.com` itself is the `www`
-    /// domain.
+    /// isn't on a Roblox web domain.
     pub fn rewrite(&self, url: &str) -> Option<String> {
-        let (_, rest) = url.split_once("://")?;
-        let (host, path) = rest
-            .find(['/', '?'])
-            .map_or((rest, ""), |at| rest.split_at(at));
-        let host = host.to_ascii_lowercase();
-        let domain = if host == ROBLOX {
-            "www"
-        } else {
-            host.strip_suffix(ROBLOX)?.strip_suffix('.')?
-        };
-        let path = if path.starts_with('?') {
-            format!("/{path}")
-        } else {
-            path.to_owned()
-        };
-        self.url(domain, &path)
+        let (domain, path) = roblox_domain(url)?;
+        self.url(&domain, &path)
     }
+}
+
+/// The Roblox web domain `url` is on (`users` for
+/// `https://users.roblox.com/v1`; `roblox.com` itself is the `www`
+/// domain) and its path and query, or `None` for any other host.
+pub fn roblox_domain(url: &str) -> Option<(String, String)> {
+    let (_, rest) = url.split_once("://")?;
+    let (host, path) = rest
+        .find(['/', '?'])
+        .map_or((rest, ""), |at| rest.split_at(at));
+    let host = host.to_ascii_lowercase();
+    let domain = if host == ROBLOX {
+        "www"
+    } else {
+        host.strip_suffix(ROBLOX)?.strip_suffix('.')?
+    };
+    let path = if path.starts_with('?') {
+        format!("/{path}")
+    } else {
+        path.to_owned()
+    };
+    Some((domain.to_owned(), path))
 }
 
 fn roblox_host(domain: &str) -> String {

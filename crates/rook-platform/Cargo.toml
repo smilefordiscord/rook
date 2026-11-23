@@ -28,6 +28,7 @@ rayon = { workspace = true, optional = true }
 ureq = { workspace = true, optional = true }
 keyring-core = { workspace = true, optional = true }
 rustc-hash.workspace = true
+thiserror.workspace = true
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { workspace = true, features = ["Win32_System_Console"] }

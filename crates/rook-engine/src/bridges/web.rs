@@ -6,7 +6,7 @@
 use std::sync::mpsc::{Receiver, Sender, channel};
 
 use rook_lua::{WebAnswer, WebRequest};
-use rook_platform::network::Request;
+use rook_platform::network::{NetworkError, Request};
 
 /// Answers are cut off past this (Roblox's web APIs answer in kilobytes).
 const MAX_BYTES: u64 = 16 << 20;
@@ -44,6 +44,7 @@ impl Web {
                 headers: &headers,
                 body: &request.body,
                 max_bytes: MAX_BYTES,
+                timeout: request.timeout,
             });
             if let Err(e) = &answer {
                 tracing::warn!(target: "web", "{} {}: {e}", request.method, request.url);
@@ -52,9 +53,10 @@ impl Web {
             let _ = sender.send((id, answer));
         });
         if let Err(e) = rook_platform::get().threads.spawn("rook-web", body) {
-            let _ = self
-                .sender
-                .send((id, Err(format!("couldn't start a thread: {e}"))));
+            let _ = self.sender.send((
+                id,
+                Err(NetworkError::Other(format!("couldn't start a thread: {e}"))),
+            ));
         }
         self.in_flight += 1;
     }

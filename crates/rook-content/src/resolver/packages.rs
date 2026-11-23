@@ -288,13 +288,17 @@ fn is_version(name: &str) -> bool {
 }
 
 fn get(url: &str, max_bytes: u64) -> Result<Vec<u8>, String> {
-    let response = rook_platform::get().network.send(&Request {
-        method: "GET",
-        url,
-        headers: &[],
-        body: &[],
-        max_bytes,
-    })?;
+    let response = rook_platform::get()
+        .network
+        .send(&Request {
+            method: "GET",
+            url,
+            headers: &[],
+            body: &[],
+            max_bytes,
+            timeout: None,
+        })
+        .map_err(|e| e.to_string())?;
     match response.status {
         200 => Ok(response.body),
         status => Err(format!("HTTP {status} from {url}")),

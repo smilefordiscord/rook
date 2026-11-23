@@ -18,7 +18,7 @@ pub(super) fn send(request: &Request<'_>) -> Result<Response, Failure> {
         let response = rook_platform::get()
             .network
             .send(request)
-            .map_err(|e| Failure::new(FailureKind::Network, e))?;
+            .map_err(|e| Failure::new(FailureKind::Network, e.to_string()))?;
         if response.status != 429 || attempt == TRIES {
             return Ok(response);
         }
@@ -54,6 +54,7 @@ pub(super) fn download(url: &str, max_bytes: u64) -> Result<Vec<u8>, Failure> {
         headers: &[],
         body: &[],
         max_bytes,
+        timeout: None,
     })?;
     if response.status == 200 {
         Ok(response.body)

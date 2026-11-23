@@ -1,4 +1,8 @@
+//! HTTP requests: asset delivery, Roblox's web APIs and scripts' own
+//! requests all go out through [`Network`].
+
 use std::fmt::Debug;
+use std::time::Duration;
 
 #[derive(Debug, Clone, Copy)]
 pub struct Request<'a> {
@@ -10,15 +14,47 @@ pub struct Request<'a> {
     pub body: &'a [u8],
     /// The answer's body is cut off past this.
     pub max_bytes: u64,
+    /// How long the whole request may take, when shorter than the
+    /// network's own limit.
+    pub timeout: Option<Duration>,
 }
 
 /// An answer, whatever its status.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Response {
     pub status: u16,
+    /// The standard reason phrase for the status (`Not Found`), whatever
+    /// the server wrote (HTTP/2 sends none); empty for a code with none.
+    pub reason: String,
+    /// Names in lowercase, as HTTP/2 sends them.
     pub headers: Vec<(String, String)>,
     /// Decompressed.
     pub body: Vec<u8>,
+}
+
+/// Why no answer came. The kinds follow what an HTTP client can tell
+/// apart (and Roblox's `Enum.HttpError` names); each keeps the client's
+/// description.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+pub enum NetworkError {
+    #[error("invalid URL: {0}")]
+    InvalidUrl(String),
+    #[error("couldn't resolve the host: {0}")]
+    DnsResolve(String),
+    #[error("couldn't connect: {0}")]
+    ConnectFail(String),
+    #[error("timed out: {0}")]
+    TimedOut(String),
+    #[error("too many redirects")]
+    TooManyRedirects,
+    #[error("invalid redirect: {0}")]
+    InvalidRedirect(String),
+    #[error("TLS failed: {0}")]
+    Tls(String),
+    #[error("connection closed: {0}")]
+    ConnectionClosed(String),
+    #[error("{0}")]
+    Other(String),
 }
 
 impl Response {
@@ -33,11 +69,12 @@ impl Response {
 
 pub trait Network: Send + Sync + Debug {
     /// Blocks until the answer has arrived. `Err` is a failure to get one
-    /// at all (no connection, a timeout), described.
-    fn send(&self, request: &Request<'_>) -> Result<Response, String>;
+    /// at all (no connection, a timeout).
+    fn send(&self, request: &Request<'_>) -> Result<Response, NetworkError>;
 }
 
-/// HTTPS through ureq (rustls, gzip), a minute per request at most.
+/// HTTPS through ureq (rustls, gzip), a minute per request at most,
+/// following up to 10 redirects.
 #[cfg(feature = "native")]
 #[derive(Debug)]
 pub struct Ureq {
@@ -70,7 +107,7 @@ impl Default for Ureq {
 
 #[cfg(feature = "native")]
 impl Network for Ureq {
-    fn send(&self, request: &Request<'_>) -> Result<Response, String> {
+    fn send(&self, request: &Request<'_>) -> Result<Response, NetworkError> {
         use std::io::Read;
         let mut call = ureq::http::Request::builder()
             .method(request.method)
@@ -78,10 +115,17 @@ impl Network for Ureq {
         for (name, value) in request.headers {
             call = call.header(*name, *value);
         }
-        let call = call
+        let mut call = call
             .body(request.body.to_vec())
-            .map_err(|e| e.to_string())?;
-        let mut response = self.agent.run(call).map_err(|e| e.to_string())?;
+            .map_err(|e| NetworkError::InvalidUrl(e.to_string()))?;
+        if let Some(timeout) = request.timeout {
+            call = self
+                .agent
+                .configure_request(call)
+                .timeout_global(Some(timeout))
+                .build();
+        }
+        let mut response = self.agent.run(call).map_err(network_error)?;
         let headers = response
             .headers()
             .iter()
@@ -93,11 +137,48 @@ impl Network for Ureq {
             .as_reader()
             .take(request.max_bytes)
             .read_to_end(&mut body)
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| network_error(e.into()))?;
+        let status = response.status();
         Ok(Response {
-            status: response.status().as_u16(),
+            status: status.as_u16(),
+            reason: status.canonical_reason().unwrap_or_default().to_owned(),
             headers,
             body,
         })
+    }
+}
+
+/// What kind of failure a ureq error is.
+#[cfg(feature = "native")]
+fn network_error(e: ureq::Error) -> NetworkError {
+    use std::io::ErrorKind;
+    let text = e.to_string();
+    match e {
+        ureq::Error::BadUri(_) | ureq::Error::Http(_) | ureq::Error::RequireHttpsOnly(_) => {
+            NetworkError::InvalidUrl(text)
+        }
+        ureq::Error::HostNotFound => NetworkError::DnsResolve(text),
+        ureq::Error::ConnectionFailed | ureq::Error::ConnectProxyFailed(_) => {
+            NetworkError::ConnectFail(text)
+        }
+        ureq::Error::Timeout(_) => NetworkError::TimedOut(text),
+        ureq::Error::TooManyRedirects => NetworkError::TooManyRedirects,
+        ureq::Error::RedirectFailed => NetworkError::InvalidRedirect(text),
+        ureq::Error::Tls(_)
+        | ureq::Error::Pem(_)
+        | ureq::Error::Rustls(_)
+        | ureq::Error::TlsRequired => NetworkError::Tls(text),
+        ureq::Error::Io(io) => match io.kind() {
+            ErrorKind::ConnectionRefused
+            | ErrorKind::HostUnreachable
+            | ErrorKind::NetworkUnreachable => NetworkError::ConnectFail(text),
+            ErrorKind::TimedOut => NetworkError::TimedOut(text),
+            ErrorKind::ConnectionReset
+            | ErrorKind::ConnectionAborted
+            | ErrorKind::BrokenPipe
+            | ErrorKind::UnexpectedEof => NetworkError::ConnectionClosed(text),
+            _ => NetworkError::Other(text),
+        },
+        _ => NetworkError::Other(text),
     }
 }

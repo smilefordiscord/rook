@@ -229,6 +229,127 @@ fn position(dm: &DataModel, part: InstanceId) -> glam::Vec3 {
         .position
 }
 
+/// A request the local web server saw.
+struct Seen {
+    method: String,
+    /// With its query.
+    path: String,
+    /// Names in lowercase.
+    headers: Vec<(String, String)>,
+    body: Vec<u8>,
+}
+
+impl Seen {
+    /// `"METHOD path body"`.
+    fn line(&self) -> String {
+        format!(
+            "{} {} {}",
+            self.method,
+            self.path,
+            String::from_utf8_lossy(&self.body)
+        )
+    }
+
+    fn header(&self, name: &str) -> Option<&str> {
+        self.headers
+            .iter()
+            .find(|(n, _)| n == name)
+            .map(|(_, v)| v.as_str())
+    }
+}
+
+/// What the local web server answers.
+struct Reply {
+    status: u16,
+    reason: &'static str,
+    headers: Vec<(&'static str, &'static str)>,
+    body: Vec<u8>,
+}
+
+impl Reply {
+    fn ok(body: Vec<u8>) -> Self {
+        Self {
+            status: 200,
+            reason: "OK",
+            headers: Vec::new(),
+            body,
+        }
+    }
+}
+
+/// A web server on a free local port standing in for a web host: it
+/// answers each request with `answer(its base URL, the request)`, one at
+/// a time, and each request comes out of the receiver.
+fn serve_http(
+    answer: impl Fn(&str, &Seen) -> Reply + Send + 'static,
+) -> (String, std::sync::mpsc::Receiver<Seen>) {
+    use std::io::{BufRead, BufReader, Read, Write};
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let base = format!("http://{}", listener.local_addr().unwrap());
+    let (seen, requests) = std::sync::mpsc::channel();
+    let at = base.clone();
+    let accept = move || {
+        for stream in listener.incoming() {
+            let Ok(mut stream) = stream else { return };
+            let mut reader = BufReader::new(stream.try_clone().unwrap());
+            let mut line = String::new();
+            reader.read_line(&mut line).unwrap();
+            let mut headers = Vec::new();
+            loop {
+                let mut header = String::new();
+                reader.read_line(&mut header).unwrap();
+                if header.trim().is_empty() {
+                    break;
+                }
+                if let Some((name, value)) = header.split_once(':') {
+                    headers.push((name.trim().to_ascii_lowercase(), value.trim().to_owned()));
+                }
+            }
+            let length = headers
+                .iter()
+                .find(|(n, _)| n == "content-length")
+                .map_or(0, |(_, v)| v.parse().unwrap());
+            let mut body = vec![0; length];
+            reader.read_exact(&mut body).unwrap();
+            let mut parts = line.split_whitespace();
+            let request = Seen {
+                method: parts.next().unwrap().to_owned(),
+                path: parts.next().unwrap().to_owned(),
+                headers,
+                body,
+            };
+            let reply = answer(&at, &request);
+            // The test may be over, with no one left to tell.
+            let _ = seen.send(request);
+            let mut head = format!(
+                "HTTP/1.1 {} {}
+",
+                reply.status, reply.reason
+            );
+            for (name, value) in &reply.headers {
+                head.push_str(&format!(
+                    "{name}: {value}
+"
+                ));
+            }
+            head.push_str(&format!(
+                "Content-Length: {}
+Connection: close
+
+",
+                reply.body.len()
+            ));
+            stream.write_all(head.as_bytes()).unwrap();
+            stream.write_all(&reply.body).unwrap();
+        }
+    };
+    rook_platform::get()
+        .threads
+        .spawn("test-web", Box::new(accept))
+        .unwrap();
+    (base, requests)
+}
+
 mod audio;
 mod characters;
 mod content;
