@@ -173,8 +173,8 @@ members' signatures).
 - A new GetTextBoundsParams is named `Instance` with `Size` 20 (measured,
   [property defaults](../property-defaults.md)); its `Font` reads Source
   Sans Pro, regular and upright (Inference).
-- Inference, to check in Studio (conformance case `gui/text_bounds`, not
-  yet recorded): a `Width` of 0 or less doesn't wrap; nil, a missing
+- Inference, which the conformance case `gui/text_bounds` checks against
+  Studio: a `Width` of 0 or less doesn't wrap; nil, a missing
   argument and an instance of another class all raise `Argument 1
   missing or nil`, and a value that isn't an instance `Unable to cast
   value to Object`; a font that fails to load doesn't raise.
