@@ -1,6 +1,7 @@
 //! Waiting and threads: the legacy `wait`, `delay` and `spawn`, and the
-//! `task` library. Legacy timing details (minimum wait, spawn delay) are
-//! Inference.
+//! `task` library, with its switches between serial and parallel phases
+//! (docs/behavior/scripting/parallel-luau.md). Legacy timing details
+//! (minimum wait, spawn delay) are Inference.
 
 use super::*;
 
@@ -158,4 +159,90 @@ pub(super) fn task_cancel(lua: &Lua, args: MultiValue) -> ApiResult<Outcome> {
     // script doesn't see.
     let _ = close.call::<MultiValue>(thread);
     Outcome::ret(lua, ())
+}
+
+/// The `task` library as code in `context` sees it: the same functions
+/// everywhere, but `desynchronize` and `synchronize` switch the calling
+/// thread to `context`'s Actor's phases.
+pub(crate) fn task_library(lua: &Lua, context: Context) -> mlua::Result<Table> {
+    let task = lua.create_table()?;
+    if context.is_some() {
+        let shared: Table = lua.named_registry_value::<Table>("rook.std")?.get("task")?;
+        for pair in shared.pairs::<LuaValue, LuaValue>() {
+            let (k, v) = pair?;
+            task.raw_set(k, v)?;
+        }
+    } else {
+        task.set("wait", api_fn(lua, task_wait)?)?;
+        task.set("spawn", api_fn(lua, task_spawn)?)?;
+        task.set("defer", api_fn(lua, task_defer)?)?;
+        task.set("delay", api_fn(lua, task_delay)?)?;
+        task.set("cancel", api_fn(lua, task_cancel)?)?;
+    }
+    task.set(
+        "desynchronize",
+        api_fn(lua, move |lua, _| desynchronize(lua, context))?,
+    )?;
+    task.set(
+        "synchronize",
+        api_fn(lua, move |lua, _| synchronize(lua, context))?,
+    )?;
+    Ok(task)
+}
+
+/// Confirmed: creator-docs task.desynchronize and task.synchronize raise
+/// an error outside an Actor. The wording is Inference, from DevForum
+/// reports of it.
+fn outside_actor(function: &str) -> ScriptError {
+    ScriptError(format!(
+        "task.{function}() should only be called from a script that is a descendant of an Actor"
+    ))
+}
+
+/// `task.desynchronize()`: serial code resumes in its Actor's next
+/// parallel phase; parallel code carries on (creator-docs).
+fn desynchronize(lua: &Lua, context: Context) -> ApiResult<Outcome> {
+    let actor = context.ok_or_else(|| outside_actor("desynchronize"))?;
+    let thread = lua.current_thread();
+    let yielded = with_world(lua, |w| {
+        if w.scheduler.phase() != Phase::Serial {
+            return false;
+        }
+        let job = Job::Resume {
+            thread,
+            args: Vec::new(),
+            wait: WaitKind::None,
+        };
+        w.scheduler.desynchronize(actor, job);
+        true
+    });
+    if yielded {
+        Ok(Outcome::Yield)
+    } else {
+        Outcome::ret(lua, ())
+    }
+}
+
+/// `task.synchronize()`: parallel code resumes in the next serial phase;
+/// serial code carries on (creator-docs).
+fn synchronize(lua: &Lua, context: Context) -> ApiResult<Outcome> {
+    context.ok_or_else(|| outside_actor("synchronize"))?;
+    let thread = lua.current_thread();
+    let yielded = with_world(lua, |w| {
+        if w.scheduler.phase() == Phase::Serial {
+            return false;
+        }
+        let job = Job::Resume {
+            thread,
+            args: Vec::new(),
+            wait: WaitKind::None,
+        };
+        w.scheduler.synchronize(job);
+        true
+    });
+    if yielded {
+        Ok(Outcome::Yield)
+    } else {
+        Outcome::ret(lua, ())
+    }
 }

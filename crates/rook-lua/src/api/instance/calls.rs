@@ -1,4 +1,5 @@
 use super::*;
+use rook_reflection::members::ThreadSafety;
 
 /// Each `(owner, name)` method gets one function, created on first use,
 /// so `a.Destroy == b.Destroy`.
@@ -13,12 +14,16 @@ pub(super) fn method_function(
     if let Some(f) = c.methods.borrow().get(&key) {
         return Ok(f.clone());
     }
+    let unsafe_in_parallel = parallel::method_safety(owner, name) != ThreadSafety::Safe;
     if let Some(source) = methods::luau_source(owner, name) {
         let std: mlua::Table = lua.named_registry_value("rook.std")?;
-        let f: Function = lua
+        let mut f: Function = lua
             .load(source)
             .set_name(format!("=[rook] {owner}.{name}"))
             .call(std)?;
+        if unsafe_in_parallel {
+            f = parallel::guard(lua, f, parallel::not_callable(owner, name))?;
+        }
         c.methods.borrow_mut().insert(key, f.clone());
         return Ok(f);
     }
@@ -45,6 +50,9 @@ pub(super) fn method_function(
     let f = match native {
         Some(raw) => api_fn(lua, move |lua, args| {
             profiling::scope!("Instance method", &format!("{owner}:{resolved}"));
+            if unsafe_in_parallel && crate::runtime::actors::in_parallel(lua) {
+                return Err(ScriptError(parallel::not_callable(owner, name)));
+            }
             let (this, args) = Args::method(args, name)?;
             if inert {
                 with_world(lua, |w| w.count_inert(format!("{owner}.{resolved}")));
@@ -52,6 +60,9 @@ pub(super) fn method_function(
             raw(lua, this, &args)
         })?,
         None => api_fn(lua, move |lua, args| {
+            if unsafe_in_parallel && crate::runtime::actors::in_parallel(lua) {
+                return Err(ScriptError(parallel::not_callable(owner, name)));
+            }
             let (this, _) = Args::method(args, name)?;
             let class = with_world(lua, |w| {
                 w.count_unimplemented(format!("{owner}.{name}"));
@@ -68,9 +79,19 @@ pub(super) fn method_function(
             )))
         })?,
     };
-    let f = match methods::instances::tree::fast(owner, resolved) {
-        Some((core, takes_string)) => fast_method(lua, core, takes_string, f)?,
-        None if methods::instances::tree::keeps_children(owner, resolved) => kept_children(lua, f)?,
+    let fast = match methods::instances::tree::fast(owner, resolved) {
+        Some((core, takes_string)) => Some(fast_method(lua, core, takes_string, f.clone())?),
+        None if methods::instances::tree::keeps_children(owner, resolved) => {
+            Some(kept_children(lua, f.clone())?)
+        }
+        None => None,
+    };
+    // A fast form skips the check in `f`.
+    let f = match fast {
+        Some(fast) if unsafe_in_parallel => {
+            parallel::guard(lua, fast, parallel::not_callable(owner, name))?
+        }
+        Some(fast) => fast,
         None => f,
     };
     c.methods.borrow_mut().insert(key, f.clone());

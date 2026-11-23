@@ -4,7 +4,8 @@
 //! The list follows creator-docs "Roblox globals" and the `task` library
 //! page.
 
-use crate::runtime::scheduler::{LEGACY_MIN_WAIT, Queue};
+use crate::runtime::actors::Context;
+use crate::runtime::scheduler::{LEGACY_MIN_WAIT, Phase, Queue};
 use mlua::{Function, Lua, MultiValue, Table, Thread, Value as LuaValue};
 use unicode_normalization::UnicodeNormalization;
 
@@ -18,6 +19,8 @@ use instance_new::instance_table;
 use new_name::new_name;
 use output::*;
 use scheduling::*;
+
+pub(crate) use scheduling::task_library;
 
 use super::instance::push_instance;
 use crate::runtime::ctx::args::{Args, display_value};
@@ -74,16 +77,7 @@ pub(crate) fn install(lua: &Lua) -> mlua::Result<()> {
     g.set("spawn", spawn_fn.clone())?;
     g.set("Spawn", spawn_fn)?;
 
-    let task = lua.create_table()?;
-    task.set("wait", api_fn(lua, task_wait)?)?;
-    task.set("spawn", api_fn(lua, task_spawn)?)?;
-    task.set("defer", api_fn(lua, task_defer)?)?;
-    task.set("delay", api_fn(lua, task_delay)?)?;
-    task.set("cancel", api_fn(lua, task_cancel)?)?;
-    // One engine thread: the parallel phases have nothing to switch to.
-    let noop = lua.create_function(|_, ()| Ok(()))?;
-    task.set("synchronize", noop.clone())?;
-    task.set("desynchronize", noop)?;
+    let task = task_library(lua, None)?;
     g.set("task", task.clone())?;
     std.set("task", task)?;
     std.set(

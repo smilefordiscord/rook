@@ -15,8 +15,9 @@ the target counts only errors Rook causes, checked against Studio.
    web lookups.
 4. TeleportService between places in one folder (multi-place games).
 5. HttpService, opt-in per place.
-6. Modern Luau: Parallel Luau (Actor, `task.desynchronize`, SharedTable),
-   `buffer`, and the libraries and syntax of the Luau live Roblox runs.
+6. Modern Luau: [Parallel Luau](../behavior/scripting/parallel-luau.md)
+   (Actor, `task.desynchronize`, SharedTable), `buffer`, and the
+   libraries and syntax of the Luau live Roblox runs.
    - *Scope*: what scripts observe: Actors as contexts with their own
      globals and modules, `SendMessage`, `BindToMessage` and
      `BindToMessageParallel`, `task.desynchronize`/`synchronize`,
@@ -27,7 +28,9 @@ the target counts only errors Rook causes, checked against Studio.
    - *Evidence*: the creator docs (Parallel Luau, Actor, SharedTable,
      SharedTableRegistry, the `task` library, RBXScriptSignal), the API
      dump's `ThreadSafety` per member, and the error messages DevForum
-     reports quote. No Studio recording yet.
+     reports quote. No Studio recording yet: the
+     [page](../behavior/scripting/parallel-luau.md#what-studio-must-settle)
+     lists what one must settle.
    - *Design* (2026-11-23):
      - Roblox's model: an Actor is a unit of isolation. Each runs its
        scripts in a Luau VM of its own (own globals, own copy of every

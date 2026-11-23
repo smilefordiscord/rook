@@ -13,6 +13,7 @@ pub(crate) mod members;
 pub(crate) mod opaque;
 pub(crate) mod random;
 pub(crate) mod sequences;
+pub(crate) mod shared_table;
 pub(crate) mod space;
 pub(crate) mod tween_info;
 
@@ -49,6 +50,7 @@ pub(crate) fn install(lua: &Lua) -> mlua::Result<()> {
     random::install(lua)?;
     space::query::install(lua)?;
     datetime::install(lua)?;
+    shared_table::install(lua)?;
     Ok(())
 }
 

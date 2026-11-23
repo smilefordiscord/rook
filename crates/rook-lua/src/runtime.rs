@@ -1,8 +1,10 @@
 //! What runs scripts: the `World` a DataModel's scripts share, the
 //! `scheduler` and Luau `threads` it resumes, `signal`s and their
-//! connections, the `ctx` that hands script calls the World, compiled
-//! `bytecode`, and what `collect`ion and `removal` free.
+//! connections, the `actors` scripts run in, the `ctx` that hands script
+//! calls the World, compiled `bytecode`, and what `collect`ion and
+//! `removal` free.
 
+pub(crate) mod actors;
 pub(crate) mod bytecode;
 pub(crate) mod collect;
 pub(crate) mod ctx;

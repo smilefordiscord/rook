@@ -19,9 +19,9 @@ use crate::runtime::threads::fire_with;
 
 /// Each listener gets its own copy, made now, not when it runs.
 pub(super) fn bindable_fire(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> {
-    let args = copy_values(lua, &a.rest(0))?;
+    let args = copy_values(lua, &a.rest(0), false)?;
     fire_with(lua, &SignalKey::event(this, "Event"), || {
-        copy_values(lua, &args).unwrap_or_default()
+        copy_values(lua, &args, false).unwrap_or_default()
     });
     Outcome::ret(lua, ())
 }
@@ -31,7 +31,7 @@ pub(crate) fn install(lua: &Lua, std: &mlua::Table) -> mlua::Result<()> {
     std.set(
         "copy_bindable",
         crate::runtime::ctx::api_fn(lua, |lua, args| {
-            let copied = copy_values(lua, &args.into_vec())?;
+            let copied = copy_values(lua, &args.into_vec(), false)?;
             Ok(Outcome::Return(MultiValue::from_vec(copied)))
         })?,
     )
@@ -116,11 +116,19 @@ pub(super) fn native(owner: &str, name: &str) -> Option<RawMethod> {
     })
 }
 
-/// Copies of `values`. Fails on what a table can't carry.
-fn copy_values(lua: &Lua, values: &[LuaValue]) -> Result<Vec<LuaValue>, ScriptError> {
+/// Copies of `values`. Fails on what a table can't carry, and, for values
+/// crossing to another Actor's VM (`Actor:SendMessage`), on functions,
+/// which belong to the VM that made them (creator-docs Actor:SendMessage;
+/// the message is Roblox's for a function reaching another VM, from
+/// DevForum reports: Inference). SharedTables cross as themselves.
+pub(crate) fn copy_values(
+    lua: &Lua,
+    values: &[LuaValue],
+    other_vm: bool,
+) -> Result<Vec<LuaValue>, ScriptError> {
     let mut out = Vec::with_capacity(values.len());
     for v in values {
-        out.push(copy_value(lua, v, &mut Vec::new())?);
+        out.push(copy_value(lua, v, &mut Vec::new(), other_vm)?);
     }
     Ok(out)
 }
@@ -131,10 +139,16 @@ fn copy_value(
     lua: &Lua,
     value: &LuaValue,
     within: &mut Vec<*const c_void>,
+    other_vm: bool,
 ) -> Result<LuaValue, ScriptError> {
     Ok(match value {
-        LuaValue::Table(t) => LuaValue::Table(copy_table(lua, t, within)?),
+        LuaValue::Table(t) => LuaValue::Table(copy_table(lua, t, within, other_vm)?),
         LuaValue::Thread(_) => LuaValue::Nil,
+        LuaValue::Function(_) if other_vm => {
+            return Err(ScriptError(
+                "Attempt to load a function from a different Lua VM".into(),
+            ));
+        }
         other => other.clone(),
     })
 }
@@ -143,6 +157,7 @@ fn copy_table(
     lua: &Lua,
     table: &Table,
     within: &mut Vec<*const c_void>,
+    other_vm: bool,
 ) -> Result<Table, ScriptError> {
     let cast = |e: mlua::Error| ScriptError(crate::runtime::ctx::lua_error_message(&e));
     let address = table.to_pointer();
@@ -156,14 +171,14 @@ fn copy_table(
         // An array: holes inside it stay, its other keys don't.
         for i in 1..=length {
             let v: LuaValue = table.raw_get(i).map_err(cast)?;
-            let v = copy_value(lua, &v, within)?;
+            let v = copy_value(lua, &v, within, other_vm)?;
             copy.raw_set(i, v).map_err(cast)?;
         }
     } else {
         for pair in table.clone().pairs::<LuaValue, LuaValue>() {
             let (k, v) = pair.map_err(cast)?;
             let key = dictionary_key(lua, &k)?;
-            let v = copy_value(lua, &v, within)?;
+            let v = copy_value(lua, &v, within, other_vm)?;
             copy.raw_set(key, v).map_err(cast)?;
         }
     }

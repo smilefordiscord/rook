@@ -25,6 +25,8 @@ pub enum SignalKind {
     /// CollectionService's `GetInstanceAddedSignal(tag)` (`added`) and
     /// `GetInstanceRemovedSignal(tag)`, kept on the DataModel's root.
     Tag { tag: String, added: bool },
+    /// An Actor's messages of one topic (`BindToMessage`).
+    Message(String),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

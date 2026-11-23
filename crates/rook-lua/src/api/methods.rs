@@ -29,6 +29,7 @@ mod input;
 pub(crate) mod instances;
 pub(crate) mod localization;
 mod materials;
+mod parallel;
 pub(crate) mod physics;
 mod player_scripts;
 pub(crate) mod prompts;
@@ -85,6 +86,7 @@ pub(crate) fn native(owner: &str, name: &str) -> Option<RawMethod> {
             web::native,
             localization::native,
             core::native,
+            parallel::native,
         ],
         owner,
         name,
@@ -141,10 +143,6 @@ pub(crate) fn ret_instances(lua: &Lua, ids: &[InstanceId]) -> ApiResult<Outcome>
 
 fn inert(lua: &Lua, _: InstanceId, _: &Args) -> ApiResult<Outcome> {
     Outcome::ret(lua, ())
-}
-
-fn nil(lua: &Lua, _: InstanceId, _: &Args) -> ApiResult<Outcome> {
-    Outcome::ret(lua, LuaValue::Nil)
 }
 
 fn true_(lua: &Lua, _: InstanceId, _: &Args) -> ApiResult<Outcome> {

@@ -14,7 +14,7 @@ pub(crate) fn fire_with(lua: &Lua, key: &SignalKey, args: impl Fn() -> Vec<LuaVa
         with_world(lua, |w| (w.signals.take_handlers(key), w.signal_behavior));
     for (connection, handler) in handlers {
         // A stopped script's connections are disconnected.
-        if let Handler::Call(f) = &handler
+        if let Handler::Call(f) | Handler::Parallel { func: f, .. } = &handler
             && stopped_function(lua, f)
         {
             with_world(lua, |w| w.signals.disconnect(connection));
@@ -34,7 +34,7 @@ pub(crate) fn fire_with(lua: &Lua, key: &SignalKey, args: impl Fn() -> Vec<LuaVa
                     with_world(lua, |w| w.push_log(MessageType::Error, e.to_string()));
                     continue;
                 }
-                run_handler(lua, handler, args());
+                run_handler(lua, connection, handler, args());
                 with_world(lua, |w| w.signals.leave());
             }
         }

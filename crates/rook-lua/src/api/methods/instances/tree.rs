@@ -1,7 +1,7 @@
 use mlua::Lua;
 use rook_dom::{DomError, InstanceId};
 
-use crate::api::methods::{RawMethod, mutate, nil, ret_instance, ret_instances};
+use crate::api::methods::{RawMethod, mutate, ret_instance, ret_instances};
 use crate::api::signal::LSignal;
 use crate::runtime::ctx::args::Args;
 use crate::runtime::ctx::{ApiResult, Outcome, ScriptError, with_world};
@@ -247,7 +247,6 @@ pub(super) fn native(owner: &str, name: &str) -> Option<RawMethod> {
         ("Instance", "ClearAllChildren") => clear_all_children,
         ("Instance", "Clone") => clone,
         ("Instance", "GetFullName") => get_full_name,
-        ("Instance", "GetActor") => nil,
         _ => return None,
     })
 }

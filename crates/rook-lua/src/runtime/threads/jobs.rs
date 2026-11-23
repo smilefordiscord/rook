@@ -23,7 +23,7 @@ pub(crate) fn job_label(lua: &Lua, job: &Job) -> String {
         } => thread_label(lua, thread),
         Job::Call { func, .. }
         | Job::Fire {
-            handler: Handler::Call(func),
+            handler: Handler::Call(func) | Handler::Parallel { func, .. },
             ..
         } => function_label(func),
         Job::Destroy(_) => "Debris destroy".into(),
@@ -86,7 +86,11 @@ pub(crate) fn run_job(lua: &Lua, job: Job) {
             // Debris may outlive what it was given; destroyed is destroyed.
             let _ = crate::runtime::removal::destroy(lua, id);
         }
-        Job::Fire { handler, args, .. } => run_handler(lua, handler, args),
+        Job::Fire {
+            connection,
+            handler,
+            args,
+        } => run_handler(lua, connection, handler, args),
     }
 }
 

@@ -2,6 +2,7 @@ use crate::runtime::signal::{ConnectionId, SignalKey, SignalKind};
 use mlua::{Function, Lua, MultiValue, Table, UserData, UserDataFields, Value as LuaValue};
 use rook_dom::InstanceId;
 
+use crate::runtime::actors;
 use crate::runtime::ctx::args::Args;
 use crate::runtime::ctx::{ApiResult, Outcome, ScriptError, api_fn, with_world};
 use crate::runtime::world::{Handler, Job};
@@ -30,6 +31,7 @@ impl LSignal {
             SignalKind::Attribute(_) => "AttributeChangedSignal".to_owned(),
             SignalKind::Tag { tag, added: true } => format!("{tag}InstanceAdded"),
             SignalKind::Tag { tag, added: false } => format!("{tag}InstanceRemoved"),
+            SignalKind::Message(topic) => topic.clone(),
         }
     }
 }
@@ -90,10 +92,37 @@ fn connect(lua: &Lua, args: MultiValue, name: &'static str, once: bool) -> ApiRe
     let func = args.function(0).map_err(|_| {
         ScriptError("Attempt to connect failed: Passed value is not a function".into())
     })?;
-    let id = with_world(lua, |w| {
-        w.signals.connect(sig.key(), Handler::Call(func), once)
-    });
+    let handler = if name == "ConnectParallel" {
+        let actor = actors::context_of(lua, &func).ok_or_else(|| outside_actor(lua, &func))?;
+        Handler::Parallel { func, actor }
+    } else {
+        Handler::Call(func)
+    };
+    let id = with_world(lua, |w| w.signals.connect(sig.key(), handler, once));
     Outcome::ret(lua, LConnection(id))
+}
+
+/// `ConnectParallel` from code outside any Actor: a script's, or a
+/// module's copy loaded by such a script. Confirmed: creator-docs
+/// RBXScriptSignal:ConnectParallel (scripts must be under an Actor); the
+/// messages are Inference, from DevForum reports of them.
+fn outside_actor(lua: &Lua, func: &Function) -> ScriptError {
+    let module = func
+        .environment()
+        .and_then(|env| env.raw_get::<mlua::AnyUserData>("script").ok())
+        .and_then(|s| {
+            s.borrow::<crate::api::instance::LuaInstance>()
+                .ok()
+                .map(|i| i.0)
+        })
+        .is_some_and(|id| with_world(lua, |w| w.dom.is_a(id, "ModuleScript")));
+    ScriptError(if module {
+        "A module script may only connect in parallel if this instantiation of the script \
+         was required by a script associated with an actor"
+            .into()
+    } else {
+        "Scripts that connect in parallel must be rooted under an Actor".into()
+    })
 }
 
 fn wait(lua: &Lua, args: MultiValue) -> ApiResult<Outcome> {
@@ -132,7 +161,6 @@ pub(crate) fn install(lua: &Lua) -> mlua::Result<()> {
             api_fn(lua, move |lua, a| connect(lua, a, name, once))?,
         )?;
     }
-    // Rook runs everything on one thread, so ConnectParallel is Connect.
     methods.set(
         "ConnectParallel",
         api_fn(lua, |lua, a| connect(lua, a, "ConnectParallel", false))?,

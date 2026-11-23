@@ -91,6 +91,7 @@
     - [JSON](behavior/scripting/json.md): which tables `JSONEncode` writes as arrays
     - [Member lookup](behavior/scripting/member-lookup.md): lowercase first letters, and what a child of that name beats
     - [Nil Instance arguments](behavior/scripting/nil-arguments.md): what each method does with the null object
+    - [Parallel Luau](behavior/scripting/parallel-luau.md): Actors, serial and parallel phases, messages and SharedTable
     - [Random](behavior/scripting/random.md): Luau's generator and each method's draws
     - [Running scripts](behavior/scripting/running-scripts.md): scripts stop the moment they're removed from where they run or disabled
     - [Tags and locked members](behavior/scripting/tags.md): tag signals, and which members a child of the same name beats.

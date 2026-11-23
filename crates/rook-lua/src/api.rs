@@ -10,6 +10,7 @@ pub(crate) use methods::physics::models::pivot_of;
 use mlua::Lua;
 
 pub(crate) fn install(lua: &Lua) -> mlua::Result<()> {
+    crate::runtime::actors::install(lua)?;
     instance::install(lua)?;
     signal::install(lua)?;
     globals::install(lua)?;

@@ -81,7 +81,13 @@ fn load_asset(lua: &Lua, _this: InstanceId, a: &Args) -> ApiResult<Outcome> {
 }
 
 /// `require` with a number: the asset's MainModule, loaded once per id.
-pub(crate) fn require_asset(lua: &Lua, n: f64) -> ApiResult<Outcome> {
+/// `require(assetId)` from code in `context`, whose `require` loads the
+/// asset's MainModule.
+pub(crate) fn require_asset(
+    lua: &Lua,
+    n: f64,
+    context: crate::runtime::actors::Context,
+) -> ApiResult<Outcome> {
     let id = asset_id(n);
     if with_world(lua, |w| w.is_client) {
         return Err(ScriptError(format!(
@@ -89,9 +95,10 @@ pub(crate) fn require_asset(lua: &Lua, n: f64) -> ApiResult<Outcome> {
         )));
     }
     let helper: Function = lua.named_registry_value("rook.require_asset")?;
+    let require = crate::runtime::actors::globals(lua, context)?.raw_get::<LuaValue>("require")?;
     Ok(Outcome::Call(
         helper,
-        MultiValue::from_vec(vec![LuaValue::Integer(id)]),
+        MultiValue::from_vec(vec![LuaValue::Integer(id), require]),
     ))
 }
 
@@ -210,7 +217,7 @@ pub(crate) fn install(lua: &Lua) -> mlua::Result<()> {
     let helpers: (Function, Function) = lua
         .load(
             r##"
-            local wait, require, error = ...
+            local wait, error = ...
             local function load_asset(id)
                 local model, err = wait(id, false)
                 if not model then
@@ -218,7 +225,7 @@ pub(crate) fn install(lua: &Lua) -> mlua::Result<()> {
                 end
                 return model
             end
-            local function require_asset(id)
+            local function require_asset(id, require)
                 local module, err = wait(id, true)
                 if not module then
                     error(err, 0)
@@ -229,11 +236,7 @@ pub(crate) fn install(lua: &Lua) -> mlua::Result<()> {
             "##,
         )
         .set_name("=[rook] assets")
-        .call((
-            wait,
-            lua.globals().get::<Function>("require")?,
-            lua.globals().get::<Function>("error")?,
-        ))?;
+        .call((wait, lua.globals().get::<Function>("error")?))?;
     lua.set_named_registry_value("rook.load_asset", helpers.0)?;
     lua.set_named_registry_value("rook.require_asset", helpers.1)?;
     Ok(())
