@@ -1,6 +1,6 @@
 # Teleports
 
-Checked against Studio 0.748 on 2026-11-23, by its creator docs only; nothing here is measured yet.
+Checked against Studio 0.748 on 2026-11-23, by its creator docs only; nothing here is measured in Studio.
 
 How TeleportService moves players between the places of a game, and what
 they carry. Sources: creator-docs TeleportService, TeleportOptions,

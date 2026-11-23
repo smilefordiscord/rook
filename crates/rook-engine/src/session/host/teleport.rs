@@ -79,6 +79,19 @@ impl ServerHost {
         }
     }
 
+    /// [`ServerHost::teleports`] for a server that runs alone, outside a
+    /// universe's servers (a session of its own, or Run mode): lookups
+    /// find only its own players, and every teleport is refused.
+    pub fn teleports_alone(&mut self) {
+        if !self.server.runtime().wants_teleports() {
+            return;
+        }
+        let mut running = vec![self.running()];
+        for plan in self.teleports(&Universe::default(), &mut running) {
+            self.refuse(plan, not_started(&"no universe holds this server"));
+        }
+    }
+
     /// Route the teleports this server's scripts asked for since the last
     /// call, and answer their lookups. `running` is every server of the
     /// universe; the plans' new servers and joining players are added to

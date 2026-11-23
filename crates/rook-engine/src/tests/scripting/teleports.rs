@@ -537,3 +537,31 @@ fn a_client_teleports_only_itself_as_a_client_may() {
         (1, None, false)
     );
 }
+
+/// A server running alone, as Run mode runs one, answers its scripts'
+/// lookups instead of leaving them waiting for good.
+#[test]
+fn a_server_alone_answers_lookups() {
+    let server = Server::new(&Options::default()).unwrap();
+    add_script(
+        &server,
+        "ServerScriptService",
+        "Find",
+        r#"
+        print(pcall(function()
+            return game:GetService("TeleportService"):GetPlayerPlaceInstanceAsync(1)
+        end))
+        "#,
+    );
+    let mut server = server;
+    server.start();
+    let mut host = crate::session::host::ServerHost::new(server);
+    for _ in 0..3 {
+        host.step();
+        host.teleports_alone();
+    }
+    assert_eq!(
+        lines(host.server()),
+        ["false User 1 is not playing this game"]
+    );
+}

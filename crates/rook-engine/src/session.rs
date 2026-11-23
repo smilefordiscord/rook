@@ -14,7 +14,6 @@ pub mod threads;
 use rook_dom::InstanceId;
 
 use crate::session::host::{Carried, ClientHost, ServerHost};
-use crate::universe::Universe;
 use crate::{DataModel, EngineError, Options};
 
 #[derive(Debug)]
@@ -139,12 +138,8 @@ impl Session {
     /// teleports (finding no place, see [`Session`]), then messages and
     /// changes go to the clients.
     pub(crate) fn after_server_step(&mut self) {
-        if !self.hosted && self.server.server().runtime().wants_teleports() {
-            let mut running = vec![self.server.running()];
-            for plan in self.server.teleports(&Universe::default(), &mut running) {
-                let refusal = host::not_started(&"no universe holds this server");
-                self.server.refuse(plan, refusal);
-            }
+        if !self.hosted {
+            self.server.teleports_alone();
         }
         self.route();
         for (index, updates) in self.server.updates() {

@@ -341,6 +341,7 @@ impl Game {
             Mode::Run(host) => {
                 let start = std::time::Instant::now();
                 host.step();
+                host.teleports_alone();
                 host.updates();
                 self.server_steps.push(start.elapsed());
             }
