@@ -169,8 +169,8 @@ Confirmed: creator-docs SharedTable and SharedTableRegistry.
   frozen table raises an error.
 - `increment` adds to a number already there and returns the number
   before; `update` calls its function with the value and stores what it
-  returns, calling it again if the table changed meanwhile; `size`,
-  `clear` and `isFrozen` do what they say.
+  returns, calling it again if another script changed the table
+  meanwhile; `size`, `clear` and `isFrozen` do what they say.
 - `SharedTableRegistry:GetSharedTable(name)` gives the table registered
   under the name, making one if there is none; `SetSharedTable(name, nil)`
   unregisters it.
@@ -182,7 +182,11 @@ numbers first in order, then strings by their bytes; `tostring` gives
 string or a whole number from 0 to 4294967295)`, `a value of type
 function cannot be stored in a SharedTable`, `SharedTable.increment: the
 element is not a number` and, for a frozen table, Luau's own `attempt to
-modify a readonly table`; Roblox's words aren't known.
+modify a readonly table`; Roblox's words aren't known. Rook's Actors take
+turns, so nothing but `update`'s own function can change the table while
+it runs; one that does raises `SharedTable.update: the update function
+must not change the table`, where retrying would only repeat the change
+forever (the creator docs don't say what Roblox does).
 
 ## What Studio must settle
 
@@ -193,4 +197,5 @@ modify a readonly table`; Roblox's words aren't known.
 - When messages are delivered, in what order bindings run, and what
   happens to a message nobody binds.
 - What a desynchronized thread's waits and defers resume in.
-- How SharedTable iterates, prints and reports bad keys and values.
+- How SharedTable iterates, prints and reports bad keys and values, and
+  what `update` does when its own function changes the table.

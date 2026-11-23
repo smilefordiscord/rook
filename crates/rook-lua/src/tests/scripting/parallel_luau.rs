@@ -459,6 +459,27 @@ fn shared_tables_keep_what_the_creator_docs_list() {
     );
 }
 
+/// An update function that changes its own table raises, where retrying
+/// until the table stood still made the same change each time and ran
+/// until the script timed out.
+#[test]
+fn a_shared_table_update_whose_function_changes_the_table_raises() {
+    expect(
+        r#"
+        local st = SharedTable.new({ n = 1 })
+        print(pcall(SharedTable.update, st, "n", function(v) st.other = v return v + 1 end))
+        print(st.n, st.other)
+        print(pcall(SharedTable.update, st, "n", function(v) return v + 1 end), st.n)
+        "#,
+        0,
+        &[
+            "false SharedTable.update: the update function must not change the table",
+            "1 1",
+            "true 2",
+        ],
+    );
+}
+
 /// Shallow clones share the tables inside; deep clones share nothing,
 /// recursive tables included; frozen tables refuse every change.
 #[test]

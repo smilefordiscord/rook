@@ -5,9 +5,10 @@
 //! can be read and changed from several Actors' threads: keys and values
 //! are converted on the way in and out, never kept as Luau values. Every
 //! operation takes the lock once, so each is atomic, and Luau code (an
-//! `update` function) never runs while it's held. `update` retries when
-//! the table changed while its function ran, as the creator docs say it
-//! may.
+//! `update` function) never runs while it's held. Roblox's `update` calls
+//! its function again when another script changed the table meanwhile;
+//! Rook's Actors take turns on one thread, so only the function itself
+//! can, and that is an error rather than a retry that never ends.
 
 use std::collections::BTreeMap;
 use std::sync::{Arc, PoisonError, RwLock, RwLockReadGuard, RwLockWriteGuard};
@@ -328,30 +329,34 @@ fn increment(st: &LSharedTable, key: &LuaValue, delta: f64) -> mlua::Result<f64>
     Ok(old)
 }
 
-/// Calls `f` with the value under `key` and stores what it returns, again
-/// with the new value if the table changed while `f` ran.
+/// Calls `f` with the value under `key` and stores what it returns.
+/// Roblox calls `f` again when other scripts changed the table while it
+/// ran (Confirmed: creator-docs SharedTable.update). Nothing runs beside
+/// `f` in Rook, which can't yield inside it, so a change meanwhile is
+/// `f`'s own, which every retry would make again: it raises instead
+/// (Inference: the creator docs leave it out; the wording is Rook's).
 fn update(lua: &Lua, st: &LSharedTable, key: &LuaValue, f: &Function) -> mlua::Result<()> {
     let key = key_of(key)?;
     // A frozen table fails before `f` runs.
     drop(st.write()?);
-    loop {
-        let (version, current) = {
-            let contents = st.read();
-            (contents.version, contents.entries.get(&key).cloned())
-        };
-        let current = current.map_or(Ok(LuaValue::Nil), |e| entry_to_lua(lua, e))?;
-        let new = entry_of(lua, &f.call::<LuaValue>(current)?)?;
-        let mut contents = st.write()?;
-        if contents.version != version {
-            continue;
-        }
-        match new {
-            Some(e) => contents.entries.insert(key, e),
-            None => contents.entries.remove(&key),
-        };
-        contents.version += 1;
-        return Ok(());
+    let (version, current) = {
+        let contents = st.read();
+        (contents.version, contents.entries.get(&key).cloned())
+    };
+    let current = current.map_or(Ok(LuaValue::Nil), |e| entry_to_lua(lua, e))?;
+    let new = entry_of(lua, &f.call::<LuaValue>(current)?)?;
+    let mut contents = st.write()?;
+    if contents.version != version {
+        return Err(err(
+            "SharedTable.update: the update function must not change the table",
+        ));
     }
+    match new {
+        Some(e) => contents.entries.insert(key, e),
+        None => contents.entries.remove(&key),
+    };
+    contents.version += 1;
+    Ok(())
 }
 
 pub(crate) fn install(lua: &Lua) -> mlua::Result<()> {
