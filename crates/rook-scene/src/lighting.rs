@@ -1,3 +1,5 @@
+mod atmosphere;
+mod celestial;
 mod local;
 mod sky;
 mod sun;
@@ -5,8 +7,8 @@ mod sun;
 pub(super) use local::LightCache;
 
 use super::*;
-use sky::sky_tint;
-use sun::{sun_and_moon, sun_direction};
+use sky::{night_sky, sky_of, sky_tint};
+use sun::{sun_and_moon, sun_now};
 
 pub(super) fn lighting(dom: &Dom) -> Lighting {
     let mut l = Lighting::default();
@@ -14,10 +16,7 @@ pub(super) fn lighting(dom: &Dom) -> Lighting {
         return l;
     };
     let hours = dom.clock_time(id) as f32;
-    let latitude = dom
-        .float_property(id, "GeographicLatitude")
-        .unwrap_or(41.733);
-    let sun = sun_direction(hours, latitude);
+    let sun = sun_now(dom, id);
     let brightness = dom.float_property(id, "Brightness").unwrap_or(2.0);
     (l.sun_direction, l.sun_color) = sun_and_moon(sun, brightness);
     if let Some(c) = dom.color3_property(id, "Ambient").map(Color3::to_array) {
@@ -74,6 +73,8 @@ pub(super) fn lighting(dom: &Dom) -> Lighting {
         .exp2();
     l.tonemapper = tonemapper(dom, id);
     l.sky_tint = sky_tint(hours);
+    l.night_sky = night_sky(l.sky_tint);
+    l.atmosphere = atmosphere::atmosphere(dom, id);
     l.sky_bottom = l.sky_horizon;
     l
 }
@@ -95,7 +96,12 @@ fn tonemapper(dom: &Dom, lighting: InstanceId) -> rook_render::Tonemapper {
 impl SceneCache {
     pub(super) fn lighting(&mut self, dom: &Dom) -> Lighting {
         let mut l = lighting(dom);
-        self.sky(dom, &mut l);
+        let sky = sky_of(dom);
+        self.sky(dom, sky, &mut l);
+        if let Some(id) = dom.find_service("Lighting") {
+            let hours = dom.clock_time(id) as f32;
+            self.celestial(dom, sky, (hours, sun_now(dom, id)), &mut l);
+        }
         l
     }
 }

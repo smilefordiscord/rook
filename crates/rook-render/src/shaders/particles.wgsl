@@ -137,7 +137,7 @@ fn fs_particle(in: ParticleOut) -> @location(0) vec4<f32> {
     // light around it, which fog tints as for a surface (Approximation).
     if in.lit > 0.0 {
         let n = normalize(g.camera_pos.xyz - in.world);
-        let lit = mix(diffuse_light(albedo, in.world, n, sun_light(in.world, n)), fog_light(), f);
+        let lit = mix(diffuse_light(albedo, in.world, n, sun_light(in.world, n)), fog_light(in.world), f);
         units = mix(units, lit, in.lit);
     }
     opacity *= mix(1.0 - f, 1.0, in.lit);

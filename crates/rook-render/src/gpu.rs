@@ -50,8 +50,28 @@ pub(crate) struct Globals {
     pub(crate) sky_horizon: [f32; 4],
     pub(crate) sky_bottom: [f32; 4],
     pub(crate) sky_tint: [f32; 4],
-    /// Each skybox image's slot in the image table, when there is one.
+    /// Each skybox image's slot in the image table, when there is one,
+    /// then the sun's and the moon's images'.
     pub(crate) sky_images: [[u32; 4]; 2],
+    /// From world directions to the skybox's own (the inverse of
+    /// `Lighting::skybox_turn`), for reading the reflection cube.
+    pub(crate) sky_turn: [[f32; 4]; 3],
+    /// The sun's and the moon's quads ([`Disc`]), two rows each: the
+    /// direction and the tangent of half its size; its light and what it
+    /// draws (0 nothing, 1 its image, 2 Rook's own disc).
+    pub(crate) discs: [[f32; 4]; 4],
+    /// `Lighting::night_sky`: the gradient's top (w how much shows) and
+    /// horizon, sRGB.
+    pub(crate) night_top: [f32; 4],
+    pub(crate) night_horizon: [f32; 4],
+    /// `Lighting::stars`: the count, turn and light.
+    pub(crate) stars: [f32; 4],
+    /// `Lighting::atmosphere`: its falloff, blur, haze and glare; its color
+    /// (w 1 with an Atmosphere, 0 for Lighting's fog); its glare's
+    /// falloff.
+    pub(crate) atmosphere: [f32; 4],
+    pub(crate) atmosphere_color: [f32; 4],
+    pub(crate) atmosphere_glare: [f32; 4],
 }
 
 impl Upload for Mesh {

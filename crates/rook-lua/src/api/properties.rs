@@ -13,6 +13,7 @@ mod attachment;
 mod grip;
 mod mouse;
 mod part;
+mod ranges;
 pub(crate) mod selection;
 mod sound;
 mod text;
@@ -231,6 +232,9 @@ pub(crate) fn set(
         return Some(done);
     }
     if let Some(done) = crate::audio_api::clamp(w, id, name, value) {
+        return Some(done);
+    }
+    if let Some(done) = ranges::clamp(w, id, name, value) {
         return Some(done);
     }
     if is_text_object(w, id)

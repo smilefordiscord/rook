@@ -42,9 +42,37 @@ struct Globals {
     // (`Lighting::sky_tint`): the sky is drawn at it, reflected at its
     // square.
     sky_tint: vec4<f32>,
-    // Each skybox image's slot in the image table, when there is one.
+    // Each skybox image's slot in the image table, when there is one,
+    // then the sun's (6) and the moon's (7).
     sky_images: array<vec4<u32>, 2>,
+    // From world directions to the skybox's own (SkyboxOrientation's
+    // inverse), as rows: what reads the reflection cube turns by it.
+    sky_turn: array<vec4<f32>, 3>,
+    // The sun's and the moon's quads, two rows each: the direction and the
+    // tangent of half its size; its light units and what it draws in w (0
+    // nothing, 1 its image, 2 Rook's own disc).
+    discs: array<vec4<f32>, 4>,
+    // The night sky's gradient overhead (w: how much of it shows, 0 by day
+    // to 1 at night) and along the horizon, sRGB looks.
+    night_top: vec4<f32>,
+    night_horizon: vec4<f32>,
+    // The stars: x = how many, y = how far the sky has turned about Z
+    // (radians), z = the brightest one's light units.
+    stars: vec4<f32>,
+    // Lighting's Atmosphere (`Lighting::atmosphere`): x = falloff, y = blur,
+    // z = haze, w = glare; its color in light units (w: 1 with an
+    // Atmosphere, which replaces Lighting's fog); xyz = its glare's falloff.
+    atmosphere: vec4<f32>,
+    atmosphere_color: vec4<f32>,
+    atmosphere_glare: vec4<f32>,
 };
+
+// A world direction in the skybox's own axes, as the reflection cube holds
+// the sky (Studio's surface shaders turn their cube reads by
+// `SkyboxRotation` alike).
+fn sky_dir(d: vec3<f32>) -> vec3<f32> {
+    return vec3(dot(g.sky_turn[0].xyz, d), dot(g.sky_turn[1].xyz, d), dot(g.sky_turn[2].xyz, d));
+}
 
 @group(0) @binding(0) var<uniform> g: Globals;
 // The surface patterns (studs, lattice, inlet, universal), one per layer.

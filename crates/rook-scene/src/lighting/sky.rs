@@ -1,3 +1,5 @@
+use rook_render::NightSky;
+
 use super::*;
 
 /// The skybox images of a Sky, in the order Up, Back, Front, Left, Right,
@@ -61,6 +63,46 @@ pub(super) fn sky_tint(hours: f32) -> [f32; 3] {
     [0, 1, 2].map(|c| a[c] + (b[c] - a[c]) * t)
 }
 
+/// Above this tint (its brightest channel) the night doesn't show.
+const NIGHT_FROM: f32 = 0.25;
+
+/// The night's gradient, shown as the tint `tint` fades out: none while
+/// its brightest channel is above 0.25, all of it at 0, smoothly between,
+/// so it comes in over dusk's last minutes and leaves over dawn's first,
+/// as Studio's night shows only once the skybox has gone.
+/// Approximation, unmeasured: Studio's night sky is a dark gradient with a
+/// purple glow along the horizon (observed in Studio 0.745,
+/// docs/behavior/lighting/sky.md#the-night-sky); its colors here are
+/// a look until a capture of the default sky at midnight sets them.
+pub(super) fn night_sky(tint: [f32; 3]) -> NightSky {
+    NightSky {
+        top: [0.02, 0.03, 0.08],
+        horizon: [0.17, 0.12, 0.25],
+        shown: {
+            let t = (tint.iter().copied().fold(0.0, f32::max) / NIGHT_FROM).clamp(0.0, 1.0);
+            1.0 - t * t * (3.0 - 2.0 * t)
+        },
+    }
+}
+
+/// The turn `SkyboxOrientation` gives the skybox: its degrees about Y
+/// first, then X, then Z (Confirmed: creator-docs Sky.SkyboxOrientation;
+/// that each turns counterclockwise looking down its axis, as CFrame
+/// angles do, is an Inference).
+fn skybox_turn(dom: &Dom, sky: InstanceId) -> Mat3 {
+    let Some(v) = dom.vector3_property(sky, "SkyboxOrientation") else {
+        return Mat3::IDENTITY;
+    };
+    let [x, y, z] = [v.x, v.y, v.z].map(f32::to_radians);
+    Mat3::from_rotation_z(z) * Mat3::from_rotation_x(x) * Mat3::from_rotation_y(y)
+}
+
+/// The Sky in Lighting, if there is one.
+pub(super) fn sky_of(dom: &Dom) -> Option<InstanceId> {
+    let lighting = dom.find_service("Lighting")?;
+    (dom.children(lighting).iter().copied()).find(|&c| dom.class_name(c) == "Sky")
+}
+
 enum Faces {
     /// All loaded: their images and average colors.
     Ready(Vec<ImageHash>, Vec<[f32; 3]>),
@@ -76,15 +118,12 @@ impl SceneCache {
     /// (docs/behavior/lighting/sky.md#a-sky-that-wont-load). The images are
     /// drawn behind everything and reflected by parts, and the plain sky
     /// colors become their averages (the Up image above, the four sides at
-    /// the horizon, the Down image below). The sun, moon and stars, and
-    /// `SkyboxOrientation`, aren't drawn yet.
-    pub(super) fn sky(&mut self, dom: &Dom, l: &mut Lighting) {
-        let sky = dom.find_service("Lighting").and_then(|id| {
-            dom.children(id)
-                .iter()
-                .copied()
-                .find(|&c| dom.class_name(c) == "Sky")
-        });
+    /// the horizon, the Down image below). The Sky's
+    /// `SkyboxOrientation` turns whichever is drawn.
+    pub(super) fn sky(&mut self, dom: &Dom, sky: Option<InstanceId>, l: &mut Lighting) {
+        if let Some(sky) = sky {
+            l.skybox_turn = skybox_turn(dom, sky);
+        }
         let place = sky.map(|sky| SKYBOX.map(|names| content_url(dom, sky, &[names.0, names.1])));
         let faces = match place.map(|urls| self.sky_faces(&urls)) {
             Some(ready @ Faces::Ready(..)) => ready,
@@ -108,27 +147,13 @@ impl SceneCache {
         let mut hashes = Vec::new();
         let mut loading = false;
         for url in urls {
-            let Some(r) = ContentRef::parse(url) else {
-                return Faces::Failed;
-            };
-            // The sky is all around the camera: first.
-            let state = self.files.state(&r, Want::Image, 0.0);
-            let key = (r, Want::Image);
-            match state {
-                FileState::Loaded(hash) => {
-                    let Some(image) = self.images.info(ImageHash(hash)) else {
-                        loading = true;
-                        continue;
-                    };
-                    averages.push(image.average);
-                    hashes.push(ImageHash(hash));
+            match self.sky_image(url) {
+                SkyImage::Ready(hash, average) => {
+                    averages.push(average);
+                    hashes.push(hash);
                 }
-                FileState::Loading => {
-                    // All six are asked for at once.
-                    self.sky_files.insert(key);
-                    loading = true;
-                }
-                FileState::Failed => return Faces::Failed,
+                SkyImage::Loading => loading = true,
+                SkyImage::Failed => return Faces::Failed,
             }
         }
         if loading {
@@ -137,10 +162,41 @@ impl SceneCache {
             Faces::Ready(hashes, averages)
         }
     }
+
+    /// One of the sky's images (a skybox face, the sun's or the moon's),
+    /// asked for first, as the sky is all around the camera; its arrival
+    /// reads the lighting again.
+    pub(super) fn sky_image(&mut self, url: &str) -> SkyImage {
+        let Some(r) = ContentRef::parse(url) else {
+            return SkyImage::Failed;
+        };
+        let state = self.files.state(&r, Want::Image, 0.0);
+        let key = (r, Want::Image);
+        match state {
+            FileState::Loaded(hash) => match self.images.info(ImageHash(hash)) {
+                Some(image) => SkyImage::Ready(ImageHash(hash), image.average),
+                None => SkyImage::Loading,
+            },
+            FileState::Loading => {
+                self.sky_files.insert(key);
+                SkyImage::Loading
+            }
+            FileState::Failed => SkyImage::Failed,
+        }
+    }
+}
+
+/// Where one of the sky's images is.
+pub(super) enum SkyImage {
+    /// Loaded: its hash and average color.
+    Ready(ImageHash, [f32; 3]),
+    Loading,
+    /// It will never load.
+    Failed,
 }
 
 #[cfg(test)]
-mod tests {
+pub(super) mod tests {
     use rook_types::Value;
 
     use super::*;
@@ -166,7 +222,7 @@ mod tests {
     ];
 
     /// A 1 x 1 BMP of one gray.
-    fn image(gray: u8) -> Vec<u8> {
+    pub(in crate::lighting) fn image(gray: u8) -> Vec<u8> {
         let mut bmp = b"BM".to_vec();
         for word in [58u32, 0, 54, 40, 1, 1] {
             bmp.extend(word.to_le_bytes());

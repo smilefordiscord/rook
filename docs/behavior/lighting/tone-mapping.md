@@ -145,7 +145,8 @@ FogColor's color squared in light units (128 gray drew 130, the curve
 gives 129). The sky isn't fogged.
 
 Rook: `fog_amount` and `fog_units` in `shaders/lighting.wgsl`, before
-the exposure.
+the exposure. With an Atmosphere in Lighting, its own form takes the place of
+this fog ([Atmosphere](atmosphere.md)).
 
 ## How Rook does it
 

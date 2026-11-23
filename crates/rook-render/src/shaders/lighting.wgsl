@@ -4,7 +4,8 @@
 // in Studio's light units, added up before the tone curve as Studio adds
 // them (`tone.wgsl`).
 
-import package::common::{g, sky_cube, brdf_table, image_sampler};
+import package::common::{g, sky_cube, brdf_table, image_sampler, sky_dir};
+import package::sky::atmosphere::{atmosphere_fog, atmosphere_kept, has_atmosphere};
 
 import package::voxels::lights::VOXEL;
 
@@ -275,7 +276,7 @@ fn remapped(roughness: f32) -> f32 {
 // (0 sharp to 5, Studio's 5 x remapped roughness), as the time of day
 // leaves it (`sky_reflection_tint`).
 fn sky_reflected(d: vec3<f32>, level: f32) -> vec3<f32> {
-    return textureSampleLevel(sky_cube, image_sampler, d, level).rgb * sky_reflection_tint();
+    return textureSampleLevel(sky_cube, image_sampler, sky_dir(d), level).rgb * sky_reflection_tint();
 }
 
 // How much of the sky a surface of reflectance `f0` reflects at remapped
@@ -402,18 +403,27 @@ fn shade_glass(
 // white parts at 12 distances under three FogStart/FogEnd pairs within
 // 0.03; docs/behavior/lighting/tone-mapping.md, "Fog").
 fn fog_amount(world: vec3<f32>) -> f32 {
+    if has_atmosphere() {
+        return 1.0 - atmosphere_kept(world);
+    }
     let dist = distance(world, g.camera_pos.xyz);
     let t = (dist - g.fog_range.x) / max(g.fog_range.y - g.fog_range.x, 1e-3);
     return 1.0 - clamp(exp2(1.0 - t) - 1.0, 0.0, 1.0);
 }
 
-// FogColor in light units (its color squared, as Studio's fog draws).
-fn fog_light() -> vec3<f32> {
+// What fog takes a surface at `world` towards, in light units: FogColor
+// squared, as Studio's fog draws, or with an Atmosphere the hazed sky
+// behind it (Studio's surface shaders swap FogColor for their sky cube
+// when the fog's form has no `w`).
+fn fog_light(world: vec3<f32>) -> vec3<f32> {
+    if has_atmosphere() {
+        return atmosphere_fog(world, atmosphere_kept(world));
+    }
     return g.fog_color.rgb * g.fog_color.rgb;
 }
 
 // Fog, then the exposure, on light units (every lit surface ends here),
 // as Studio's shaders apply them before the frame.
 fn fog_units(units: vec3<f32>, world: vec3<f32>) -> vec3<f32> {
-    return mix(units, fog_light(), fog_amount(world)) * g.fog_range.z;
+    return mix(units, fog_light(world), fog_amount(world)) * g.fog_range.z;
 }

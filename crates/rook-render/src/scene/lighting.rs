@@ -43,6 +43,18 @@ pub struct Lighting {
     /// Front, Left, Right, Down), drawn behind everything once all six
     /// are in [`Scene::images`]; `None` draws the plain sky color.
     pub skybox: Option<[ImageHash; 6]>,
+    /// How `Sky.SkyboxOrientation` turns the skybox: world directions
+    /// from the skybox's own. The sun, moon and stars don't turn with it.
+    pub skybox_turn: Mat3,
+    /// The sun and the moon over the sky; `None` draws none (below the
+    /// horizon, `CelestialBodiesShown` off, or its image still loading).
+    pub sun_disc: Option<Disc>,
+    pub moon_disc: Option<Disc>,
+    /// The stars; a count of 0 draws none.
+    pub stars: Stars,
+    pub night_sky: NightSky,
+    /// Lighting's Atmosphere; with one, Lighting's fog isn't drawn.
+    pub atmosphere: Option<Atmosphere>,
     /// `Lighting.GlobalShadows`: false draws no shadows at all.
     pub global_shadows: bool,
     /// `Lighting.PrioritizeLightingQuality`: on, the sun casts sharp
@@ -98,6 +110,20 @@ impl Default for Lighting {
             sky_bottom: [0.75, 0.84, 0.95],
             sky_tint: [1.0; 3],
             skybox: None,
+            skybox_turn: Mat3::IDENTITY,
+            sun_disc: None,
+            moon_disc: None,
+            stars: Stars {
+                count: 0,
+                turn: 0.0,
+                light: 0.0,
+            },
+            night_sky: NightSky {
+                top: [0.0; 3],
+                horizon: [0.0; 3],
+                shown: 0.0,
+            },
+            atmosphere: None,
             global_shadows: true,
             prioritize_quality: false,
             environment_specular: 0.0,

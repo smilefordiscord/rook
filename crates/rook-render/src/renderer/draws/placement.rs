@@ -84,8 +84,15 @@ impl Renderer {
     pub fn update_lighting(&mut self, scene: &Scene) {
         self.lighting = scene.lighting;
         self.terrain = scene.terrain;
-        // The skybox's images go up like any other image.
-        for hash in scene.lighting.skybox.into_iter().flatten() {
+        // The skybox's, the sun's and the moon's images go up like any
+        // other image.
+        let l = &scene.lighting;
+        let discs = [l.sun_disc, l.moon_disc].into_iter().flatten();
+        let disc_images = discs.filter_map(|d| match d.image {
+            DiscImage::Image(hash) => Some(hash),
+            DiscImage::Own => None,
+        });
+        for hash in l.skybox.into_iter().flatten().chain(disc_images) {
             self.image_readiness(hash);
         }
     }
