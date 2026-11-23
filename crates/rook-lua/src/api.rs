@@ -17,6 +17,7 @@ pub(crate) fn install(lua: &Lua) -> mlua::Result<()> {
     methods::content::assets::install(lua)?;
     methods::web::requests::install(lua)?;
     methods::web::http::install(lua)?;
+    methods::web::memory_stores::install(lua)?;
     methods::remotes::install(lua)?;
     methods::gui::text_chat::install(lua)?;
     Ok(())

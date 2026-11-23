@@ -207,7 +207,9 @@ fn response(lua: &Lua, answer: WebAnswer) -> mlua::Result<MultiValue> {
     (true, t).into_lua_multi(lua)
 }
 
-fn to_json(v: &LuaValue, depth: usize) -> ApiResult<serde_json::Value> {
+/// `v` as JSON, as `JSONEncode` writes it. Values JSON has no form for
+/// are `null`, or an error when `strict`.
+pub(crate) fn to_json(v: &LuaValue, depth: usize, strict: bool) -> ApiResult<serde_json::Value> {
     use serde_json::Value as J;
     if depth > 100 {
         return Err(ScriptError("Can't convert to JSON".into()));
@@ -231,7 +233,7 @@ fn to_json(v: &LuaValue, depth: usize) -> ApiResult<serde_json::Value> {
             if len > 0 || t.is_empty() {
                 let mut out = Vec::with_capacity(len);
                 for i in 1..=len {
-                    out.push(to_json(&t.raw_get::<LuaValue>(i)?, depth + 1)?);
+                    out.push(to_json(&t.raw_get::<LuaValue>(i)?, depth + 1, strict)?);
                 }
                 J::Array(out)
             } else {
@@ -247,16 +249,18 @@ fn to_json(v: &LuaValue, depth: usize) -> ApiResult<serde_json::Value> {
                         }
                         _ => return Err(ScriptError("Can't convert to JSON".into())),
                     };
-                    out.insert(key, to_json(&v, depth + 1)?);
+                    out.insert(key, to_json(&v, depth + 1, strict)?);
                 }
                 J::Object(out)
             }
         }
+        LuaValue::Nil => J::Null,
+        _ if strict => return Err(ScriptError("Can't convert to JSON".into())),
         _ => J::Null,
     })
 }
 
-fn from_json(lua: &Lua, v: &serde_json::Value) -> mlua::Result<LuaValue> {
+pub(crate) fn from_json(lua: &Lua, v: &serde_json::Value) -> mlua::Result<LuaValue> {
     use serde_json::Value as J;
     Ok(match v {
         J::Null => LuaValue::Nil,
@@ -281,7 +285,7 @@ fn from_json(lua: &Lua, v: &serde_json::Value) -> mlua::Result<LuaValue> {
 }
 
 fn json_encode(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
-    let json = to_json(a.get(0), 0)?;
+    let json = to_json(a.get(0), 0, false)?;
     Outcome::ret(lua, json.to_string())
 }
 
