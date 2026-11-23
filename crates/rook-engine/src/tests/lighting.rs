@@ -28,3 +28,33 @@ fn sky_changes_mark_the_lighting() {
         "Instance.new('Sky').Parent = game.ReplicatedStorage"
     ));
 }
+
+/// Clouds in the Terrain arriving, changing or leaving mark the lighting
+/// (the scene reads them with it); Clouds elsewhere don't.
+#[test]
+fn cloud_changes_mark_the_lighting() {
+    let mut s = Server::new(&Options::default()).unwrap();
+    s.start();
+    s.take_render_changes();
+    let lighting = |s: &mut Server, source: &str| {
+        s.run_extra_script(source).unwrap();
+        let changes = s.take_render_changes();
+        assert!(!changes.full, "{source}");
+        changes.lighting
+    };
+    for source in [
+        "Instance.new('Clouds').Parent = workspace.Terrain",
+        "workspace.Terrain.Clouds.Cover = 0.9",
+        "workspace.Terrain.Clouds.Color = Color3.new(1, 0, 0)",
+        "workspace.Terrain.Clouds.Enabled = false",
+        "workspace.Terrain.Clouds:Destroy()",
+    ] {
+        assert!(lighting(&mut s, source), "{source}");
+    }
+    for source in [
+        "Instance.new('Clouds').Parent = workspace",
+        "workspace.Clouds.Cover = 0.9",
+    ] {
+        assert!(!lighting(&mut s, source), "{source}");
+    }
+}

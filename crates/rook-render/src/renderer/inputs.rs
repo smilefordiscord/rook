@@ -63,6 +63,14 @@ impl Renderer {
         self.ribbons.sim.step(dt);
         self.water_phase =
             (self.water_phase + f64::from(dt * self.terrain.wave_speed)) % WATER_PHASE_PERIOD;
+        self.clouds.advance(dt, self.terrain.wind);
         self.time = seconds;
+    }
+
+    /// Draw clouds with `noise` (the install's cloud textures) from now on,
+    /// in place of Rook's own. False, keeping what it had, if they aren't
+    /// laid out as the cloud shaders read them.
+    pub fn set_cloud_noise(&mut self, noise: &crate::CloudNoise) -> bool {
+        self.clouds.set_noise(&self.device, &self.queue, noise)
     }
 }

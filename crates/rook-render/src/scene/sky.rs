@@ -1,5 +1,6 @@
 //! What the sky draws besides its skybox: the sun and moon, the stars and
-//! the night's gradient (docs/behavior/lighting/sky.md), and the atmosphere.
+//! the night's gradient (docs/behavior/lighting/sky.md), the atmosphere and
+//! the clouds.
 
 use super::*;
 
@@ -76,4 +77,18 @@ pub struct Atmosphere {
     /// The glare's falloff away from the sun, per channel: the power its
     /// lobe is raised to.
     pub glare_falloff: [f32; 3],
+}
+
+/// Terrain's Clouds, as Studio's cloud shaders take them
+/// (docs/behavior/lighting/clouds.md).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Clouds {
+    /// `Cover`, 0 to 1: how much of the cloud field's range counts as
+    /// cloud. 0 draws none.
+    pub cover: f32,
+    /// `Density`, 0 to 1: how much light the cloud stops.
+    pub density: f32,
+    /// `Color`, in light units (its sRGB value squared): what the light
+    /// the cloud scatters is multiplied by.
+    pub color: [f32; 3],
 }

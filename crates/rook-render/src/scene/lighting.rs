@@ -55,6 +55,8 @@ pub struct Lighting {
     pub night_sky: NightSky,
     /// Lighting's Atmosphere; with one, Lighting's fog isn't drawn.
     pub atmosphere: Option<Atmosphere>,
+    /// Workspace's Terrain's Clouds, drifting with [`TerrainLook::wind`].
+    pub clouds: Option<Clouds>,
     /// `Lighting.GlobalShadows`: false draws no shadows at all.
     pub global_shadows: bool,
     /// `Lighting.PrioritizeLightingQuality`: on, the sun casts sharp
@@ -124,6 +126,7 @@ impl Default for Lighting {
                 shown: 0.0,
             },
             atmosphere: None,
+            clouds: None,
             global_shadows: true,
             prioritize_quality: false,
             environment_specular: 0.0,

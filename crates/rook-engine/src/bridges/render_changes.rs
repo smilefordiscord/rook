@@ -261,6 +261,7 @@ pub(crate) struct RenderIds {
     model: ClassId,
     world_root: ClassId,
     terrain: ClassId,
+    clouds: ClassId,
     smooth_grid: Option<PropertyId>,
     light: ClassId,
     attachment: ClassId,
@@ -301,6 +302,7 @@ impl RenderIds {
                 model: class("Model"),
                 world_root: class("WorldRoot"),
                 terrain: class("Terrain"),
+                clouds: class("Clouds"),
                 smooth_grid: db
                     .find_canonical_property(class("Terrain"), "SmoothGrid")
                     .map(|p| p.id),

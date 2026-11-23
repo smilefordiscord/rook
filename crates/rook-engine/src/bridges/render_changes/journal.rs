@@ -5,7 +5,8 @@ use super::*;
 impl DataModel {
     /// Note whether the journal since the last check touched anything drawn:
     /// parts, their meshes, decals and SurfaceAppearances, their ancestry,
-    /// Lighting, the Terrain and `Workspace.GlobalWind` (which bends grass),
+    /// Lighting, the Terrain and `Workspace.GlobalWind` (which bends grass
+    /// and carries the clouds), the Terrain's Clouds (read with Lighting),
     /// or MaterialService and its MaterialVariants (which redraw the parts
     /// and terrain they can draw on, found in `material_parts`).
     /// Camera moves don't count; the renderer reads the camera every frame
@@ -22,6 +23,10 @@ impl DataModel {
         let lights_scene =
             |id: InstanceId| lighting.is_some_and(|l| id == l || dom.parent(id) == Some(l));
         let ids = RenderIds::get();
+        // Clouds draw only in a Terrain (creator docs); the scene reads
+        // them with the Lighting service.
+        let terrain = |id: Option<InstanceId>| id.is_some_and(|t| dom.is_a_class(t, ids.terrain));
+        let clouds = |id: InstanceId| dom.is_a_class(id, ids.clouds);
         let any_of =
             |id: InstanceId, classes: &[ClassId]| classes.iter().any(|&c| dom.is_a_class(id, c));
         let changes = &mut self.render_changes;
@@ -104,7 +109,7 @@ impl DataModel {
                         for p in world.physics.moved_with(*id).filter(|p| p != id) {
                             part_moved(dom, changes, p);
                         }
-                    } else if lights_scene(*id) {
+                    } else if lights_scene(*id) || (clouds(*id) && terrain(dom.parent(*id))) {
                         changes.lighting = true;
                     } else if dom.is_a_class(*id, ids.terrain) || *property == ids.global_wind {
                         changes.terrain = true;
@@ -153,11 +158,16 @@ impl DataModel {
                     for &i in subtree {
                         material_parts.note(dom, i, changes);
                     }
-                    // Which Terrain Workspace holds may have changed.
-                    changes.terrain |= subtree.iter().any(|&i| dom.is_a_class(i, ids.terrain));
-                    // A Sky (or tone curve) arriving in or leaving Lighting.
-                    changes.lighting |=
-                        lighting.is_some_and(|l| *old_parent == Some(l) || *new_parent == Some(l));
+                    // Which Terrain Workspace holds, and so its Clouds, may
+                    // have changed.
+                    let terrain_moved = subtree.iter().any(|&i| dom.is_a_class(i, ids.terrain));
+                    changes.terrain |= terrain_moved;
+                    // A Sky (or tone curve) arriving in or leaving Lighting,
+                    // or Clouds a Terrain.
+                    changes.lighting |= terrain_moved
+                        || lighting
+                            .is_some_and(|l| *old_parent == Some(l) || *new_parent == Some(l))
+                        || (clouds(*id) && (terrain(*old_parent) || terrain(*new_parent)));
                     let attachment = |i: InstanceId| dom.is_a_class(i, ids.attachment);
                     changes
                         .lights_placed

@@ -67,6 +67,7 @@
     - [The sun](behavior/lighting/sun.md)
     - [The sky over the day](behavior/lighting/sky.md): its tint at dawn and dusk, and what it reaches, the sun, moon, stars and night sky
     - [Atmosphere](behavior/lighting/atmosphere.md): haze, glare and aerial perspective, in place of fog
+    - [Clouds](behavior/lighting/clouds.md): Terrain's volumetric clouds, their drift with the wind
     - [Tone mapping](behavior/lighting/tone-mapping.md): Studio's HDR blending, Neon's glow, ColorGrading's curves and fog
   - Meshes
     - [Built-in shapes](behavior/meshes/built-in-shapes.md): SpecialMesh types, BlockMesh, CylinderMesh
