@@ -1,23 +1,30 @@
 //! A play session in one thread: a server and the clients connected to it,
 //! each message delivered as soon as it's sent (docs/design/architecture/replication.md#run-modes-and-replication-rook-net).
 //! The ends are the same [`ServerHost`] and [`ClientHost`] a threaded host
-//! runs apart.
+//! runs apart. A session alone is a place outside any universe, whose
+//! teleports find no place; [`servers::Servers`] holds the sessions of a
+//! universe and moves players between them.
 
 pub mod ended;
 pub mod host;
 pub mod server_thread;
+pub mod servers;
 pub mod threads;
 
 use rook_dom::InstanceId;
 
-use crate::session::host::{ClientHost, ServerHost};
+use crate::session::host::{Carried, ClientHost, ServerHost};
+use crate::universe::Universe;
 use crate::{DataModel, EngineError, Options};
 
 #[derive(Debug)]
 pub struct Session {
     server: ServerHost,
-    clients: Vec<ClientHost>,
+    /// By index; `None` once that client has teleported away.
+    clients: Vec<Option<ClientHost>>,
     options: Options,
+    /// Held by a [`servers::Servers`], which routes its teleports.
+    hosted: bool,
 }
 
 impl Session {
@@ -27,6 +34,7 @@ impl Session {
             server: ServerHost::new(server),
             clients: Vec::new(),
             options,
+            hosted: false,
         }
     }
 
@@ -39,15 +47,18 @@ impl Session {
     }
 
     pub fn clients(&self) -> impl Iterator<Item = &DataModel> {
-        self.clients.iter().map(ClientHost::client)
+        self.clients.iter().flatten().map(ClientHost::client)
     }
 
     pub fn client(&self, index: usize) -> Option<&DataModel> {
-        self.clients.get(index).map(ClientHost::client)
+        self.clients.get(index)?.as_ref().map(ClientHost::client)
     }
 
     pub fn client_mut(&mut self, index: usize) -> Option<&mut DataModel> {
-        self.clients.get_mut(index).map(ClientHost::client_mut)
+        self.clients
+            .get_mut(index)?
+            .as_mut()
+            .map(ClientHost::client_mut)
     }
 
     /// A player joins (see [`ServerHost::join`]); a new client DataModel
@@ -68,8 +79,36 @@ impl Session {
     ) -> Result<usize, EngineError> {
         let (index, joined) = self.server.join(name, user_id)?;
         self.clients
-            .push(ClientHost::new(&joined, &self.options, present)?);
+            .push(Some(ClientHost::new(&joined, &self.options, present)?));
         Ok(index)
+    }
+
+    /// A player arrives from a teleport: it joins with its join data, and
+    /// its new client gets what the last one carried.
+    pub(crate) fn arrive(
+        &mut self,
+        name: &str,
+        user_id: i64,
+        join: rook_lua::teleport::JoinData,
+        carried: Carried,
+    ) -> Result<usize, EngineError> {
+        let (index, joined) = self.server.join_with(name, user_id, join)?;
+        let client = ClientHost::arriving(&joined, &self.options, &[], Some(carried))?;
+        self.clients.push(Some(client));
+        Ok(index)
+    }
+
+    /// Client `index` leaves this session (its player has teleported).
+    pub(crate) fn take_client(&mut self, index: usize) -> Option<ClientHost> {
+        self.clients.get_mut(index)?.take()
+    }
+
+    pub(crate) fn host_mut(&mut self) -> &mut ServerHost {
+        &mut self.server
+    }
+
+    pub(crate) fn host(&self) -> &ServerHost {
+        &self.server
     }
 
     /// One frame: the server steps, its changes replicate to every client,
@@ -77,7 +116,12 @@ impl Session {
     pub fn step(&mut self) {
         profiling::scope!("Session::step");
         self.step_server();
-        for client in &mut self.clients {
+        self.step_clients();
+    }
+
+    /// Each client's frame, then what they sent.
+    pub(crate) fn step_clients(&mut self) {
+        for client in self.clients.iter_mut().flatten() {
             client.step();
         }
         self.route();
@@ -88,15 +132,36 @@ impl Session {
     /// their own rate, as `rook-player` runs them.
     pub fn step_server(&mut self) {
         self.server.step();
+        self.after_server_step();
+    }
+
+    /// What follows the server's frame: a session alone routes its
+    /// teleports (finding no place, see [`Session`]), then messages and
+    /// changes go to the clients.
+    pub(crate) fn after_server_step(&mut self) {
+        if !self.hosted && self.server.server().runtime().wants_teleports() {
+            let mut running = vec![self.server.running()];
+            for plan in self.server.teleports(&Universe::default(), &mut running) {
+                let refusal = host::not_started(&"no universe holds this server");
+                self.server.refuse(plan, refusal);
+            }
+        }
         self.route();
         for (index, updates) in self.server.updates() {
-            self.clients[index].deliver(&updates);
+            self.deliver(index, &updates);
+        }
+    }
+
+    /// A message to client `index`, if it's still here.
+    pub(crate) fn deliver(&mut self, index: usize, msg: &host::ToClient) {
+        if let Some(Some(client)) = self.clients.get_mut(index) {
+            client.deliver(msg);
         }
     }
 
     /// One frame of every client, `dt` seconds long.
     pub fn step_clients_by(&mut self, dt: f64) {
-        for client in &mut self.clients {
+        for client in self.clients.iter_mut().flatten() {
             client.step_by(dt);
         }
         self.route();
@@ -108,10 +173,13 @@ impl Session {
     fn route(&mut self) {
         profiling::scope!("Session::route");
         for (index, msg) in self.server.outgoing() {
-            self.clients[index].deliver(&msg);
+            self.deliver(index, &msg);
         }
         for index in 0..self.clients.len() {
-            for msg in self.clients[index].outgoing() {
+            let Some(Some(client)) = self.clients.get_mut(index) else {
+                continue;
+            };
+            for msg in client.outgoing() {
                 self.server.deliver(index, msg);
             }
         }
@@ -126,7 +194,7 @@ impl Session {
     }
 
     pub fn input(&mut self, index: usize, event: crate::InputEvent) {
-        let Some(client) = self.clients.get_mut(index) else {
+        let Some(Some(client)) = self.clients.get_mut(index) else {
             return;
         };
         for msg in client.input(event) {

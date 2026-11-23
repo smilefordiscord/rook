@@ -3,3 +3,4 @@
 
 mod collect;
 mod scripts;
+mod teleports;

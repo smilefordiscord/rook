@@ -50,7 +50,18 @@ pub(super) fn spawn_point(
     body: InstanceId,
 ) -> (CFrame, Option<InstanceId>) {
     let drop = feet_below_root(&w.dom, body);
-    let spawns = spawns_for(&w.dom, player);
+    let mut spawns = spawns_for(&w.dom, player);
+    // A teleport's spawn name picks among them for the first spawn
+    // (creator-docs TeleportToSpawnByName). Inference: with no spawn of
+    // that name, any of them.
+    if let Some(data) = w.teleports.join_data.get_mut(&player)
+        && !data.spawn_name.is_empty()
+    {
+        let name = std::mem::take(&mut data.spawn_name);
+        if spawns.iter().any(|&s| w.dom.name(s) == name) {
+            spawns.retain(|&s| w.dom.name(s) == name);
+        }
+    }
     let picked = (!spawns.is_empty())
         .then(|| spawns[(w.spawn_random.next_f64() * spawns.len() as f64) as usize % spawns.len()]);
     let at = picked.and_then(|s| {

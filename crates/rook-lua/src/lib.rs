@@ -12,6 +12,7 @@ pub mod gamepads;
 mod net;
 pub mod runtime;
 mod styles;
+pub mod teleport;
 mod types;
 pub mod user_settings;
 

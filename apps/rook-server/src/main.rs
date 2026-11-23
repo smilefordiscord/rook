@@ -7,7 +7,7 @@ use std::time::{Duration, Instant};
 
 use clap::Parser;
 use rook_content::Resolver;
-use rook_engine::session::server_thread::ServerThread;
+use rook_engine::session::server_thread::{Placement, ServerThread};
 use rook_engine::{Options, settings};
 
 #[derive(Debug, Parser)]
@@ -52,6 +52,7 @@ fn main() -> anyhow::Result<()> {
 
 fn serve(args: &Args) -> anyhow::Result<()> {
     let place = fs_err::read(&args.place)?;
+    let placement = Placement::open(&args.place)?;
     let script = match &args.script {
         Some(path) => Some(fs_err::read_to_string(path)?),
         None => None,
@@ -62,7 +63,8 @@ fn serve(args: &Args) -> anyhow::Result<()> {
         content: Some(Arc::new(Resolver::new(settings::content_config(true)))),
         ..Options::default()
     };
-    let (server, _) = ServerThread::spawn(place, options, script, None)?.wait()?;
+    let (server, _) =
+        ServerThread::spawn(place.into(), options, script, placement, None)?.wait()?;
     server.run(true);
     #[cfg(feature = "repl")]
     let mut repl = if args.no_repl {

@@ -34,6 +34,7 @@ tracing.workspace = true
 tracing-subscriber.workspace = true
 directories.workspace = true
 serde_json.workspace = true
+toml.workspace = true
 reedline = { workspace = true, optional = true }
 nu-ansi-term = { workspace = true, optional = true }
 

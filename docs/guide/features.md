@@ -36,6 +36,7 @@ Everything Rook supports today. What's coming next is in the [roadmap](../roadma
 - Replication follows Roblox's rules: `NotReplicated` classes and properties stay on the server, a `PlayerGui` reaches only its player, server `Script` source is withheld, references are remapped, attributes and tags replicate, and client changes stay on the client (FilteringEnabled).
 - Joining creates the `Player`, `Backpack` and `PlayerGui` from `StarterPack` and `StarterGui`, fires `PlayerAdded`, sets `Players.LocalPlayer` and starts **LocalScripts** where Roblox allows them.
 - `RemoteEvent`, `UnreliableRemoteEvent` and `RemoteFunction`: arguments are copied between VMs the way Roblox copies them, and invokes yield until the reply.
+- **Multi-place games**: a `universe.toml` beside the place names the game's places by PlaceId, and `TeleportService` moves players between them, to public or reserved servers, with their teleport data, join data and loading GUI ([teleports](../behavior/scripting/teleports.md)).
 
 ## Physics
 

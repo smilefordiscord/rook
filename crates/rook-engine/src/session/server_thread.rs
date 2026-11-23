@@ -8,14 +8,24 @@
 //! client in lockstep with it, so `--seconds`, `--bench` and screenshots
 //! give the same results every run), or by itself at 60 Hz of real time
 //! ([`ServerThread::run`]), as a server does for players.
+//!
+//! The thread is one server of a universe. Its scripts' teleports are
+//! routed there against the one server it knows, itself: a player sent to
+//! another server leaves in a [`Teleported`] the app carries out by
+//! starting that server's thread (docs/behavior/scripting/teleports.md).
 
+use std::sync::Arc;
 use std::sync::mpsc::{Receiver, RecvTimeoutError, Sender, TryRecvError, channel};
 use std::time::{Duration, Instant};
+
+use rook_lua::teleport::JoinData;
 
 #[cfg(feature = "repl")]
 use rook_lua::MessageType;
 
-use crate::session::host::{Joined, ServerHost, ToClient, ToServer};
+use crate::session::host::{Departure, Joined, ServerHost, ToClient, ToServer, not_started};
+use crate::universe::routing::Target;
+use crate::universe::{ServerIdentity, Universe};
 use crate::{DataModel, EngineError, Options, SavedCamera, console};
 
 #[derive(Debug)]
@@ -23,6 +33,43 @@ pub struct Frame {
     pub messages: Vec<ToClient>,
     /// How long the server took to step.
     pub took: Duration,
+    /// The player teleported this frame, after `messages`.
+    pub teleports: Vec<Teleported>,
+}
+
+/// The player left for another server by teleport.
+#[derive(Debug)]
+pub struct Teleported {
+    pub departure: Departure,
+    /// For a teleport back into this same server, how the player joined
+    /// it again; otherwise the app starts the departure's server.
+    pub joined: Option<Joined>,
+}
+
+/// Which server a thread runs, and the universe it's in.
+#[derive(Debug, Clone)]
+pub struct Placement {
+    pub universe: Arc<Universe>,
+    pub identity: ServerIdentity,
+}
+
+impl Placement {
+    /// A public server of the place file at `place`, in the universe its
+    /// folder's manifest describes.
+    pub fn open(place: &std::path::Path) -> Result<Self, crate::universe::ManifestError> {
+        let (universe, place_id) = Universe::open(place)?;
+        let universe = Arc::new(universe);
+        let identity = ServerIdentity::new_server(&universe, place_id, String::new());
+        Ok(Self { universe, identity })
+    }
+}
+
+/// A player joining as the thread's server starts.
+#[derive(Debug, Clone)]
+pub struct Joining {
+    pub name: String,
+    pub user_id: i64,
+    pub join: JoinData,
 }
 
 #[derive(Debug)]
@@ -84,30 +131,35 @@ impl Starting {
 }
 
 impl ServerThread {
-    /// Load `place` on a new thread, start its scripts, run `script` (the
-    /// `--script` file) and let `player` (name, user id) join, if given.
+    /// Load `place` on a new thread as the server `placement` names, start
+    /// its scripts, run `script` (the `--script` file) and let `player`
+    /// join, if given.
     pub fn spawn(
-        place: Vec<u8>,
+        place: Arc<[u8]>,
         options: Options,
         script: Option<String>,
-        player: Option<(&str, i64)>,
+        placement: Placement,
+        player: Option<Joining>,
     ) -> Result<Starting, EngineError> {
         let (commands, command_rx) = channel();
         let (frame_tx, frames) = channel();
         let (started_tx, started_rx) = channel();
         let (ended_tx, ended) = channel::<()>();
-        let player = player.map(|(name, user_id)| (name.to_owned(), user_id));
         let body = move || {
             // Dropped as the thread ends, however it ends.
             let _ended = ended_tx;
-            let host = (|| -> Result<ServerHost, EngineError> {
+            let host = (|| -> Result<Hosted, EngineError> {
                 let mut server = DataModel::load_place(&place, &options)?;
+                placement.identity.apply(&server);
                 server.start();
                 let mut host = ServerHost::new(server);
                 let camera = SavedCamera::read(host.server());
-                let joined = match &player {
-                    Some((name, user_id)) => Some(host.join(name, *user_id)?.1),
-                    None => None,
+                let (client, joined) = match player {
+                    Some(p) => {
+                        let (index, joined) = host.join_with(&p.name, p.user_id, p.join)?;
+                        (index, Some(joined))
+                    }
+                    None => (0, None),
                 };
                 if let Some(source) = &script {
                     host.server()
@@ -118,7 +170,11 @@ impl ServerThread {
                 // The receiver is gone only if the game closed while
                 // starting.
                 let _ = started_tx.send(Ok(Started { joined, camera }));
-                Ok(host)
+                Ok(Hosted {
+                    host,
+                    placement,
+                    client,
+                })
             })();
             match host {
                 Ok(host) => serve(host, &command_rx, &frame_tx),
@@ -152,6 +208,7 @@ impl ServerThread {
         self.frames.recv().unwrap_or(Frame {
             messages: Vec::new(),
             took: Duration::ZERO,
+            teleports: Vec::new(),
         })
     }
 
@@ -192,8 +249,15 @@ fn print_logs(server: &DataModel) {
     }
 }
 
+/// The thread's server, where it is, and the index of the app's client.
+struct Hosted {
+    host: ServerHost,
+    placement: Placement,
+    client: usize,
+}
+
 /// The server thread's loop, until the app lets it go.
-fn serve(mut host: ServerHost, commands: &Receiver<Command>, frames: &Sender<Frame>) {
+fn serve(mut host: Hosted, commands: &Receiver<Command>, frames: &Sender<Frame>) {
     let step = Duration::from_secs_f64(1.0 / 60.0);
     let mut running = false;
     let mut next = Instant::now();
@@ -242,7 +306,7 @@ fn serve(mut host: ServerHost, commands: &Receiver<Command>, frames: &Sender<Fra
 
 /// Carry out one command. Returns false once the app is gone.
 fn obey(
-    host: &mut ServerHost,
+    host: &mut Hosted,
     command: Command,
     frames: &Sender<Frame>,
     running: &mut bool,
@@ -254,27 +318,73 @@ fn obey(
             *running = on;
             *next = Instant::now();
         }
-        Command::Deliver(msg) => host.deliver(0, msg),
+        Command::Deliver(msg) => host.host.deliver(host.client, msg),
         #[cfg(feature = "repl")]
         Command::Repl(line) => {
-            if let Err(e) = crate::console::repl::run_line(host.server(), &line) {
+            if let Err(e) = crate::console::repl::run_line(host.host.server(), &line) {
                 console::print_message(MessageType::Error, &e);
             }
-            print_logs(host.server());
+            print_logs(host.host.server());
         }
     }
     true
 }
 
 /// One server frame, with what the client should receive.
-fn frame(host: &mut ServerHost) -> Frame {
+fn frame(hosted: &mut Hosted) -> Frame {
     let start = Instant::now();
-    host.step();
+    hosted.host.step();
+    let teleports = teleport(hosted);
+    let host = &mut hosted.host;
     let mut messages: Vec<ToClient> = host.outgoing().into_iter().map(|(_, m)| m).collect();
     messages.extend(host.updates().into_iter().map(|(_, m)| m));
     print_logs(host.server());
     Frame {
         messages,
         took: start.elapsed(),
+        teleports,
     }
+}
+
+/// Route the teleports the server's scripts asked for, against this
+/// server alone: a teleport into it again rejoins the player here, one to
+/// a new server leaves for the app to start it.
+fn teleport(hosted: &mut Hosted) -> Vec<Teleported> {
+    let host = &mut hosted.host;
+    if !host.server().runtime().wants_teleports() {
+        return Vec::new();
+    }
+    let mut running = vec![host.running()];
+    let own = running[0].identity.job_id.clone();
+    let mut out = Vec::new();
+    for plan in host.teleports(&hosted.placement.universe, &mut running) {
+        let here = match &plan.route.target {
+            Target::Running(job) if *job == own => true,
+            Target::New(_) => false,
+            // Routing knows no other running server.
+            Target::Running(_) => {
+                host.refuse(plan, not_started(&"that server isn't here"));
+                continue;
+            }
+        };
+        for departure in host.depart(plan) {
+            let joined = if here {
+                let d = &departure;
+                match host.join_with(&d.name, d.user_id, d.join.clone()) {
+                    Ok((index, joined)) => {
+                        hosted.client = index;
+                        Some(joined)
+                    }
+                    Err(e) => {
+                        tracing::warn!("{} couldn't join again: {e}", d.name);
+                        None
+                    }
+                }
+            } else {
+                None
+            };
+            out.push(Teleported { departure, joined });
+        }
+    }
+    out
 }

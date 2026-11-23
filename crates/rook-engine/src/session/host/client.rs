@@ -37,7 +37,20 @@ impl ClientHost {
         options: &Options,
         present: &[InputEvent],
     ) -> Result<Self, EngineError> {
+        Self::arriving(joined, options, present, None)
+    }
+
+    /// [`ClientHost::new`] for a player arriving from a teleport, with what
+    /// its last client carried: `LocalPlayerArrivedFromTeleport` fires once
+    /// its scripts have started.
+    pub fn arriving(
+        joined: &Joined,
+        options: &Options,
+        present: &[InputEvent],
+        carried: Option<Carried>,
+    ) -> Result<Self, EngineError> {
         let mut client = DataModel::new_client(options)?;
+        joined.identity.apply(&client);
         let mut sink = Sink::new();
         {
             let mut w = client.runtime().world_mut();
@@ -76,8 +89,15 @@ impl ClientHost {
         if let Some(patch) = &options.core_scripts {
             patch.install(&client);
         }
+        let teleported = carried.is_some();
+        if let Some(carried) = carried {
+            Self::receive(&client, carried);
+        }
         client.note_camera_scripts();
         client.start();
+        if teleported {
+            client.runtime().arrived_from_teleport();
+        }
         Ok(Self {
             client,
             sink,
@@ -160,6 +180,9 @@ impl ClientHost {
             ToClient::Kicked { message } => {
                 self.client
                     .end_session(crate::session::ended::kick_prompt(message));
+            }
+            ToClient::TeleportState { .. } | ToClient::TeleportFailed(_) => {
+                self.teleport_message(msg);
             }
             &ToClient::Updates { time, ref updates } => {
                 let (start, local, added) = {
@@ -339,6 +362,7 @@ impl ClientHost {
 
     fn messages(&mut self) -> Vec<ToServer> {
         let mut out = std::mem::take(&mut self.hover_out);
+        out.extend(self.teleport_requests());
         let poses = self.owned_poses();
         self.last_poses.retain(|root, _| {
             poses

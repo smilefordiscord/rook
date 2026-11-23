@@ -296,6 +296,12 @@ fn json_decode(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
 /// (creator-docs HttpService:GenerateGUID).
 fn generate_guid(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
     let braces = !matches!(a.get(0), LuaValue::Boolean(false));
+    let guid = random_guid(lua)?;
+    Outcome::ret(lua, if braces { format!("{{{guid}}}") } else { guid })
+}
+
+/// A random version 4 UUID, uppercase, from the scripts' `math.random`.
+pub(crate) fn random_guid(lua: &Lua) -> mlua::Result<String> {
     let math: Table = lua.globals().get("math")?;
     let random: mlua::Function = math.get("random")?;
     let mut bytes = [0u8; 16];
@@ -305,15 +311,14 @@ fn generate_guid(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
     bytes[6] = (bytes[6] & 0x0f) | 0x40;
     bytes[8] = (bytes[8] & 0x3f) | 0x80;
     let hex: String = bytes.iter().map(|b| format!("{b:02X}")).collect();
-    let guid = format!(
+    Ok(format!(
         "{}-{}-{}-{}-{}",
         &hex[0..8],
         &hex[8..12],
         &hex[12..16],
         &hex[16..20],
         &hex[20..32]
-    );
-    Outcome::ret(lua, if braces { format!("{{{guid}}}") } else { guid })
+    ))
 }
 
 fn url_encode(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {

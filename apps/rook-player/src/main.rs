@@ -77,6 +77,10 @@ struct Args {
     /// Show the server only, without a player (Studio's Run mode).
     #[arg(long)]
     run: bool,
+    /// The player joins with this `LaunchData`, as a share link would
+    /// give it (`Player:GetJoinData`).
+    #[arg(long, conflicts_with = "run")]
+    launch_data: Option<String>,
     /// Run this many frames offscreen and print where the time goes.
     #[arg(long)]
     bench: Option<u32>,
@@ -232,6 +236,7 @@ fn play(args: &Args) -> anyhow::Result<()> {
         wait_for_sounds: args.record_audio.is_some(),
         core_scripts,
         user_settings: None,
+        launch_data: args.launch_data.clone(),
     };
     if args.windowed() && !args.crash_test {
         // The player's settings, which only a window's player changes.
