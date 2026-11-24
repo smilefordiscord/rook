@@ -28,6 +28,9 @@ Only edits to the place count:
 - not where the current camera looks from (its `CFrame`, `Focus` and
   `FieldOfView`), whoever sets it (Measured: a script moving it between
   two waypoints made no step, where making a folder did);
+- not a part's `LocalTransparencyModifier`, which editors hide parts with
+  (Measured: `Undo` of a step that set it to 1 left it at 1, where a
+  `Transparency` change in the same place reverted);
 - not services coming into the DataModel by their first `GetService`.
 
 What isn't in the DataModel keeps its values as they are. A part made and

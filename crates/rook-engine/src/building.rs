@@ -6,6 +6,18 @@ use crate::*;
 
 impl DataModel {
     pub fn load_place(bytes: &[u8], options: &Options) -> Result<Self, EngineError> {
+        Self::load_place_joining(bytes, options, true)
+    }
+
+    /// [`DataModel::load_place`], joining touching surfaces of a place
+    /// saved before joints were explicit only when `join` (a place opened
+    /// for editing keeps what its file holds: the joins happen when it
+    /// runs).
+    pub(crate) fn load_place_joining(
+        bytes: &[u8],
+        options: &Options,
+        join: bool,
+    ) -> Result<Self, EngineError> {
         let loaded = rook_formats::load(bytes)?;
         let mut dom = Dom::new();
         let root = dom.root();
@@ -14,7 +26,8 @@ impl DataModel {
         let journaling = dom.journal().is_enabled();
         dom.journal_mut().set_enabled(false);
         ensure_terrain(&mut dom);
-        if rook_physics::joints::surfaces::joins_on_load(&dom)
+        if join
+            && rook_physics::joints::surfaces::joins_on_load(&dom)
             && let Err(e) = rook_physics::joints::surfaces::make_joints_on_load(&mut dom)
         {
             tracing::warn!("joining the place's surfaces failed: {e}");

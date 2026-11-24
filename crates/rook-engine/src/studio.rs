@@ -28,7 +28,9 @@ impl DataModel {
     /// so no script starts, nothing simulates, StarterGui shows and edits
     /// are recorded for undo.
     pub fn edit_place(bytes: &[u8], options: &Options) -> Result<Self, EngineError> {
-        let dm = Self::load_place(bytes, options)?;
+        // Inference: Studio makes a legacy place's surface joints when it
+        // runs, so saving an edited place doesn't add them to the file.
+        let dm = Self::load_place_joining(bytes, options, false)?;
         dm.runtime.set_studio_mode(Some(StudioMode::Edit));
         dm.runtime.world_mut().gui.set_editing(true);
         Ok(dm)

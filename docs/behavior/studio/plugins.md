@@ -43,6 +43,9 @@ Edit mode:
   coordinates, InputObjects' positions and the Mouse's `X` and `Y` count
   from the top left with no inset.
 - Edits are recorded for [undo](history.md).
+- A place saved before joints were explicit isn't joined on opening: its
+  touching surfaces join when it runs, so saving the edited place adds no
+  joints to the file (Inference).
 
 ## The view
 

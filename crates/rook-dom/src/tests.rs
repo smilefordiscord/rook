@@ -523,3 +523,17 @@ fn recording_keeps_to_the_place() {
         }]
     );
 }
+
+/// Hiding a part for the editor isn't recorded (Measured: Studio's undo
+/// leaves `LocalTransparencyModifier` as it is).
+#[test]
+fn local_transparency_isnt_recorded() {
+    let mut dom = Dom::new();
+    let ws = dom.get_service("Workspace").unwrap();
+    let p = part(&mut dom, "Brick");
+    dom.set_parent(p, Some(ws)).unwrap();
+    dom.start_recording();
+    let ltm = dom.property_id(p, "LocalTransparencyModifier").unwrap();
+    dom.set_property(p, ltm, Value::Float32(1.0)).unwrap();
+    assert_eq!(dom.stop_recording(), Vec::new());
+}

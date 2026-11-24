@@ -158,6 +158,10 @@ impl Dom {
             && Some(property) != self.smooth_grid
             && !self.db.property(property).flags.read_only
             && !self.is_view(id, property)
+            // Measured in Studio 0.748's Edit mode: undo leaves a part's
+            // `LocalTransparencyModifier` as it is (editors hide parts
+            // with it, which isn't an edit; it isn't saved either).
+            && self.db.property(property).name != "LocalTransparencyModifier"
     }
 
     /// Whether `property` is where the current camera looks from (its
