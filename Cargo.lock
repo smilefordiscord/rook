@@ -3831,6 +3831,7 @@ dependencies = [
  "profiling",
  "rbx_dom_weak",
  "rbx_types",
+ "resvg",
  "rook-formats",
  "rook-platform",
  "rook-types",
