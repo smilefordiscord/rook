@@ -88,8 +88,10 @@ impl ClientHost {
         }
         if let Some(patch) = &options.core_scripts {
             patch.install(&client);
-        } else if options.menu {
-            crate::menu::install(&client);
+        } else if options.menu
+            && let Some(package) = crate::core_scripts::CorePatch::rook()
+        {
+            package.install(&client);
         }
         if let Some((width, height)) = options.viewport {
             client.set_viewport(width, height);
