@@ -5,6 +5,7 @@ Every release, newest first. How versions are numbered is in
 
 ## [Unreleased]
 
+- Images draw at up to 4096 × 4096, as in Roblox: Rook fetches them as Roblox's client does, in Roblox's KTX2 transcode for textures (its mip packs joined into one file), and keeps them in the GPU's BC1 and BC3 blocks, so a 4096 texture holds 22 MB where 1024 in RGBA8 held 5.6 MB, and small ones less than before. GUI still measures `ImageRectOffset` and `ImageRectSize` as Roblox does, in the upload's size fitted to 1024 (a 1264 × 632 image measures 1024 × 512, where Rook halved it to 632 × 316). Rook fetched every image as uploaded and halved anything past 1024. See [textures](docs/behavior/content/asset-fetching.md#textures).
 - A place can be opened for editing, with Roblox Studio plugins running in it as in Studio: their toolbars, dock widgets, mouse and settings, the Selection, and undo through ChangeHistoryService. Rook could only play places, and ran no plugins. See [plugins](docs/behavior/studio/plugins.md) and [change history](docs/behavior/studio/history.md).
 - `ReflectionService` lists a class's properties as Studio does. Rook raised a "not implemented" error for it. See [stubs](docs/guide/stubs.md#studio-plugins).
 - `LogService.MessageOut` fires for every line of output, as in Roblox. Rook never fired it. See [data and logging](docs/design/data-and-logging.md).
