@@ -6263,7 +6263,6 @@ dependencies = [
  "serde",
  "serde_json",
  "toml",
- "ureq",
  "walkdir",
  "zip",
 ]
