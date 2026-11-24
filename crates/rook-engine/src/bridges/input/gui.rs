@@ -7,7 +7,6 @@ use glam::Vec2;
 use rook_dom::InstanceId;
 use rook_types::{Value, Vector2, Viewer};
 
-use super::gui_point;
 use crate::DataModel;
 
 /// Measured: activations this close count as a run for `Activated`'s
@@ -57,7 +56,7 @@ impl DataModel {
     /// inactive Frame or TextLabel over a SurfaceGui button lets it take
     /// the click, an `Active` object or a button doesn't.
     fn gui_hits(&self) -> Vec<InstanceId> {
-        let (x, y) = gui_point(self.runtime.world().input.mouse);
+        let (x, y) = self.gui_mouse();
         let mut hits = {
             let mut w = self.runtime.world_mut();
             let w = &mut *w;
@@ -216,7 +215,7 @@ impl DataModel {
     pub(super) fn gui_move(&mut self, obj: Option<InstanceId>) -> bool {
         let hits = self.update_hover(obj, true);
         if let Some(drag) = self.input.gui.drag {
-            let (x, y) = gui_point(self.runtime.world().input.mouse);
+            let (x, y) = self.gui_mouse();
             let to = self.runtime.world().gui.drag_bar(&drag, Vec2::new(x, y));
             if let Some(to) = to {
                 self.set_property(drag.frame, "CanvasPosition", Value::Vector2(Vector2(to)));
@@ -275,7 +274,7 @@ impl DataModel {
             self.runtime.release_text_box(false, obj);
             self.runtime.drain_deferred();
         }
-        let (x, y) = gui_point(self.runtime.world().input.mouse);
+        let (x, y) = self.gui_mouse();
         if button == 1 {
             self.input.gui.drag = self.bar_under(&hits, Vec2::new(x, y));
         }

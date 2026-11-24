@@ -122,6 +122,9 @@ pub struct Renderer {
     /// 0 and goes on from there), wrapped at [`WATER_PHASE_PERIOD`].
     pub(crate) water_phase: f64,
     depth: Option<DepthBuffer>,
+    /// Where the 3D view goes in the target ([`Renderer::set_view`]);
+    /// `None` fills it.
+    view: Option<ViewRect>,
     /// The frame the main pass draws into, and the pass taking it to the
     /// target.
     tonemap: Tonemap,
@@ -136,6 +139,30 @@ pub struct Renderer {
     /// uploads included.
     record_time: std::time::Duration,
     stage_times: StageTimes,
+}
+
+/// A rectangle of the target, in pixels from its top left.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ViewRect {
+    pub x: u32,
+    pub y: u32,
+    pub width: u32,
+    pub height: u32,
+}
+
+impl ViewRect {
+    /// This rectangle inside a `width` × `height` target: cut to it, and
+    /// at least a pixel each way.
+    pub(crate) fn within(self, width: u32, height: u32) -> Self {
+        let x = self.x.min(width.saturating_sub(1));
+        let y = self.y.min(height.saturating_sub(1));
+        Self {
+            x,
+            y,
+            width: self.width.min(width - x).max(1),
+            height: self.height.min(height - y).max(1),
+        }
+    }
 }
 
 /// The main pass's depth buffer.

@@ -93,11 +93,7 @@ pub(crate) fn get(w: &World, id: InstanceId, name: &str) -> Option<Value> {
         // none.
         // TODO: measure where the CoreScripts' buttons end.
         "TopbarInset" if dom.class_name(id) == "GuiService" => {
-            let height = if w.is_client {
-                rook_gui::GUI_INSET
-            } else {
-                0.0
-            };
+            let height = if w.is_client { w.gui.inset() } else { 0.0 };
             let width = dom
                 .find_service("Workspace")
                 .and_then(|ws| dom.ref_property(ws, "CurrentCamera"))

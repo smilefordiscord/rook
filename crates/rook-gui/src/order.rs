@@ -54,7 +54,7 @@ fn widgets(dom: &Dom, layout: &Layout) -> Vec<InstanceId> {
 pub(crate) fn root_clip(layout: &Layout, root: InstanceId) -> Clip {
     match layout.widgets.get(&root) {
         Some(&[x, y, w, h]) => {
-            let top = y - crate::layout::GUI_INSET;
+            let top = y - layout.inset();
             Clip {
                 rect: [x, top, x + w, top + h],
                 turned: false,

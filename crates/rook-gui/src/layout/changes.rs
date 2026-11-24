@@ -40,6 +40,7 @@ impl Layout {
         let host = Layout {
             widgets: previous.widgets.clone(),
             editing: previous.editing,
+            screen: previous.screen,
             ..Layout::default()
         };
         let mut pass = Pass::new(dom, (&*previous, turning), fonts, host);

@@ -97,7 +97,7 @@ impl DataModel {
         let Some(value) = key_code_value(code) else {
             return false;
         };
-        let pos = gui_point(self.runtime.world().input.mouse);
+        let pos = self.gui_mouse();
         let mut processed = self.focused_text_box().is_some();
         // Inference: a binding sinking a key doesn't hide it from the
         // legacy Mice, which hear what GUI, TextBoxes and prompts don't

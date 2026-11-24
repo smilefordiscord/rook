@@ -53,13 +53,14 @@ impl<'a> Pass<'a> {
         fonts: &'a mut Fonts,
         out: Layout,
     ) -> Self {
+        let screen = out.screen_size(dom);
         Self {
             dom,
             previous,
             turning,
             fonts,
             out,
-            screen: screen_size(dom),
+            screen,
             eye: Eye::of(dom),
             cells: FxHashMap::default(),
         }
@@ -200,19 +201,20 @@ impl<'a> Pass<'a> {
                 // top bar; the others (`IgnoreGuiInset` sets
                 // DeviceSafeInsets) cover the whole window, from (0, -58).
                 // Inference: DeviceSafeInsets has no inset on a desktop.
+                let top_bar = self.out.inset();
                 let inset =
                     dom.enum_item_property(collector, "ScreenInsets") == Some("CoreUISafeInsets");
                 if inset {
-                    let size = self.screen - Vec2::new(0.0, GUI_INSET);
+                    let size = self.screen - Vec2::new(0.0, top_bar);
                     (Vec2::ZERO, size.max(Vec2::ZERO))
                 } else {
-                    (Vec2::new(0.0, -GUI_INSET), self.screen)
+                    (Vec2::new(0.0, -top_bar), self.screen)
                 }
             }
             // Where the editor shows it, from its top left (GUI
             // coordinates start below the top bar's inset).
             "DockWidgetPluginGui" => match self.out.widgets.get(&collector) {
-                Some(&[x, y, w, h]) => (Vec2::new(x, y - GUI_INSET), Vec2::new(w, h)),
+                Some(&[x, y, w, h]) => (Vec2::new(x, y - self.out.inset()), Vec2::new(w, h)),
                 None => (Vec2::ZERO, Vec2::ZERO),
             },
             _ => (Vec2::ZERO, Vec2::ZERO),

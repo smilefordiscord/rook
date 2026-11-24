@@ -140,16 +140,17 @@ impl WorldGui {
     }
 
     /// The untoned canvases' quads where `camera` sees them in a `size`
-    /// window, as screen GUI quads, back to front.
-    pub(crate) fn overlay(&self, camera: &Camera, size: (u32, u32)) -> Packed {
+    /// view whose top left is at `view_origin` on the screen, as screen GUI
+    /// quads, back to front.
+    pub(crate) fn overlay(&self, camera: &Camera, size: (u32, u32), view_origin: Vec2) -> Packed {
         let mut seen: Vec<(f32, Vec2, f32, &Packed)> = (self.canvases.iter().zip(&self.places))
             .filter_map(|(c, place)| {
                 let quads = c.overlay.as_ref()?;
                 let (origin, right, _, _) = lay(c, place.as_ref()?, camera, size.1)?;
-                let corner = on_screen(origin, camera, size)?;
-                let k = on_screen(origin + right, camera, size)?.distance(corner);
+                let at = on_screen(origin, camera, size)?;
+                let k = on_screen(origin + right, camera, size)?.distance(at);
                 let distance = origin.distance(camera.position);
-                (distance <= c.max_distance).then_some((distance, corner, k, quads))
+                (distance <= c.max_distance).then_some((distance, at + view_origin, k, quads))
             })
             .collect();
         seen.sort_by(|a, b| b.0.total_cmp(&a.0));

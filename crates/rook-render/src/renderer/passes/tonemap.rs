@@ -4,7 +4,10 @@
 //! onto the target (docs/behavior/lighting/tone-mapping.md), then the
 //! ColorCorrections' matrix (docs/behavior/lighting/post-processing.md),
 //! Highlights and the GUI layer over it. With no post effect it's the
-//! frame's only pass after the main pass and the Highlights' mask.
+//! frame's only pass after the main pass and the Highlights' mask. The
+//! frame and the mask are the 3D view's size and land on its rectangle of
+//! the target ([`crate::Renderer::set_view`]); the GUI layer is the
+//! target's.
 
 use wesl_core::include_wesl;
 
@@ -34,6 +37,9 @@ struct ToneUniform {
     /// The depth of field's focus: x its distance, y its radius, in
     /// studs.
     focus: [f32; 4],
+    /// Where the frame goes on the target: its top left, then its size,
+    /// in pixels.
+    view: [f32; 4],
     looks: Looks,
 }
 
@@ -47,7 +53,9 @@ struct Frame {
     mask: wgpu::TextureView,
     gui: wgpu::TextureView,
     group: wgpu::BindGroup,
+    /// The frame's and the mask's size, then the GUI layer's.
     size: (u32, u32),
+    screen: (u32, u32),
 }
 
 #[derive(Debug)]
@@ -160,20 +168,21 @@ impl Tonemap {
         }
     }
 
-    /// The frame, the Highlight mask and the GUI layer for a `width` ×
-    /// `height` target, made again when the size changes.
+    /// The frame and the Highlight mask for a `size` view, and the GUI
+    /// layer for a `screen` target, made again when either size changes.
     pub(crate) fn frame(
         &mut self,
         device: &wgpu::Device,
-        width: u32,
-        height: u32,
+        size: (u32, u32),
+        screen: (u32, u32),
     ) -> (wgpu::TextureView, wgpu::TextureView, wgpu::TextureView) {
         if let Some(f) = &self.frame
-            && f.size == (width, height)
+            && f.size == size
+            && f.screen == screen
         {
             return (f.view.clone(), f.mask.clone(), f.gui.clone());
         }
-        let texture = |label, format| {
+        let texture = |label, format, (width, height): (u32, u32)| {
             device
                 .create_texture(&wgpu::TextureDescriptor {
                     label: Some(label),
@@ -192,9 +201,9 @@ impl Tonemap {
                 })
                 .create_view(&Default::default())
         };
-        let view = texture("rook frame", FRAME_FORMAT);
-        let mask = texture("rook highlight mask", MASK_FORMAT);
-        let gui = texture("rook gui layer", GUI_FORMAT);
+        let view = texture("rook frame", FRAME_FORMAT, size);
+        let mask = texture("rook highlight mask", MASK_FORMAT, size);
+        let gui = texture("rook gui layer", GUI_FORMAT, screen);
         let group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("rook tone"),
             layout: &self.layout,
@@ -222,20 +231,22 @@ impl Tonemap {
             mask: mask.clone(),
             gui: gui.clone(),
             group,
-            size: (width, height),
+            size,
+            screen,
         });
         (view, mask, gui)
     }
 
     /// The frame and the post effects' textures (`inputs`, read through
-    /// `group`) through `post`'s curve and color matrix onto `target`,
+    /// `group`) through `post`'s curve and color matrix onto `view` of
+    /// `target`, black around it,
     /// with the Highlights' `looks` over it when the mask holds any, and
     /// the GUI layer over that when it holds GUI.
     pub(crate) fn record(
         &self,
         queue: &wgpu::Queue,
         encoder: &mut wgpu::CommandEncoder,
-        target: &wgpu::TextureView,
+        (target, view): (&wgpu::TextureView, crate::ViewRect),
         (post, group, inputs): (&PostEffects, &wgpu::BindGroup, ToneInputs),
         (looks, gui): (Option<&Looks>, bool),
     ) {
@@ -263,6 +274,7 @@ impl Tonemap {
             ],
             in_place: inputs.in_place,
             focus: inputs.focus,
+            view: [view.x, view.y, view.width, view.height].map(|v| v as f32),
             looks: looks.copied().unwrap_or([[0.0; 4]; 2 * HIGHLIGHT_LIMIT]),
         };
         queue.write_buffer(&self.uniform, 0, bytemuck::bytes_of(&uniform));

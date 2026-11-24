@@ -225,7 +225,8 @@ impl GuiPass {
 
     /// Bind the images the GUI draws that are on the GPU now (`cache`),
     /// and upload the world GUI's canvases `camera` sees this frame in a
-    /// `size` window, the untoned ones as screen quads.
+    /// `size` view at `origin` on the screen, the untoned ones as screen
+    /// quads.
     pub(crate) fn upload(
         &mut self,
         device: &wgpu::Device,
@@ -233,9 +234,9 @@ impl GuiPass {
         cache: &GpuCache<ImageHash, Image>,
         lights: &GpuLights,
         (camera, view): (&Camera, &Frustum),
-        size: (u32, u32),
+        (size, origin): ((u32, u32), glam::Vec2),
     ) -> WorldRuns {
-        let overlay = self.world.overlay(camera, size);
+        let overlay = self.world.overlay(camera, size, origin);
         self.overlay.set(device, queue, &overlay);
         self.images.bind(device, &self.overlay.runs, cache);
         self.images.bind(device, &self.screen.runs, cache);

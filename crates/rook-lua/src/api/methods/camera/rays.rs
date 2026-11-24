@@ -113,18 +113,19 @@ pub(crate) fn project(lens: &Lens, point: Vec3) -> (Vec3, bool) {
     (Vec3::new(x, y, depth), visible)
 }
 
-fn point_to_ray(lua: &Lua, this: InstanceId, a: &Args, inset: f32) -> ApiResult<Outcome> {
+/// `offset`: what takes the point given to a viewport point.
+fn point_to_ray(lua: &Lua, this: InstanceId, a: &Args, offset: Vec2) -> ApiResult<Outcome> {
     let (x, y) = (a.number(0)? as f32, a.number(1)? as f32);
     let depth = a.number_or(2, 0.0)? as f32;
     let lens = with_world(lua, |w| Lens::of(&w.dom, this));
-    let (origin, dir) = viewport_ray(&lens, x, y + inset);
+    let (origin, dir) = viewport_ray(&lens, x + offset.x, y + offset.y);
     let origin = origin + dir * depth;
     let ray = rbx_types::Ray::new(Vector3(origin).into(), Vector3(dir).into());
     Outcome::ret(lua, LRay(ray))
 }
 
 fn viewport_point_to_ray(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> {
-    point_to_ray(lua, this, a, 0.0)
+    point_to_ray(lua, this, a, Vec2::ZERO)
 }
 
 fn screen_point_to_ray(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> {
@@ -132,20 +133,21 @@ fn screen_point_to_ray(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outco
         lua,
         this,
         a,
-        crate::api::methods::gui::screen::gui_inset(lua),
+        crate::api::methods::gui::screen::screen_to_viewport(lua),
     )
 }
 
-fn world_to_point(lua: &Lua, this: InstanceId, a: &Args, inset: f32) -> ApiResult<Outcome> {
+/// `offset`: what takes the point returned to a viewport point.
+fn world_to_point(lua: &Lua, this: InstanceId, a: &Args, offset: Vec2) -> ApiResult<Outcome> {
     let point = a.vector3(0)?.0;
     let lens = with_world(lua, |w| Lens::of(&w.dom, this));
     let (p, visible) = project(&lens, point);
-    let p = Vec3::new(p.x, p.y - inset, p.z);
+    let p = Vec3::new(p.x - offset.x, p.y - offset.y, p.z);
     Outcome::ret(lua, (vector3_to_lua(Vector3(p)), visible))
 }
 
 fn world_to_viewport_point(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> {
-    world_to_point(lua, this, a, 0.0)
+    world_to_point(lua, this, a, Vec2::ZERO)
 }
 
 fn world_to_screen_point(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> {
@@ -153,7 +155,7 @@ fn world_to_screen_point(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Out
         lua,
         this,
         a,
-        crate::api::methods::gui::screen::gui_inset(lua),
+        crate::api::methods::gui::screen::screen_to_viewport(lua),
     )
 }
 

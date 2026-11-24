@@ -105,8 +105,12 @@ pub struct InputState {
     pub keys: FxHashSet<u32>,
     /// Mouse buttons 1-3 held.
     pub buttons: [bool; 3],
-    /// Cursor position in pixels from the viewport's top left.
+    /// Cursor position in pixels from the window's top left.
     pub mouse: (f32, f32),
+    /// Where the current camera's viewport starts in the window, in
+    /// pixels: (0, 0), the whole window, unless the host draws the view in
+    /// part of it, as an editor does between its panels.
+    pub view_origin: (f32, f32),
     /// Cursor movement so far this frame: every motion event added up,
     /// back to zero when a client frame ends (`GetMouseDelta`).
     pub mouse_delta: (f32, f32),

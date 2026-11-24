@@ -449,6 +449,30 @@ fn recorded_edits_revert_and_redo() {
     assert!(dom.has_tag(p, "Door"));
 }
 
+/// Moving the current camera isn't an edit (measured in Studio 0.748),
+/// but another camera's CFrame is part of the place.
+#[test]
+fn the_current_cameras_view_is_not_recorded() {
+    let mut dom = Dom::new();
+    let ws = dom.get_service("Workspace").unwrap();
+    let current = dom.create_by_name("Camera").unwrap();
+    dom.set_parent(current, Some(ws)).unwrap();
+    dom.set_property_by_name(ws, "CurrentCamera", Value::Ref(Some(current.to_ref())))
+        .unwrap();
+    let other = dom.create_by_name("Camera").unwrap();
+    dom.set_parent(other, Some(ws)).unwrap();
+    let moved = Value::CFrame(rook_types::CFrame::from_position(glam::Vec3::X));
+    dom.start_recording();
+    for name in ["CFrame", "Focus"] {
+        dom.set_property_by_name(current, name, moved.clone())
+            .unwrap();
+    }
+    dom.set_property_by_name(current, "FieldOfView", Value::Float32(50.0))
+        .unwrap();
+    dom.set_property_by_name(other, "CFrame", moved).unwrap();
+    assert_eq!(dom.stop_recording().len(), 1);
+}
+
 /// A property that read its default reads it again once reverted.
 #[test]
 fn reverting_a_first_write_unsets_it() {

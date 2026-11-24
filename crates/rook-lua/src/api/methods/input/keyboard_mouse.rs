@@ -26,8 +26,13 @@ pub(super) fn is_mouse_button_pressed(lua: &Lua, _: InstanceId, a: &Args) -> Api
     Outcome::ret(lua, pressed)
 }
 
+/// In viewport pixels, the top bar's inset included (measured, see
+/// `gui_point` in rook-engine).
 pub(super) fn get_mouse_location(lua: &Lua, _: InstanceId, _: &Args) -> ApiResult<Outcome> {
-    let (x, y) = with_world(lua, |w| w.input.mouse);
+    let (x, y) = with_world(lua, |w| {
+        let (ox, oy) = w.input.view_origin;
+        (w.input.mouse.0 - ox, w.input.mouse.1 - oy)
+    });
     Outcome::ret(lua, LVector2(rook_types::Vector2::new(x, y)))
 }
 

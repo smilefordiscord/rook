@@ -1,5 +1,6 @@
 //! What the renderer draws besides the scene: the GUI, the cursor, where
-//! world GUI canvases are, and the time.
+//! world GUI canvases are, the time, and where in the target the 3D view
+//! goes.
 
 use super::*;
 
@@ -72,5 +73,27 @@ impl Renderer {
     /// laid out as the cloud shaders read them.
     pub fn set_cloud_noise(&mut self, noise: &crate::CloudNoise) -> bool {
         self.clouds.set_noise(&self.device, &self.queue, noise)
+    }
+
+    /// Draw the 3D view into `view` of the target from now on, projected
+    /// for that rectangle's shape, and the GUI over the whole target; `None`
+    /// fills the target, as a game's window does. An editor draws its view
+    /// between its panels this way, so the view's center is the middle of
+    /// what shows. Outside the rectangle is black under the GUI.
+    pub fn set_view(&mut self, view: Option<ViewRect>) {
+        self.view = view;
+    }
+
+    /// Where the 3D view goes in a `width` × `height` target.
+    pub(crate) fn view_in(&self, width: u32, height: u32) -> ViewRect {
+        let whole = ViewRect {
+            x: 0,
+            y: 0,
+            width,
+            height,
+        };
+        self.view
+            .unwrap_or(whole)
+            .within(width.max(1), height.max(1))
     }
 }

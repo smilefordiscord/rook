@@ -279,6 +279,24 @@ impl Gui {
         }
     }
 
+    /// Lay ScreenGuis out on a `size` window (pixels) rather than the
+    /// current camera's `ViewportSize`, or on the viewport again
+    /// (`None`): for a host that draws the camera's view in part of its
+    /// window, as an editor does between its panels, while GUI covers the
+    /// whole window. In a game the viewport is the window.
+    pub fn set_screen(&mut self, size: Option<Vec2>) {
+        if self.layout.screen != size {
+            self.layout.screen = size;
+            self.screen_changed();
+        }
+    }
+
+    /// How far below the window's top GUI coordinates start: the top
+    /// bar's height, none while editing.
+    pub fn inset(&self) -> f32 {
+        self.layout.inset()
+    }
+
     /// Everything lays out again, on the screen as it is now.
     fn screen_changed(&mut self) {
         self.stale = true;

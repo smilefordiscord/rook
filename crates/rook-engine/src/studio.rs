@@ -128,6 +128,21 @@ impl DataModel {
         self.runtime.dispatch_since(start);
     }
 
+    /// Where the current camera looks from now: its `CFrame`, `Focus` and
+    /// `FieldOfView`. A plugin may have moved it since
+    /// [`DataModel::set_edit_camera`], and the editor's view follows, as
+    /// Studio's does (measured in Studio 0.748: a script setting the
+    /// current camera's `CFrame` moves the view, which stays there, and
+    /// makes no undo step).
+    pub fn edit_camera(&self) -> Option<(rook_types::CFrame, rook_types::CFrame, f32)> {
+        let camera = self.current_camera()?;
+        let w = self.runtime.world();
+        let cframe = w.dom.cframe_property(camera, "CFrame")?;
+        let focus = w.dom.cframe_property(camera, "Focus")?;
+        let fov = w.dom.float_property(camera, "FieldOfView")?;
+        Some((cframe, focus, fov))
+    }
+
     /// Show dock widget `widget` at `rect` (left, top, width, height in
     /// window pixels), or nowhere.
     pub fn set_widget_rect(&self, widget: InstanceId, rect: Option<[f32; 4]>) {

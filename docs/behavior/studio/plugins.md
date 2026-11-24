@@ -15,8 +15,11 @@ plugin's mouse, settings) stays creator-docs or Inference.
 Code: the state plugins share in `rook-lua/src/studio.rs`, the members in
 `rook-lua/src/api/methods/studio/`, what an editor calls in
 `rook-lua/src/calls/studio.rs` and `rook-engine/src/studio.rs`, and the
-dock widgets' layout in `rook-gui` (`order.rs`, `layout/pass.rs`). Tests
-in `rook-engine/src/tests/studio/plugins.rs`.
+dock widgets' layout in `rook-gui` (`order.rs`, `layout/pass.rs`); the
+view in `rook-engine/src/bridges/input/events.rs` and
+`rook-render/src/renderer/inputs.rs`. Tests in
+`rook-engine/src/tests/studio/plugins.rs` and
+`rook-render/src/tests/view.rs`.
 
 ## Edit mode
 
@@ -33,7 +36,45 @@ Edit mode:
 - StarterGui's ScreenGuis show in the view, as a player's would, while
   `StarterGui.ShowDevelopmentGui` is on (Confirmed: creator-docs
   StarterGui).
+- There is no top bar (Measured): `GuiService:GetGuiInset()` is (0, 0)
+  and (0, 0), `TopbarInset` is empty, a ScreenGui with the default
+  `ScreenInsets` (CoreUISafeInsets) sits at (0, 0) as big as the view,
+  and `WorldToScreenPoint` gives what `WorldToViewportPoint` does. GUI
+  coordinates, InputObjects' positions and the Mouse's `X` and `Y` count
+  from the top left with no inset.
 - Edits are recorded for [undo](history.md).
+
+## The view
+
+Studio draws the place in its 3D view, between its panels, and the
+current camera's viewport is that view (Measured: `ViewportSize` is the
+view's size, 1760 × 990 in a 2000-pixel-wide window). An editor on Rook
+says where it draws the view in its window with
+`DataModel::set_view_rect`, and Rook's renderer draws it there
+(`Renderer::set_view`), projected for that rectangle and centered on it.
+GUI covers the whole window, since the editor's own panels and dock
+widgets are GUI (Approximation: Studio's ScreenGuis lay out in the 3D view
+alone). With a view rectangle:
+
+- `Camera.ViewportSize`, `ViewportPointToRay` and `WorldToViewportPoint`
+  are the view's, counted from its top left, as are
+  `UserInputService:GetMouseLocation()` and the Mouse's `ViewSizeX` and
+  `ViewSizeY`.
+- `ScreenPointToRay` and `WorldToScreenPoint` work in GUI coordinates,
+  the window's, so a ScreenGui can draw at a point `WorldToScreenPoint`
+  gives and the Mouse's `X` and `Y` go straight into `ScreenPointToRay`.
+- The mouse's ray (`Hit`, `Target`, `UnitRay`) goes through the cursor's
+  place in the view.
+
+Without one, as in a game, the view is the whole window.
+
+The editor moves the current camera as its user flies around
+(`DataModel::set_edit_camera`). A plugin can move it too, by setting its
+`CFrame`, `Focus` or `FieldOfView`, and the editor's view follows from there
+(`DataModel::edit_camera`): Measured, a script setting the current
+camera's `CFrame` in Edit mode moves Studio's view, which stays there.
+Moving the view isn't an edit, so it makes no undo step (Measured; see
+[change history](history.md#whats-recorded)).
 
 RunService answers by mode (Confirmed: creator-docs RunService, the table
 under `IsStudio`; the Edit column Measured):
@@ -80,7 +121,10 @@ The activated plugin's PluginMouse hears the view. `Move`,
 took, so a dock widget's clicks don't reach it. `Button1Up` and
 `Button2Up` always fire, so a drag ending over a widget ends. Its `Hit`,
 `Target`, `UnitRay` and the rest follow the cursor as the PlayerMouse's
-do. Its own `TargetFilter` isn't applied (Approximation).
+do. Its `X` and `Y` are GUI coordinates, with no top bar in Edit mode,
+the same as dock widgets' `AbsolutePosition` and `ScreenPointToRay`'s
+(see [the view](#the-view)). Its own `TargetFilter` isn't applied
+(Approximation).
 
 ## Dock widgets
 

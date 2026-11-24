@@ -18,7 +18,8 @@ struct Look {
     camera: CFrame,
     dir: Vec3,
     cursor: (f32, f32),
-    viewport: (u32, u32),
+    /// [`DataModel::view_rect`].
+    view: [f32; 4],
     target_filter: Option<InstanceId>,
     /// The local player's Character, which the mouse looks through.
     character: Option<InstanceId>,
@@ -49,13 +50,13 @@ impl DataModel {
     pub(super) fn mouse_ray(&self) -> Option<(Vec3, Vec3, CFrame)> {
         let camera = self.current_camera()?;
         let w = self.runtime.world();
-        let (vw, vh) = self.input.viewport;
+        let [x, y, vw, vh] = self.view_rect();
         let lens = rook_lua::Lens {
-            viewport: glam::Vec2::new(vw as f32, vh as f32),
+            viewport: glam::Vec2::new(vw, vh),
             ..rook_lua::Lens::of(&w.dom, camera)
         };
         let (mx, my) = w.input.mouse;
-        let (_, dir) = rook_lua::viewport_ray(&lens, mx, my);
+        let (_, dir) = rook_lua::viewport_ray(&lens, mx - x, my - y);
         Some((lens.cframe.position, dir, lens.cframe))
     }
 
@@ -83,7 +84,7 @@ impl DataModel {
                 camera,
                 dir,
                 cursor: w.input.mouse,
-                viewport: self.input.viewport,
+                view: self.view_rect(),
                 target_filter,
                 character,
                 world: w.physics.generation(),
@@ -174,9 +175,9 @@ impl DataModel {
     ) {
         let point = hit.map_or(origin + dir * MOUSE_MISS, |(_, at)| at);
         let mut w = self.runtime.world_mut();
-        let (mx, my) = gui_point(w.input.mouse);
-        let (vw, vh) = self.input.viewport;
-        let vh = (vh as f32 - rook_gui::GUI_INSET).max(0.0);
+        let (mx, my) = gui_point(&w.gui, w.input.mouse);
+        let [_, _, vw, vh] = self.view_rect();
+        let vh = (vh - w.gui.inset()).max(0.0);
         let hit_cf = CFrame {
             position: point,
             rotation: camera.rotation,

@@ -27,22 +27,60 @@ impl DataModel {
             self.resize_ended();
             return;
         }
+        self.apply_view();
+    }
+
+    /// Where the host draws the camera's view in its window: left, top,
+    /// width and height in window pixels, or `None` for the whole window,
+    /// as a game draws it. An editor draws its view between its panels,
+    /// and GUI still covers the window. The view is then the camera's
+    /// viewport, as Studio's 3D view is (measured in Studio 0.748):
+    /// `ViewportSize` is its size, viewport points and the mouse's ray
+    /// count from its top left, and `WorldToScreenPoint` and
+    /// `ScreenPointToRay` work in the window's GUI coordinates, where the
+    /// Mouse's `X` and `Y` are.
+    pub fn set_view_rect(&mut self, rect: Option<[f32; 4]>) {
+        let rect = rect.map(|[x, y, w, h]| [x, y, w.max(1.0), h.max(1.0)]);
+        if self.input.view == rect {
+            return;
+        }
+        self.input.view = rect;
+        self.apply_view();
+    }
+
+    /// The camera's viewport in the window: left, top, width, height.
+    pub(crate) fn view_rect(&self) -> [f32; 4] {
+        let (w, h) = self.input.viewport;
+        self.input.view.unwrap_or([0.0, 0.0, w as f32, h as f32])
+    }
+
+    /// Tell scripts and GUI where the view is in the window, then the
+    /// camera its size.
+    fn apply_view(&self) {
+        let [x, y, ..] = self.view_rect();
+        let (w, h) = self.input.viewport;
+        {
+            let mut world = self.runtime.world_mut();
+            world.input.view_origin = (x, y);
+            let window = glam::Vec2::new(w as f32, h as f32);
+            world.gui.set_screen(self.input.view.map(|_| window));
+        }
         self.sync_viewport_size();
     }
 
-    /// Give the current camera the window's size as its ViewportSize, which
+    /// Give the current camera the view's size as its ViewportSize, which
     /// `Camera:ViewportPointToRay` and friends and GUI layout read. A
     /// change fires Changed, as a resize does in Roblox. Nothing happens
     /// before the host gives a window size.
     pub(crate) fn sync_viewport_size(&self) {
-        let (w, h) = self.input.viewport;
-        if (w, h) == (0, 0) {
+        if self.input.viewport == (0, 0) {
             return;
         }
+        let [_, _, w, h] = self.view_rect();
         let Some(camera) = self.current_camera() else {
             return;
         };
-        let size = rook_types::Vector2::new(w as f32, h as f32);
+        let size = rook_types::Vector2::new(w, h);
         let current = self
             .runtime
             .world()
@@ -171,7 +209,7 @@ impl DataModel {
             w.input.mouse = (x, y);
             w.input.mouse_delta = (0.0, 0.0);
         }
-        let (gx, gy) = gui_point((x, y));
+        let (gx, gy) = self.gui_mouse();
         let obj =
             self.changed_input_object(UserInputType::MouseMovement, (gx, gy, 0.0), (0.0, 0.0));
         let mut processed = self.gui_move(obj);
@@ -193,13 +231,12 @@ impl DataModel {
     pub(super) fn mouse_motion(&mut self, dx: f32, dy: f32) -> bool {
         self.note_input_type(UserInputType::MouseMovement, None);
         self.hold_mouse();
-        let pos = {
+        {
             let mut w = self.runtime.world_mut();
             w.input.mouse_delta.0 += dx;
             w.input.mouse_delta.1 += dy;
-            w.input.mouse
-        };
-        let (gx, gy) = gui_point(pos);
+        }
+        let (gx, gy) = self.gui_mouse();
         let obj = self.changed_input_object(UserInputType::MouseMovement, (gx, gy, 0.0), (dx, dy));
         obj.is_some_and(|obj| self.deliver("InputChanged", obj, false))
     }
@@ -214,13 +251,13 @@ impl DataModel {
         if self.mouse_lock() != crate::MouseLock::Center {
             return;
         }
-        let (vw, vh) = self.input.viewport;
-        self.runtime.world_mut().input.mouse = (vw as f32 / 2.0, vh as f32 / 2.0);
+        let [x, y, w, h] = self.view_rect();
+        self.runtime.world_mut().input.mouse = (x + w / 2.0, y + h / 2.0);
     }
 
     pub(super) fn wheel(&mut self, delta: f32) -> bool {
         self.note_input_type(UserInputType::MouseWheel, None);
-        let pos = gui_point(self.runtime.world().input.mouse);
+        let pos = self.gui_mouse();
         // The wheel amount is in Position.Z (creator-docs InputObject).
         let obj =
             self.changed_input_object(UserInputType::MouseWheel, (pos.0, pos.1, delta), (0.0, 0.0));
@@ -255,11 +292,8 @@ impl DataModel {
             UserInputType::MOUSE_BUTTONS[index],
             Some(Preferred::KeyboardAndMouse),
         );
-        let pos = {
-            let mut w = self.runtime.world_mut();
-            w.input.buttons[index] = down;
-            gui_point(w.input.mouse)
-        };
+        self.runtime.world_mut().input.buttons[index] = down;
+        let pos = self.gui_mouse();
         let state = if down {
             UserInputState::Begin
         } else {

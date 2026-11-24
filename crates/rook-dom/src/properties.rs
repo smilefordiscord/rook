@@ -151,12 +151,28 @@ impl Dom {
     }
 
     /// Whether a write to `property` of `id` is recorded: what the engine
-    /// works out (read-only properties such as `AbsoluteSize`) and
-    /// terrain's voxels aren't edits.
+    /// works out (read-only properties such as `AbsoluteSize`), terrain's
+    /// voxels and where the view looks from aren't edits.
     fn records_property(&self, id: InstanceId, property: PropertyId) -> bool {
         self.records(id)
             && Some(property) != self.smooth_grid
             && !self.db.property(property).flags.read_only
+            && !self.is_view(id, property)
+    }
+
+    /// Whether `property` is where the current camera looks from (its
+    /// `CFrame`, `Focus` or `FieldOfView`): moving the view isn't an edit
+    /// (measured in Studio 0.748's Edit mode: a script moving the current
+    /// camera makes no undo step, and the view stays where it put it).
+    fn is_view(&self, id: InstanceId, property: PropertyId) -> bool {
+        matches!(
+            self.db.property(property).name,
+            "CFrame" | "Focus" | "FieldOfView"
+        ) && self.class_name(id) == "Camera"
+            && self
+                .find_service("Workspace")
+                .and_then(|ws| self.ref_property(ws, "CurrentCamera"))
+                == Some(id)
     }
 
     /// Whether `property` was set on `id`, rather than reading its class

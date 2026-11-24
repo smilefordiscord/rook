@@ -42,7 +42,7 @@ use gpu::pool::{GpuMesh, MeshPool};
 use gpu::*;
 
 pub use lighting::clouds::{CloudNoise, Volume};
-pub use renderer::Renderer;
+pub use renderer::{Renderer, ViewRect};
 pub use window_surface::WindowSurface;
 
 /// The shadow map's depth, and the main pass's where the device has no

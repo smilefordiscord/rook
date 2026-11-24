@@ -25,6 +25,9 @@ Only edits to the place count:
   terrain's voxels;
 - not what the engine and the editor write themselves (the edit camera,
   input state, GUI layout);
+- not where the current camera looks from (its `CFrame`, `Focus` and
+  `FieldOfView`), whoever sets it (Measured: a script moving it between
+  two waypoints made no step, where making a folder did);
 - not services coming into the DataModel by their first `GetService`.
 
 What isn't in the DataModel keeps its values as they are. A part made and

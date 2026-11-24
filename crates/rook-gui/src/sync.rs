@@ -368,7 +368,7 @@ impl Gui {
                 // re-entrancy limit.
                 let (at, size) = if at.is_nan() || size.is_nan() {
                     let at = if at.is_nan() {
-                        Vec2::new(0.0, -GUI_INSET)
+                        Vec2::new(0.0, -self.layout.inset())
                     } else {
                         at
                     };

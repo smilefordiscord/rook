@@ -192,6 +192,7 @@ impl Renderer {
             time: 0.0,
             water_phase: 0.0,
             depth: None,
+            view: None,
             tonemap,
             post_passes,
             gui,

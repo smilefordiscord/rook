@@ -12,7 +12,7 @@ use super::objects::group;
 use super::overlays::{messages, prompt};
 use super::{Draw, Focus, Text};
 use crate::images::Images;
-use crate::layout::{GUI_INSET, Layout, top_of};
+use crate::layout::{Layout, top_of};
 use crate::order::{self, Stacked};
 
 #[derive(Debug)]
@@ -175,7 +175,7 @@ impl Screen {
                         draw.emit(s);
                     }
                     std::mem::swap(draw.out, &mut quads);
-                    below_top_bar(&mut quads);
+                    below_top_bar(&mut quads, layout.inset());
                     quads.into()
                 });
                 if !piece.is_empty() {
@@ -413,16 +413,16 @@ fn hidden_above(dom: &Dom, id: InstanceId) -> bool {
 /// Laid out in GUI coordinates, drawn in the window's, below the top bar:
 /// the quads, what clips them, and the corners and gradients they carry,
 /// which are placed in the same pixels.
-fn below_top_bar(quads: &mut [GuiQuad]) {
+fn below_top_bar(quads: &mut [GuiQuad], inset: f32) {
     for q in quads {
-        q.center.y += GUI_INSET;
-        q.clip[1] += GUI_INSET;
-        q.clip[3] += GUI_INSET;
+        q.center.y += inset;
+        q.clip[1] += inset;
+        q.clip[3] += inset;
         if let Some(shape) = &mut q.shape {
-            shape.center.y += GUI_INSET;
+            shape.center.y += inset;
         }
         if let Some(gradient) = &mut q.gradient {
-            gradient.origin.y += GUI_INSET;
+            gradient.origin.y += inset;
         }
     }
 }

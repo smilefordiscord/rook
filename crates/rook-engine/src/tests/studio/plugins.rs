@@ -209,6 +209,123 @@ fn activation_and_the_plugins_mouse() {
     assert!(out[2].starts_with("down"), "{out:?}");
 }
 
+/// Edit mode has no top bar (measured in Studio 0.748's Edit DataModel):
+/// `GetGuiInset` is (0, 0), a CoreUISafeInsets ScreenGui covers the
+/// viewport from its top left, and screen and viewport points agree. The
+/// plugin's Mouse gives the same coordinates, which once left out a
+/// client's 58-pixel top bar.
+#[test]
+fn edit_mode_has_no_top_bar() {
+    let mut dm = editing(
+        r#"
+        local gui = Instance.new("ScreenGui")
+        gui.Parent = game:GetService("CoreGui")
+        local mouse = plugin:GetMouse()
+        mouse.Button1Down:Connect(function()
+            local camera = workspace.CurrentCamera
+            local p = camera.CFrame.Position + camera.CFrame.LookVector * 50
+            print(game:GetService("GuiService"):GetGuiInset())
+            print(gui.AbsolutePosition, gui.AbsoluteSize)
+            print(mouse.X, mouse.Y, mouse.ViewSizeX, mouse.ViewSizeY)
+            print(camera:WorldToScreenPoint(p) == camera:WorldToViewportPoint(p))
+        end)
+        plugin:Activate(true)
+        "#,
+    );
+    dm.set_viewport(800, 600);
+    dm.step();
+    for e in (ScreenPoint { x: 120.0, y: 90.0 }).click() {
+        dm.input(e);
+    }
+    dm.step();
+    assert_eq!(
+        lines(&dm),
+        ["0, 0 0, 0", "0, 0 800, 600", "120 90 800 600", "true"]
+    );
+}
+
+/// A host drawing its view in part of the window (an editor, between its
+/// panels) makes that the camera's viewport, as Studio's 3D view is:
+/// `ViewportSize` is its size and viewport points and the mouse's ray
+/// count from its top left, while GUI, the Mouse's `X` and `Y` and screen
+/// points stay in the window's coordinates.
+#[test]
+fn a_view_rect_is_the_cameras_viewport() {
+    let mut dm = editing(
+        r#"
+        local gui = Instance.new("ScreenGui")
+        gui.Parent = game:GetService("CoreGui")
+        local mouse = plugin:GetMouse()
+        mouse.Button1Down:Connect(function()
+            local camera = workspace.CurrentCamera
+            local look = camera.CFrame.LookVector
+            local p = camera.CFrame.Position + look * 50
+            local function near(a, b) return (a - b).Magnitude < 1e-3 end
+            print(camera.ViewportSize, gui.AbsoluteSize)
+            print(mouse.X, mouse.Y, mouse.ViewSizeX, mouse.ViewSizeY)
+            print(near(mouse.UnitRay.Direction, look), mouse.Target and mouse.Target.Name)
+            local v, s = camera:WorldToViewportPoint(p), camera:WorldToScreenPoint(p)
+            print(math.round(v.X), math.round(v.Y), math.round(s.X), math.round(s.Y))
+            print(near(camera:ScreenPointToRay(mouse.X, mouse.Y).Direction, look),
+                near(camera:ViewportPointToRay(200, 150).Direction, look))
+            print(game:GetService("UserInputService"):GetMouseLocation())
+        end)
+        plugin:Activate(true)
+        "#,
+    );
+    dm.set_viewport(800, 600);
+    dm.set_view_rect(Some([300.0, 50.0, 400.0, 300.0]));
+    let at = rook_types::CFrame::look_at(
+        glam::Vec3::new(0.0, 20.0, 20.0),
+        glam::Vec3::new(0.0, 0.5, 0.0),
+        glam::Vec3::Y,
+    );
+    dm.set_edit_camera(at, at, 70.0);
+    dm.step();
+    // The view's center.
+    for e in (ScreenPoint { x: 500.0, y: 200.0 }).click() {
+        dm.input(e);
+    }
+    dm.step();
+    assert_eq!(
+        lines(&dm),
+        [
+            "400, 300 800, 600",
+            "500 200 400 300",
+            "true Brick",
+            "200 150 500 200",
+            "true true",
+            "200, 150",
+        ]
+    );
+    // Back to the whole window, as a game draws.
+    dm.set_view_rect(None);
+    dm.run_extra_script("print(workspace.CurrentCamera.ViewportSize)")
+        .unwrap();
+    assert_eq!(lines(&dm), ["800, 600"]);
+}
+
+/// A plugin moving the current camera moves the editor's view, and it's
+/// no edit to undo (measured in Studio 0.748).
+#[test]
+fn a_plugin_moves_the_edit_camera() {
+    let dm = editing(
+        r#"
+        local chs = game:GetService("ChangeHistoryService")
+        workspace.CurrentCamera.CFrame = CFrame.new(1, 2, 3)
+        workspace.CurrentCamera.Focus = CFrame.new(1, 2, -7)
+        workspace.CurrentCamera.FieldOfView = 50
+        chs:SetWaypoint("Moved the view")
+        print(chs:GetCanUndo())
+        "#,
+    );
+    let (cframe, focus, fov) = dm.edit_camera().unwrap();
+    assert_eq!(cframe.position, glam::Vec3::new(1.0, 2.0, 3.0));
+    assert_eq!(focus.position, glam::Vec3::new(1.0, 2.0, -7.0));
+    assert_eq!(fov, 50.0);
+    assert_eq!(lines(&dm), ["false"]);
+}
+
 /// A dock widget lays out in the area the editor gives it and takes the
 /// mouse there.
 #[test]
@@ -242,7 +359,7 @@ fn dock_widgets_lay_out_where_placed() {
         dm.input(e);
     }
     dm.step();
-    assert_eq!(lines(&dm), ["true", "200, 150 10, 42", "pressed"]);
+    assert_eq!(lines(&dm), ["true", "200, 150 10, 100", "pressed"]);
 }
 
 /// `DockWidgetPluginGuiInfo` as Studio 0.748 prints, compares and checks

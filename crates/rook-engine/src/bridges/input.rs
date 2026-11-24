@@ -46,7 +46,7 @@ pub enum InputEvent {
         button: u8,
         down: bool,
     },
-    /// Cursor position in pixels from the viewport's top left.
+    /// Cursor position in pixels from the window's top left.
     MouseMove {
         x: f32,
         y: f32,
@@ -184,7 +184,12 @@ pub struct ClickEvent {
 /// Per-client input bookkeeping the engine keeps beside the World's state.
 #[derive(Debug, Default)]
 pub(crate) struct InputTracker {
+    /// The window's size in pixels.
     pub(crate) viewport: (u32, u32),
+    /// Where the camera draws in the window (left, top, width, height in
+    /// pixels) when the host draws its view in part of it
+    /// ([`DataModel::set_view_rect`]); `None`: all of it.
+    pub(crate) view: Option<[f32; 4]>,
     /// InputObjects of held keys, reused for their end event.
     held: FxHashMap<u32, InstanceId>,
     /// The InputObjects mouse movement and the wheel pass to every
@@ -231,11 +236,19 @@ impl InputTracker {
     }
 }
 
-/// A window point in GUI coordinates, below the top bar, as InputObjects
-/// and the Mouse give it (measured: `GetMouseLocation` alone includes
-/// the inset).
-fn gui_point((x, y): (f32, f32)) -> (f32, f32) {
-    (x, y - rook_gui::GUI_INSET)
+/// A window point in GUI coordinates, below the top bar (none while
+/// editing), as InputObjects and the Mouse give it (measured:
+/// `GetMouseLocation` alone includes the inset).
+fn gui_point(gui: &rook_gui::Gui, (x, y): (f32, f32)) -> (f32, f32) {
+    (x, y - gui.inset())
+}
+
+impl DataModel {
+    /// The cursor in GUI coordinates ([`gui_point`]).
+    fn gui_mouse(&self) -> (f32, f32) {
+        let w = self.runtime.world();
+        gui_point(&w.gui, w.input.mouse)
+    }
 }
 
 #[cfg(test)]

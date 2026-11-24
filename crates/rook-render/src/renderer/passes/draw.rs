@@ -36,8 +36,9 @@ impl Renderer {
     /// surface is configured: a frame at a new size otherwise makes them
     /// itself, and a driver can take a long time over the first ones.
     pub fn size_targets(&mut self, width: u32, height: u32) {
-        self.depth_view(width, height);
-        self.tonemap.frame(&self.device, width, height);
+        let view = self.view_in(width, height);
+        self.depth_view(view.width, view.height);
+        (self.tonemap).frame(&self.device, (view.width, view.height), (width, height));
     }
 
     /// The depth buffer for a `width` × `height` frame, and a view of its
@@ -75,11 +76,19 @@ impl Renderer {
         (view, read)
     }
 
-    /// Draw the scene into `target` (a view of a `color_format` texture):
-    /// into the frame, then through the tone curve onto `target`. Mesh
+    /// Draw the scene into `target` (a view of a `color_format` texture,
+    /// `screen_width` × `screen_height`): into the frame, the size of the
+    /// 3D view ([`Renderer::set_view`]), then through the tone curve onto
+    /// the view's rectangle of `target`, with the GUI over all of it. Mesh
     /// files and images queued for upload go up first, within a per-frame
     /// budget.
-    pub fn render(&mut self, target: &wgpu::TextureView, width: u32, height: u32, camera: &Camera) {
+    pub fn render(
+        &mut self,
+        target: &wgpu::TextureView,
+        screen_width: u32,
+        screen_height: u32,
+        camera: &Camera,
+    ) {
         profiling::scope!("Renderer::render");
         let start = std::time::Instant::now();
         self.upload_files(UploadBudget::frame());
@@ -92,6 +101,11 @@ impl Renderer {
         };
         stage(&mut times.uploads);
         let l = self.lighting;
+        // Everything 3D (the frame, its depth, the post effects, world GUI
+        // and the projection) is the view's size; only the screen's GUI
+        // and the tone pass's target are the screen's.
+        let view_rect = self.view_in(screen_width, screen_height);
+        let (width, height) = (view_rect.width, view_rect.height);
         let aspect = width as f32 / height.max(1) as f32;
         let sun = l.sun_direction.normalize_or(Vec3::Y);
         // No shadow pass at all with GlobalShadows off, or with the sun
@@ -140,7 +154,10 @@ impl Renderer {
             &self.images,
             &self.lights,
             (camera, &view),
-            (width, height),
+            (
+                (width, height),
+                glam::Vec2::new(view_rect.x as f32, view_rect.y as f32),
+            ),
         );
         stage(&mut times.effects);
 
@@ -157,7 +174,8 @@ impl Renderer {
 
         stage(&mut times.draws);
         let (depth, depth_read) = self.depth_view(width, height);
-        let (frame, mask, gui_layer) = self.tonemap.frame(&self.device, width, height);
+        let (frame, mask, gui_layer) =
+            (self.tonemap).frame(&self.device, (width, height), (screen_width, screen_height));
         self.lights.fill(
             &self.queue,
             &mut encoder,
@@ -189,9 +207,12 @@ impl Renderer {
             self.highlight_pass(&mut encoder, [&mask, &depth], &mut mask_runs, starts[2]);
         }
         let looks = highlighted.then_some(&looks);
-        let gui = self
-            .gui
-            .record(&self.queue, &mut encoder, &gui_layer, (width, height));
+        let gui = self.gui.record(
+            &self.queue,
+            &mut encoder,
+            &gui_layer,
+            (screen_width, screen_height),
+        );
         let inputs = self.post_passes.record(
             &self.device,
             &self.queue,
@@ -208,7 +229,7 @@ impl Renderer {
         self.tonemap.record(
             &self.queue,
             &mut encoder,
-            target,
+            (target, view_rect),
             (&self.post, self.post_passes.tone_group(), inputs),
             (looks, gui),
         );

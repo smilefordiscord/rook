@@ -32,7 +32,8 @@ pub(crate) use tree::*;
 
 /// The top bar's height, which ScreenGuis start below unless they ignore
 /// the inset (measured: 58 pixels in Studio 0.742's client, with the
-/// current top bar; `GuiService:GetGuiInset()` says the same).
+/// current top bar; `GuiService:GetGuiInset()` says the same). Edit mode
+/// has no top bar ([`Layout::inset`]).
 pub const GUI_INSET: f32 = 58.0;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -114,6 +115,24 @@ pub(crate) struct Layout {
     /// The DataModel is being edited: with no local player, StarterGui's
     /// ScreenGuis show (see [`crate::Gui::set_editing`]).
     pub(crate) editing: bool,
+    /// The window's size where the camera's viewport is only part of it
+    /// (see [`crate::Gui::set_screen`]).
+    pub(crate) screen: Option<Vec2>,
+}
+
+impl Layout {
+    /// How far below the window's top GUI coordinates start: the top
+    /// bar's height, none while editing (measured in Studio 0.748's Edit
+    /// DataModel: `GetGuiInset` is (0, 0), and a CoreUISafeInsets
+    /// ScreenGui sits at (0, 0) the viewport's size).
+    pub(crate) fn inset(&self) -> f32 {
+        if self.editing { 0.0 } else { GUI_INSET }
+    }
+
+    /// The screen ScreenGuis lay out on: the window.
+    pub(crate) fn screen_size(&self, dom: &Dom) -> Vec2 {
+        self.screen.unwrap_or_else(|| screen_size(dom))
+    }
 }
 
 /// A text object's text, with what it was laid out from, so an unchanged

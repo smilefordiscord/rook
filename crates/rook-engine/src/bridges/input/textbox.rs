@@ -225,7 +225,7 @@ impl DataModel {
             self.input.gui.text_drag = None;
             return false;
         }
-        let (x, y) = super::gui_point(self.runtime.world().input.mouse);
+        let (x, y) = self.gui_mouse();
         let Some(caret) = self.caret_at(id, Vec2::new(x, y)) else {
             return true;
         };

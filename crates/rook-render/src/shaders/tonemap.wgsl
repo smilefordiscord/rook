@@ -1,7 +1,9 @@
 // The last pass: the frame (Studio's encoding of light units, `tone.wgsl`)
 // through the place's tone curve and the ColorCorrections' matrix, onto
 // the screen, with Highlights and then the GUI over it
-// (docs/behavior/lighting/post-processing.md).
+// (docs/behavior/lighting/post-processing.md). The frame, the mask and the
+// post effects' textures are the 3D view's size and land on its rectangle
+// of the screen (`tone.view`); the GUI layer is the screen's.
 
 import package::post::focus::{distance_of, far_circle};
 import package::tone::{FRAME_LIGHT, linear_to_srgb, srgb_to_linear, studio_light3};
@@ -23,6 +25,9 @@ struct Tone {
     in_place: array<vec4<f32>, 2>,
     // The depth of field's focus: x its distance, y its radius, in studs.
     focus: vec4<f32>,
+    // Where the frame goes on the screen: xy its top left, zw its size,
+    // in pixels.
+    view: vec4<f32>,
     // Each Highlight's fill and outline (sRGB, and their opacity), by its
     // number - 1 (`renderer/passes/highlights.rs`).
     looks: array<vec4<f32>, 62>,
@@ -58,10 +63,26 @@ fn vs_tonemap(@builtin(vertex_index) i: u32) -> @builtin(position) vec4<f32> {
 
 @fragment
 fn fs_tonemap(@builtin(position) at: vec4<f32>) -> @location(0) vec4<f32> {
-    let p = vec2<i32>(at.xy);
+    let in_view = at.xy - tone.view.xy;
+    var out = vec3(0.0);
+    if all(in_view >= vec2(0.0)) && all(in_view < tone.view.zw) {
+        out = view_pixel(in_view);
+    }
+    if tone.curve.z == 1.0 {
+        // Over the screen's sRGB pixels, as Roblox blends GUI.
+        let g = textureLoad(gui_layer, vec2<i32>(at.xy), 0);
+        out = srgb_to_linear(g.rgb + linear_to_srgb(out) * (1.0 - g.a));
+    }
+    return vec4(out, 1.0);
+}
+
+// The 3D view's finished pixel at `at`, in pixels from the view's top
+// left.
+fn view_pixel(at: vec2<f32>) -> vec3<f32> {
+    let p = vec2<i32>(at);
     let v = textureLoad(frame_texture, p, 0).rgb;
     var units = v * v * FRAME_LIGHT;
-    let uv = at.xy / vec2<f32>(textureDimensions(frame_texture));
+    let uv = at / vec2<f32>(textureDimensions(frame_texture));
     // The depth of field's fields replace the frame where they blur it,
     // before anything adds to it (Studio resolves them into the frame).
     if tone.effects.w > 0.0 {
@@ -118,12 +139,7 @@ fn fs_tonemap(@builtin(position) at: vec4<f32>) -> @location(0) vec4<f32> {
     if tone.curve.y == 1.0 {
         out = highlighted(p, out);
     }
-    if tone.curve.z == 1.0 {
-        // Over the screen's sRGB pixels, as Roblox blends GUI.
-        let g = textureLoad(gui_layer, p, 0);
-        out = srgb_to_linear(g.rgb + linear_to_srgb(out) * (1.0 - g.a));
-    }
-    return vec4(out, 1.0);
+    return out;
 }
 
 fn mask_at(p: vec2<i32>) -> u32 {

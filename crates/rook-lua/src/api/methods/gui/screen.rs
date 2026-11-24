@@ -47,11 +47,19 @@ pub(super) fn luau_source(owner: &str, name: &str) -> Option<&'static str> {
 /// doesn't (measured: a server's `ScreenPointToRay` and
 /// `ViewportPointToRay` agree; conformance case `physics/queries`).
 pub(crate) fn gui_inset(lua: &Lua) -> f32 {
-    if with_world(lua, |w| w.is_client) {
-        rook_gui::GUI_INSET
-    } else {
-        0.0
-    }
+    with_world(lua, |w| if w.is_client { w.gui.inset() } else { 0.0 })
+}
+
+/// Where GUI coordinates' origin is in the camera's viewport: a screen
+/// point plus this is a viewport point. In a game the viewport is the
+/// window and GUI starts the top bar's inset below it; where the host draws
+/// the view in part of a window GUI covers, the view's place comes off
+/// too, so `ScreenPointToRay` takes the Mouse's X and Y and
+/// `WorldToScreenPoint` gives where GUI sits.
+pub(crate) fn screen_to_viewport(lua: &Lua) -> glam::Vec2 {
+    let inset = gui_inset(lua);
+    let (ox, oy) = with_world(lua, |w| w.input.view_origin);
+    glam::Vec2::new(-ox, inset - oy)
 }
 
 /// Measured on a client: (0, 58) and (0, 0), the top bar above
